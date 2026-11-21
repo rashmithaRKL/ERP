@@ -1,0 +1,155 @@
+:root {
+  --motion-fast: 140ms;
+  --motion-standard: 220ms;
+  --motion-slow: 320ms;
+  --ease-out: cubic-bezier(.22, 1, .36, 1);
+  --ease-spring: cubic-bezier(.2, .8, .2, 1);
+}
+
+.workspace-page { min-width: 0; }
+.nav-item { isolation: isolate; transition: color var(--motion-fast), background-color var(--motion-fast); }
+.nav-item.selected { background: transparent; }
+.nav-item.selected::before { display: none; }
+.nav-item > .nav-selection {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  flex: none;
+  border-radius: 5px;
+  background: #d726381c;
+  pointer-events: none;
+}
+.nav-selection::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 10px;
+  bottom: 10px;
+  width: 2px;
+  background: #ef5367;
+  border-radius: 2px;
+}
+.nav-item > span:nth-of-type(2):not(.nav-count):not(.nav-alert) { flex: 1; }
+.nav-item > svg { transition: transform var(--motion-standard) var(--ease-out), color var(--motion-fast); }
+.sidebar { transition: transform var(--motion-slow) var(--ease-out); }
+
+.motion-tabs { overflow: visible; }
+.motion-tabs .tab-list { display: flex; align-self: stretch; gap: 25px; min-width: 0; overflow-x: auto; scrollbar-width: none; }
+.motion-tabs .tab-list::-webkit-scrollbar { display: none; }
+.motion-tabs .tab-list > button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  position: relative;
+  flex-shrink: 0;
+  isolation: isolate;
+  border-bottom: 0;
+  color: var(--muted);
+  transition: color var(--motion-fast);
+}
+.motion-tabs .tab-list > button.active { color: var(--text); font-weight: 550; }
+.motion-tabs .tab-list > button:hover { color: var(--heading); }
+.motion-tabs .tab-label { font: inherit; background: none; border: 0; padding: 0; }
+.motion-tabs .tab-count { font-size: 10px; border: 1px solid var(--border); background: var(--soft); border-radius: 4px; padding: 1px 5px; }
+.motion-tabs .tab-indicator {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  padding: 0;
+  background: var(--red);
+  border: 0;
+  border-radius: 2px 2px 0 0;
+  pointer-events: none;
+}
+.mini-tabs.motion-tabs { gap: 10px; }
+.mini-tabs.motion-tabs .tab-list { gap: 18px; overflow: visible; }
+.mini-tabs.motion-tabs .tab-list > button { font-size: 11px; padding: 0; }
+
+.dialog, .dialog.drawer { animation: none; transform-origin: center; }
+.dialog.drawer { transform-origin: right center; }
+.dialog::backdrop {
+  background-color: #0a152466;
+  transition: background-color 180ms var(--ease-out), backdrop-filter 180ms var(--ease-out);
+}
+.dialog[data-motion-state="exiting"] { pointer-events: none; }
+.dialog[data-motion-state="exiting"]::backdrop { background-color: #0a152400; backdrop-filter: blur(0); }
+@starting-style {
+  .dialog[open]::backdrop { background-color: #0a152400; backdrop-filter: blur(0); }
+}
+.toast { translate: -40% 0; transform: none; }
+.bom-editor-line { transform-origin: top center; }
+.bom-editor-line > .field { padding-block: 1px; }
+
+.button, .icon-button, .avatar, .global-search, .workspace-switch, .favorite-button {
+  transition: background-color var(--motion-fast), color var(--motion-fast), border-color var(--motion-fast),
+    box-shadow var(--motion-standard) var(--ease-out), transform var(--motion-fast) var(--ease-out);
+}
+.button:active:not(:disabled), .icon-button:active:not(:disabled), .avatar:active { transform: scale(.97); }
+.text-button > svg, .floor-link > svg, .attention-item > div > span > svg { transition: transform var(--motion-standard) var(--ease-out); }
+.stat-card, .bom-card, .machine-card, .job-card { transition: box-shadow var(--motion-standard), border-color var(--motion-standard); }
+.stat-icon, .machine-symbol, .attention-symbol, .product-mark { transition: background-color var(--motion-standard), color var(--motion-standard); }
+.field input, .field select, .field textarea, .search-input {
+  transition: border-color var(--motion-fast), box-shadow var(--motion-fast), background-color var(--motion-fast);
+}
+.field input:focus, .field select:focus, .field textarea:focus, .search-input:focus-within {
+  border-color: #d7263866;
+  box-shadow: 0 0 0 3px #d7263809;
+}
+.favorite-button.is-favorite svg { animation: favorite-feedback 320ms var(--ease-out); }
+.clickable-row td { transition: background-color var(--motion-fast); }
+.role-options > button, .command-results > button, .notification-list > button, .attention-item {
+  transition: background-color var(--motion-fast), border-color var(--motion-fast);
+}
+.lifecycle span { transition: background-color var(--motion-standard), border-color var(--motion-standard), color var(--motion-standard); }
+.lifecycle .done span { animation: step-complete 280ms var(--ease-out); }
+.form-error { animation: feedback-in 160ms var(--ease-out); }
+
+.motion-settings-panel { margin-top: 20px; }
+.motion-settings-panel > .panel-heading > svg { color: #ab7b81; }
+.motion-settings-body { display: grid; grid-template-columns: 1.1fr 1fr; gap: 24px; padding: 22px; align-items: start; }
+.motion-setting-copy { display: flex; align-items: flex-start; gap: 12px; }
+.motion-setting-copy strong { font-size: 13px; font-weight: 550; color: var(--heading); }
+.motion-setting-copy p { color: var(--secondary); font-size: 11px; margin-top: 6px; max-width: 390px; }
+.motion-setting-icon { display: grid; place-items: center; flex-shrink: 0; width: 38px; height: 38px; border: 1px solid var(--border); background: var(--soft); color: #8195af; border-radius: 9px; }
+.motion-settings-body > .field { max-width: 300px; width: 100%; justify-self: end; }
+.motion-preview { padding: 17px; background: var(--soft); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+.motion-preview-cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.motion-preview-card { display: flex; flex-direction: column; gap: 9px; background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 12px; box-shadow: 0 2px 5px #10182704; }
+.motion-preview-step { font-family: 'Manrope Variable', sans-serif; font-size: 10px; color: #b48088; }
+.motion-preview-card > span:nth-child(2) { font-size: 11px; color: var(--secondary); }
+.motion-preview-card i { background: var(--soft); height: 3px; width: 75%; border-radius: 2px; margin-top: 2px; }
+.motion-settings-body > .button { justify-self: end; align-self: center; }
+
+@media (hover: hover) and (pointer: fine) {
+  .button:hover:not(:disabled) { transform: translateY(-1px); }
+  .button.primary:hover:not(:disabled) { box-shadow: 0 4px 12px #d7263826; }
+  .button.secondary:hover:not(:disabled) { box-shadow: 0 3px 8px #17223508; }
+  .button:active:not(:disabled) { transform: translateY(0) scale(.98); }
+  .nav-item:hover > svg { transform: translateX(1.5px); }
+  .text-button:hover > svg, .floor-link:hover > svg, .attention-item:hover > div > span > svg { transform: translateX(3px); }
+  .stat-card:hover, .bom-card:hover, .machine-card:hover, .job-card:hover { box-shadow: 0 7px 22px #17223508; border-color: #cfd6e1; }
+  .workspace-switch:hover { background: #ffffff04; border-color: #ffffff22; }
+  .avatar:hover { box-shadow: 0 0 0 3px #d726380b; }
+}
+@media (max-width: 650px) {
+  .toast { translate: 0; }
+  .mini-tabs.motion-tabs .tab-list { gap: 13px; }
+  .mini-tabs.motion-tabs .tab-list > button { font-size: 10px; }
+  .mini-tabs.motion-tabs .tab-count { font-size: 9px; }
+  .motion-settings-body { grid-template-columns: 1fr; gap: 18px; padding: 20px; }
+  .motion-settings-body > .field { max-width: none; justify-self: stretch; }
+  .motion-settings-body > .button { justify-self: start; }
+}
+@keyframes favorite-feedback { 0% { transform: scale(.8); } 55% { transform: scale(1.15); } 100% { transform: scale(1); } }
+@keyframes step-complete { from { opacity: .65; transform: scale(.85); } to { opacity: 1; transform: scale(1); } }
+@keyframes feedback-in { from { opacity: 0; transform: translateY(-3px); } to { opacity: 1; transform: translateY(0); } }
+
+/* The in-app preference complements the operating system preference in styles.css. */
+:root[data-motion="reduced"] *, :root[data-motion="reduced"] *::before, :root[data-motion="reduced"] *::after {
+  animation: none !important;
+  transition: none !important;
+  scroll-behavior: auto !important;
+}

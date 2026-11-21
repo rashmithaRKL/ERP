@@ -1,0 +1,10 @@
+.git
+.local
+node_modules
+**/node_modules
+**/dist
+**/target
+.env
+*.log
+*.dump
+*.enc

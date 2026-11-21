@@ -1,0 +1,19 @@
+node_modules/
+dist/
+target/
+.env
+.env.*
+!.env.example
+.local/
+.DS_Store
+*.log
+*.dump
+*.enc
+test-results/
+playwright-report/
+
+*.tsbuildinfo
+*.age
+
+# Agent worktrees
+.claude/worktrees/

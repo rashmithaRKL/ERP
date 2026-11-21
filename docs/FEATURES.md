@@ -1,0 +1,39 @@
+# Completed-feature register and screen inventory
+
+Release 0.1.0, 29 October 2026. Scope: foundation and first reconciled manufacturing lifecycle. Modules are **partial** unless all requirements from the master brief are delivered. The UI never promotes a future capability as a working module.
+
+| Domain | Implemented screens / behavior | Status against full brief |
+|---|---|---|
+| Executive overview | Period-filtered posted output/revenue/yield; machine states; active orders; shortages, overdue and QC attention | Partial; no fabricated OEE/telemetry; advanced BI later |
+| Identity | Production login; expiring sessions; bcrypt; CSRF; login limits; demo-only persona switching; user creation | Partial; MFA/recovery/session revocation/SSO later |
+| Organization | Organization/factory settings, default raw/finished warehouses, profile, theme, favorites, command search | Partial; one plant per tenant; onboarding/imports later |
+| Product/material master | Typed item creation, base kg/pcs, standard cost, safety level, stock availability | Partial; variants/conversions/barcodes/images later |
+| Inventory | Lot stock, quarantine/released status, reservations, immutable quantity/value ledger, valuation | Partial; controlled counts/adjustments/transfers/returns and expiry/serials later |
+| Procurement | Suppliers; draft single-item purchase; independent approval; partial GRN; incoming QC; accepted receipt invoice matching | Partial; requisitions, RFQs, multi-line documents, supplier credits/variance matching later |
+| BOM | Component authoring; draft/approve; immutable revisions; base output/yield; component costs; exact order snapshots | Partial; single-level raw/packaging formulas; alternatives/subassemblies/change comparison later |
+| MRP | Net shortages from unreserved MO demand, safety stock, released available stock, approved receipts; draft PO recommendations | Basic material planning; lead times/MOQ/what-if/multi-level/finite-capacity later |
+| Manufacturing | List/filter/search/sort, detail drawer, material and cost snapshots, independent approval/reserve/issue/start/pause/resume/partial/final/quality/close, pre-issue cancellation | Supported lifecycle slice; routing versions, extra issues/returns, rework and controlled closed-order adjustments later |
+| Shop floor | Large operation cards, start/pause/resume, quantity/scrap/cost/notes posting | Partial; barcode/downtime/request/supervisor-shift flows and offline queue later |
+| Work centers | Registry, idle center creation, registered states, assigned production output, configured hourly cost | Partial; machine status editing/telemetry/utilization/calendars/routing later |
+| Quality | Inspection queue; incoming/final decisions; notes; held inventory; supplier-return reversal; dispatch guard | Partial; templates/measurements/CAPA/rework and recall disposition later |
+| Costing | Actual FIFO materials + conversion; partial WIP/FG/scrap allocation; residual-safe valuation; immutable journal view | Partial; standard/actual comparison and basic accounting; detailed variance drivers later |
+| Sales/CRM | Customers; confirmed single-item SO; manufacturing link; partial/full released-lot dispatch and revenue/receivable recognition | Partial; CRM/quotations/pricing/credit controls/returns later |
+| Logistics | Delivery reference, lot/quantity, partial delivery, immutable stock/COGS posting | Partial; picking/packing/vehicles/POD/shipping integration later |
+| Finance | Manufacturing/inventory/dispatch subledger; balanced journals; period posting guard | Partial; full financial accounting, taxes, currency and closing administration later |
+| Reports | Manufacturing cost register, composition, reconciliation, journal, per-view CSV | Partial; capped lists; server report/export jobs/Excel/PDF/scheduling later |
+| Administration | Team creation, audit history, organization settings, honest local/cloud connection state | Partial; configurable scopes/approvals, backup UI/integrations/entitlements later |
+| Traceability | Persisted supplier receipt → raw lot → issue/MO → output lot → customer delivery relationships | Data links present; explorer/recall workflows later |
+| Maintenance/HR/industry/SaaS/AI | Architecture/roadmap boundaries only | Planned; no empty operational screens or imaginary services |
+
+## Screen patterns actually implemented
+
+Application shell, responsive navigation, dashboard, order tables, search/filter/sort/pagination, create forms, form validation/error/loading states, modal dialogs, detail drawer, touch-oriented shop-floor cards, approved BOM cards and component editor, inventory ledger, QC decision forms, costing charts, audit table, organization and team configuration, profile/persona selection, attention dialog, help and keyboard command palette. Light/dark tokens and reduced-motion preferences are implemented. Responsive/keyboard checks are recorded separately; no completed accessibility certification is asserted.
+
+## Completion evidence
+
+Domain/API acceptance is implemented in `ManufacturingIntegrationTest`. Actual executed results, browser actions and verification limits are in `docs/VERIFICATION.md`. Production packaging, recovery scripts, CI and the OpenAPI contract are delivered as source; their existence does not imply the target deployment or backup/restore drill has passed.
+
+
+## Interface update — 30 October 2026
+
+Implemented shared spring navigation, page and card entrances, animated filter indicators, dialog/drawer exits, progress-bar updates, table row movement, expandable BOM components, toast feedback and control microinteractions. Administration includes persistent reduced-motion preferences and a manually replayable transition preview. Native modal focus restoration and unique dialog labels were improved and checked with nested production dialogs. See `docs/architecture/MOTION.md` and `docs/VERIFICATION.md` for details. Manufacturing domain scope remains as registered above.

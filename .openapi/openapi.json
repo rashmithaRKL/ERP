@@ -1,0 +1,1514 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "DexLanka Manufacturing Pro",
+    "version": "0.1.0",
+    "description": "Foundation release. Cookie sessions, CSRF and idempotent transactional commands. See docs/api/API.md for role and workflow boundaries."
+  },
+  "servers": [
+    {
+      "url": "/api"
+    }
+  ],
+  "security": [
+    {
+      "session": []
+    }
+  ],
+  "paths": {
+    "/manufacturing": {
+      "post": {
+        "summary": "Snapshot an approved BOM into a draft manufacturing order",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Manufacture"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Committed result; retry with same key returns prior result"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Role/CSRF denied"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "State/stock/period/idempotency conflict"
+          }
+        }
+      }
+    },
+    "/manufacturing/{id}/complete": {
+      "post": {
+        "summary": "Record output and reconcile WIP",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Complete"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Committed result; retry with same key returns prior result"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Role/CSRF denied"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "State/stock/period/idempotency conflict"
+          }
+        }
+      }
+    },
+    "/purchases": {
+      "post": {
+        "summary": "Create purchase order",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Purchase"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Committed result; retry with same key returns prior result"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Role/CSRF denied"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "State/stock/period/idempotency conflict"
+          }
+        }
+      }
+    },
+    "/purchases/{id}/receive": {
+      "post": {
+        "summary": "Receive materials into quarantine",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Receive"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Committed result; retry with same key returns prior result"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Role/CSRF denied"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "State/stock/period/idempotency conflict"
+          }
+        }
+      }
+    },
+    "/receipts/{id}/invoice": {
+      "post": {
+        "summary": "Match supplier invoice to released receipt",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Invoice"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Committed result; retry with same key returns prior result"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Role/CSRF denied"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "State/stock/period/idempotency conflict"
+          }
+        }
+      }
+    },
+    "/quality/{id}/inspect": {
+      "post": {
+        "summary": "Record quality decision",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Inspect"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Committed result; retry with same key returns prior result"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Role/CSRF denied"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "State/stock/period/idempotency conflict"
+          }
+        }
+      }
+    },
+    "/sales": {
+      "post": {
+        "summary": "Confirm customer demand",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Sale"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Committed result; retry with same key returns prior result"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Role/CSRF denied"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "State/stock/period/idempotency conflict"
+          }
+        }
+      }
+    },
+    "/sales/{id}/dispatch": {
+      "post": {
+        "summary": "Dispatch released finished lot and recognize sales",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Dispatch"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Committed result; retry with same key returns prior result"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Role/CSRF denied"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "State/stock/period/idempotency conflict"
+          }
+        }
+      }
+    },
+    "/items": {
+      "post": {
+        "summary": "Create item master",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Item"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Committed result; retry with same key returns prior result"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Role/CSRF denied"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "State/stock/period/idempotency conflict"
+          }
+        }
+      }
+    },
+    "/boms": {
+      "post": {
+        "summary": "Create draft BOM revision",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Bom"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Committed result; retry with same key returns prior result"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Role/CSRF denied"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "State/stock/period/idempotency conflict"
+          }
+        }
+      }
+    },
+    "/partners": {
+      "post": {
+        "summary": "Create supplier or customer",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Partner"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Committed result; retry with same key returns prior result"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Role/CSRF denied"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "State/stock/period/idempotency conflict"
+          }
+        }
+      }
+    },
+    "/machines": {
+      "post": {
+        "summary": "Register work center",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Machine"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Committed result; retry with same key returns prior result"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Role/CSRF denied"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "State/stock/period/idempotency conflict"
+          }
+        }
+      }
+    },
+    "/organization": {
+      "post": {
+        "summary": "Update organization and plant",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Organization"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Committed result; retry with same key returns prior result"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Role/CSRF denied"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "State/stock/period/idempotency conflict"
+          }
+        }
+      }
+    },
+    "/users": {
+      "post": {
+        "summary": "Create authorized user",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/User"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Committed result; retry with same key returns prior result"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Role/CSRF denied"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "State/stock/period/idempotency conflict"
+          }
+        }
+      }
+    },
+    "/manufacturing/{id}/actions/{action}": {
+      "post": {
+        "summary": "Validated document transition",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "action",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "approve",
+                "reserve",
+                "issue",
+                "start",
+                "pause",
+                "resume",
+                "cancel",
+                "close"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Committed transition"
+          },
+          "403": {
+            "description": "Denied role or CSRF"
+          },
+          "409": {
+            "description": "Invalid state or self-approval"
+          }
+        }
+      }
+    },
+    "/purchases/{id}/approve": {
+      "post": {
+        "summary": "Validated document transition",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Committed transition"
+          },
+          "403": {
+            "description": "Denied role or CSRF"
+          },
+          "409": {
+            "description": "Invalid state or self-approval"
+          }
+        }
+      }
+    },
+    "/boms/{id}/approve": {
+      "post": {
+        "summary": "Validated document transition",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Committed transition"
+          },
+          "403": {
+            "description": "Denied role or CSRF"
+          },
+          "409": {
+            "description": "Invalid state or self-approval"
+          }
+        }
+      }
+    },
+    "/state": {
+      "get": {
+        "summary": "Bounded tenant workspace snapshot",
+        "parameters": [
+          {
+            "name": "days",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "enum": [
+                7,
+                14,
+                30,
+                90
+              ],
+              "default": 14
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Snapshot with bounded lists; financial report aggregates and user directory depend on role"
+          },
+          "401": {
+            "description": "Sign-in required"
+          }
+        }
+      }
+    },
+    "/manufacturing/{id}": {
+      "get": {
+        "summary": "Tenant-owned order, material snapshot, observations and audit",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Order detail"
+          },
+          "404": {
+            "description": "Missing or unowned"
+          }
+        }
+      }
+    },
+    "/auth/csrf": {
+      "get": {
+        "summary": "Issue session CSRF token and header name",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        }
+      }
+    },
+    "/auth/config": {
+      "get": {
+        "summary": "Demo mode and release metadata",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        }
+      }
+    },
+    "/health": {
+      "get": {
+        "summary": "Database health",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        }
+      }
+    },
+    "/auth/me": {
+      "get": {
+        "summary": "Authenticated user and organization",
+        "responses": {
+          "200": {
+            "description": "Current principal"
+          },
+          "401": {
+            "description": "No session"
+          }
+        }
+      }
+    },
+    "/auth/login": {
+      "post": {
+        "summary": "Email/password session login",
+        "security": [],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "email",
+                  "password"
+                ],
+                "properties": {
+                  "email": {
+                    "type": "string"
+                  },
+                  "password": {
+                    "type": "string",
+                    "format": "password"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Authenticated; refresh CSRF"
+          },
+          "401": {
+            "description": "Invalid credentials"
+          },
+          "429": {
+            "description": "Rate limit"
+          }
+        }
+      }
+    },
+    "/auth/logout": {
+      "post": {
+        "summary": "Invalidate session",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Session cleared"
+          }
+        }
+      }
+    },
+    "/auth/demo": {
+      "post": {
+        "summary": "Explicit demo profile only; unavailable in production",
+        "security": [],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          },
+          {
+            "name": "role",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "admin",
+                "planner",
+                "warehouse",
+                "operator",
+                "quality"
+              ],
+              "default": "admin"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Fictional demo session"
+          },
+          "404": {
+            "description": "Demo disabled"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "session": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "JSESSIONID"
+      }
+    },
+    "parameters": {
+      "IdempotencyKey": {
+        "name": "Idempotency-Key",
+        "in": "header",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "pattern": "^[a-zA-Z0-9_-]{8,120}$"
+        }
+      },
+      "CsrfToken": {
+        "name": "X-CSRF-TOKEN",
+        "in": "header",
+        "required": true,
+        "schema": {
+          "type": "string"
+        }
+      }
+    },
+    "schemas": {
+      "Manufacture": {
+        "type": "object",
+        "required": [
+          "bomId",
+          "machineId",
+          "quantity",
+          "priority",
+          "dueDate"
+        ],
+        "properties": {
+          "bomId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "machineId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "salesOrderId": {
+            "type": "string",
+            "nullable": true
+          },
+          "quantity": {
+            "oneOf": [
+              {
+                "type": "string",
+                "pattern": "^\\d+(\\.\\d{1,6})?$"
+              },
+              {
+                "type": "number",
+                "exclusiveMinimum": true,
+                "minimum": 0
+              }
+            ]
+          },
+          "priority": {
+            "type": "string",
+            "enum": [
+              "NORMAL",
+              "HIGH",
+              "URGENT"
+            ]
+          },
+          "dueDate": {
+            "type": "string",
+            "format": "date"
+          }
+        }
+      },
+      "Complete": {
+        "type": "object",
+        "required": [
+          "goodQty",
+          "scrapQty",
+          "labourCost",
+          "machineCost",
+          "notes"
+        ],
+        "properties": {
+          "goodQty": {
+            "oneOf": [
+              {
+                "type": "string",
+                "pattern": "^\\d+(\\.\\d{1,6})?$"
+              },
+              {
+                "type": "number",
+                "minimum": 0
+              }
+            ]
+          },
+          "scrapQty": {
+            "oneOf": [
+              {
+                "type": "string",
+                "pattern": "^\\d+(\\.\\d{1,6})?$"
+              },
+              {
+                "type": "number",
+                "minimum": 0
+              }
+            ]
+          },
+          "labourCost": {
+            "oneOf": [
+              {
+                "type": "string",
+                "pattern": "^\\d+(\\.\\d{1,6})?$"
+              },
+              {
+                "type": "number",
+                "minimum": 0
+              }
+            ]
+          },
+          "machineCost": {
+            "oneOf": [
+              {
+                "type": "string",
+                "pattern": "^\\d+(\\.\\d{1,6})?$"
+              },
+              {
+                "type": "number",
+                "minimum": 0
+              }
+            ]
+          },
+          "notes": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      },
+      "Purchase": {
+        "type": "object",
+        "required": [
+          "supplierId",
+          "itemId",
+          "quantity",
+          "unitCost",
+          "dueDate"
+        ],
+        "properties": {
+          "supplierId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "itemId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "quantity": {
+            "oneOf": [
+              {
+                "type": "string",
+                "pattern": "^\\d+(\\.\\d{1,6})?$"
+              },
+              {
+                "type": "number",
+                "exclusiveMinimum": true,
+                "minimum": 0
+              }
+            ]
+          },
+          "unitCost": {
+            "oneOf": [
+              {
+                "type": "string",
+                "pattern": "^\\d+(\\.\\d{1,6})?$"
+              },
+              {
+                "type": "number",
+                "exclusiveMinimum": true,
+                "minimum": 0
+              }
+            ]
+          },
+          "dueDate": {
+            "type": "string",
+            "format": "date"
+          }
+        }
+      },
+      "Receive": {
+        "type": "object",
+        "required": [
+          "quantity",
+          "warehouseId",
+          "supplierLot"
+        ],
+        "properties": {
+          "quantity": {
+            "oneOf": [
+              {
+                "type": "string",
+                "pattern": "^\\d+(\\.\\d{1,6})?$"
+              },
+              {
+                "type": "number",
+                "exclusiveMinimum": true,
+                "minimum": 0
+              }
+            ]
+          },
+          "warehouseId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "supplierLot": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      },
+      "Inspect": {
+        "type": "object",
+        "required": [
+          "result",
+          "notes"
+        ],
+        "properties": {
+          "result": {
+            "type": "string",
+            "enum": [
+              "PASSED",
+              "FAILED"
+            ]
+          },
+          "notes": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      },
+      "Sale": {
+        "type": "object",
+        "required": [
+          "customerId",
+          "productId",
+          "quantity",
+          "unitPrice",
+          "dueDate"
+        ],
+        "properties": {
+          "customerId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "productId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "quantity": {
+            "oneOf": [
+              {
+                "type": "string",
+                "pattern": "^\\d+(\\.\\d{1,6})?$"
+              },
+              {
+                "type": "number",
+                "exclusiveMinimum": true,
+                "minimum": 0
+              }
+            ]
+          },
+          "unitPrice": {
+            "oneOf": [
+              {
+                "type": "string",
+                "pattern": "^\\d+(\\.\\d{1,6})?$"
+              },
+              {
+                "type": "number",
+                "exclusiveMinimum": true,
+                "minimum": 0
+              }
+            ]
+          },
+          "dueDate": {
+            "type": "string",
+            "format": "date"
+          }
+        }
+      },
+      "Dispatch": {
+        "type": "object",
+        "required": [
+          "lotId",
+          "quantity",
+          "reference"
+        ],
+        "properties": {
+          "lotId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "quantity": {
+            "oneOf": [
+              {
+                "type": "string",
+                "pattern": "^\\d+(\\.\\d{1,6})?$"
+              },
+              {
+                "type": "number",
+                "exclusiveMinimum": true,
+                "minimum": 0
+              }
+            ]
+          },
+          "reference": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      },
+      "Item": {
+        "type": "object",
+        "required": [
+          "sku",
+          "name",
+          "type",
+          "uom",
+          "standardCost",
+          "reorderLevel"
+        ],
+        "properties": {
+          "sku": {
+            "type": "string",
+            "minLength": 1
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "RAW_MATERIAL",
+              "FINISHED_GOOD",
+              "PACKAGING"
+            ]
+          },
+          "uom": {
+            "type": "string",
+            "enum": [
+              "kg",
+              "pcs"
+            ]
+          },
+          "standardCost": {
+            "oneOf": [
+              {
+                "type": "string",
+                "pattern": "^\\d+(\\.\\d{1,6})?$"
+              },
+              {
+                "type": "number",
+                "minimum": 0
+              }
+            ]
+          },
+          "reorderLevel": {
+            "oneOf": [
+              {
+                "type": "string",
+                "pattern": "^\\d+(\\.\\d{1,6})?$"
+              },
+              {
+                "type": "number",
+                "minimum": 0
+              }
+            ]
+          }
+        }
+      },
+      "Invoice": {
+        "type": "object",
+        "required": [
+          "reference"
+        ],
+        "properties": {
+          "reference": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      },
+      "Bom": {
+        "type": "object",
+        "required": [
+          "productId",
+          "revision",
+          "outputQty",
+          "yieldFactor",
+          "lines"
+        ],
+        "properties": {
+          "productId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "revision": {
+            "type": "string",
+            "minLength": 1
+          },
+          "outputQty": {
+            "oneOf": [
+              {
+                "type": "string",
+                "pattern": "^\\d+(\\.\\d{1,6})?$"
+              },
+              {
+                "type": "number",
+                "exclusiveMinimum": true,
+                "minimum": 0
+              }
+            ]
+          },
+          "yieldFactor": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "number",
+                "minimum": 0,
+                "exclusiveMinimum": true,
+                "maximum": 1
+              }
+            ]
+          },
+          "lines": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 100,
+            "items": {
+              "type": "object",
+              "required": [
+                "itemId",
+                "quantity"
+              ],
+              "properties": {
+                "itemId": {
+                  "type": "string"
+                },
+                "quantity": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      },
+      "Partner": {
+        "type": "object",
+        "required": [
+          "name",
+          "type",
+          "email",
+          "paymentDays"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "SUPPLIER",
+              "CUSTOMER"
+            ]
+          },
+          "email": {
+            "type": "string",
+            "format": "email"
+          },
+          "paymentDays": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 365
+          }
+        }
+      },
+      "Machine": {
+        "type": "object",
+        "required": [
+          "code",
+          "name",
+          "kind",
+          "hourlyRate"
+        ],
+        "properties": {
+          "code": {
+            "type": "string",
+            "minLength": 1
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "kind": {
+            "type": "string",
+            "minLength": 1
+          },
+          "hourlyRate": {
+            "oneOf": [
+              {
+                "type": "string",
+                "pattern": "^\\d+(\\.\\d{1,6})?$"
+              },
+              {
+                "type": "number",
+                "minimum": 0
+              }
+            ]
+          }
+        }
+      },
+      "Organization": {
+        "type": "object",
+        "required": [
+          "name",
+          "factoryName",
+          "location"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "factoryName": {
+            "type": "string",
+            "minLength": 1
+          },
+          "location": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      },
+      "User": {
+        "type": "object",
+        "required": [
+          "email",
+          "name",
+          "password",
+          "role"
+        ],
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "password": {
+            "type": "string",
+            "format": "password",
+            "minLength": 16,
+            "maxLength": 128,
+            "writeOnly": true
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "ADMIN",
+              "PLANNER",
+              "WAREHOUSE",
+              "OPERATOR",
+              "QUALITY",
+              "SALES",
+              "VIEWER"
+            ]
+          }
+        }
+      }
+    }
+  }
+}

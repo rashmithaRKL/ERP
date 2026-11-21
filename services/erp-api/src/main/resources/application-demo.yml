@@ -1,0 +1,7 @@
+app:
+  demo: true
+server:
+  servlet:
+    session:
+      cookie:
+        secure: false

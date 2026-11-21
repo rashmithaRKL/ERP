@@ -1,0 +1,57 @@
+services:
+  db:
+    image: postgres:17
+    environment:
+      POSTGRES_DB: dexlanka
+      POSTGRES_USER: dexlanka
+      POSTGRES_PASSWORD: ${DATABASE_PASSWORD:?Generate a unique database password}
+      TZ: Asia/Colombo
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dexlanka -d dexlanka"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+  api:
+    build:
+      context: .
+      dockerfile: infrastructure/docker/Dockerfile.api
+    environment:
+      DATABASE_URL: jdbc:postgresql://db:5432/dexlanka
+      DATABASE_USER: dexlanka
+      DATABASE_PASSWORD: ${DATABASE_PASSWORD:?Generate a unique database password}
+      BOOTSTRAP_EMAIL: ${BOOTSTRAP_EMAIL:?Set the initial administrator email}
+      BOOTSTRAP_PASSWORD: ${BOOTSTRAP_PASSWORD:?Generate an initial administrator password of at least 16 characters}
+      COOKIE_SECURE: "true"
+      TZ: Asia/Colombo
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+  web:
+    build:
+      context: .
+      dockerfile: infrastructure/docker/Dockerfile.web
+    depends_on:
+      - api
+    restart: unless-stopped
+  gateway:
+    image: caddy:2-alpine
+    environment:
+      DOMAIN: ${DOMAIN:?Set a DNS hostname for HTTPS}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./infrastructure/docker/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - web
+    restart: unless-stopped
+volumes:
+  postgres-data:
+  caddy-data:
+  caddy-config:

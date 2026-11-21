@@ -1,0 +1,17 @@
+{
+  "name": "dexlanka-manufacturing-pro",
+  "private": true,
+  "version": "0.1.0",
+  "workspaces": [
+    "apps/erp-web"
+  ],
+  "scripts": {
+    "dev": "npm run dev -w apps/erp-web",
+    "build": "npm run build -w apps/erp-web",
+    "typecheck": "npm run typecheck -w apps/erp-web",
+    "test:api": "./mvnw -f services/erp-api/pom.xml test",
+    "api": "node scripts/dev.mjs --api-only",
+    "verify": "npm run typecheck && npm run build && npm run test:api",
+    "start": "node scripts/dev.mjs"
+  }
+}
