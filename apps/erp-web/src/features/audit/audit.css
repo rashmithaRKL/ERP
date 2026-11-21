@@ -1,0 +1,9 @@
+/*
+ * Audit action labels come pre-cased from auditLabel() ("MO approved", "QC passed"), so the
+ * capitalize transform from styles.css would turn them into "MO Approved". Imported after
+ * styles.css in main.tsx so these equal-specificity rules win.
+ */
+.audit-action,
+.activity-feed strong {
+  text-transform: none;
+}

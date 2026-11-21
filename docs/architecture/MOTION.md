@@ -4,7 +4,7 @@ Implemented 30 October 2026. This is a code-native Figma-style interaction syste
 
 ## Shared configuration
 
-`apps/erp-web/src/motion.tsx` owns spring/easing constants, motion preferences, page transitions, filter tabs and the interactive settings preview. `motion.css` owns CSS timings, focus/hover feedback and reduced-motion overrides. `MotionProvider` wraps the workspace in `main.tsx`. The production bundler separates Motion into its own chunk.
+`apps/erp-web/src/motion/motion.tsx` owns spring/easing constants, motion preferences, page transitions, filter tabs and the interactive settings preview. `motion/motion.css` owns CSS timings, focus/hover feedback and reduced-motion overrides. `MotionProvider` wraps the workspace in `main.tsx`. The production bundler separates Motion into its own chunk.
 
 | Interaction | Behavior |
 |---|---|
