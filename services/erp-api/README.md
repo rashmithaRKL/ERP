@@ -76,15 +76,17 @@ Each feature owns one Flyway version and one `/api/state` order range, so parall
 | Migration | Feature (wave plan) | State order range |
 |---|---|---|
 | `V1`, `V2` | foundation (applied — never edit) | 100–320 |
-| `V3` | sales/procurement multi-line documents, partners, returns | 1300–1399 |
-| `V4` | inventory adjustments, transfers, counts, warehouses | 1400–1499 |
-| `V5` | item master, units/conversions, variants, `SEMI_FINISHED` | 1500–1599 |
-| `V6` | admin users, approval policies, CSV imports, audit pagination | 1600–1699 |
+| `V3` | sales: multi-line sales orders, customer/supplier (partner) editing, customer returns | 1300–1399 |
+| `V4` | item master: editing, units/conversions, categories, barcodes, variants, `SEMI_FINISHED` | 1400–1499 |
+| `V5` | procurement: multi-line purchase orders, supplier returns | 1500–1599 |
+| `V6` | inventory: adjustments, transfers, cycle counts, warehouses | 1600–1699 |
 | `V7` | multi-level BOM and MRP explosion | 1700–1799 |
-| `V8` | integration: pagination rollout, approval and unit wiring | 1800–1899 |
+| `V8` | administration: user management, approval policies, CSV imports, audit pagination | 1800–1899 |
+| `V9` | integration: pagination rollout, approval and unit wiring | 1900–1999 |
 
-A feature that needs a second migration takes the next free number after the highest one merged on the main branch and
-records it in this table in the same commit.
+Branches are merged to `main` in ascending migration order (Flyway runs with `outOfOrder=false`), two features at a
+time. A feature that needs a second migration uses a sub-version of its own number (e.g. `V3_1__…`) so it still sorts
+inside its slot.
 
 ### 1. Package and files
 
