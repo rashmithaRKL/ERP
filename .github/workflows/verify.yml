@@ -18,4 +18,6 @@ jobs:
       - run: npm ci --no-audit --no-fund
       - run: npm run typecheck
       - run: npm run build
+      - name: Check backend formatting (fix locally with spotless:apply)
+        run: ./mvnw -f services/erp-api/pom.xml spotless:check
       - run: npm run test:api
