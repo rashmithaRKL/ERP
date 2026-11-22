@@ -78,8 +78,8 @@ Each feature owns one Flyway version and one `/api/state` order range, so parall
 | `V1`, `V2` | foundation (applied — never edit) | 100–320 |
 | `V3` | sales: multi-line sales orders, customer/supplier (partner) editing, customer returns | 1300–1399 |
 | `V4` | item master: editing, units/conversions, categories, barcodes, variants, `SEMI_FINISHED` | 1400–1499 |
-| `V5` | procurement: multi-line purchase orders, supplier returns | 1500–1599 |
-| `V6` | inventory: adjustments, transfers, cycle counts, warehouses | 1600–1699 |
+| `V5` | inventory: adjustments, transfers, cycle counts, warehouses | 1500–1599 |
+| `V6` | procurement: multi-line purchase orders, supplier returns | 1600–1699 |
 | `V7` | multi-level BOM and MRP explosion | 1700–1799 |
 | `V8` | administration: user management, approval policies, CSV imports, audit pagination | 1800–1899 |
 | `V9` | integration: pagination rollout, approval and unit wiring | 1900–1999 |
