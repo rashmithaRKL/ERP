@@ -40,6 +40,9 @@ npm run dev
 - Manufacturing approval → reservation → issue to WIP → release → start/pause/resume → partial/final output → final quality release → completion → close.
 - Lot-specific finished-goods dispatch per sales-order line (one or more released lots per dispatch) with quality gates and partial delivery support. Each delivery posts sales revenue, receivables and cost of goods sold.
 - FIFO material allocation, atomic reservations, immutable quantity/value ledger, nonnegative balance constraints, idempotent mutations and transactional audit/outbox records.
+- Inventory operations: warehouse management (code, kind, active flag; stocked warehouses cannot be deactivated), multi-line stock adjustments with reason codes and found-stock lots, a tenant approval threshold above which a different person must approve, and balanced inventory/adjustment journals.
+- Warehouse transfers that preserve item, quality status, unit cost and FIFO age (a quarantined lot stays quarantined and follows its original inspection), with source-lot traceability and no reserved stock moved.
+- Cycle counts: per-lot snapshot, blind counting on a touch-friendly sheet, variance review against the quantity at posting time (with moved-stock warnings) and posting through the same adjustment approval rule; one open count per lot.
 - Decimal-safe costing. Raw material + conversion cost reconciles to remaining WIP + finished output + scrap expense. Partial lot depletion preserves monetary rounding residuals.
 
 ## Try the complete workflow
