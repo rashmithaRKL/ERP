@@ -27,10 +27,10 @@ run by `target/surefire-reports/*.xml`.
 |---|---|
 | `lk.dexlanka.erp` | `ErpApplication` only (component scan root) |
 | `platform` | `Store` (posting primitives), `Actor` (identity + role checks), `ErpUser`, `SecurityConfig`, `LoginRateLimit`, `AuthController` (`/api/health`, `/api/auth/*`), `ApiErrors` (the single `@RestControllerAdvice`) |
-| `catalog` | Organization, user accounts, partners, items, work centers (machines), BOM revisions |
+| `catalog` | Organization, user accounts, partners (maintenance and directory in `Partner*` files), items, work centers (machines), BOM revisions |
 | `procurement` | Purchase orders, approval, goods receipt, supplier invoice matching |
 | `quality` | Incoming and final inspections (including the supplier return of a failed incoming lot and MO completion after the last final release) |
-| `sales` | Sales orders, dispatch (revenue/receivables and COGS) |
+| `sales` | Multi-line sales orders (draft/confirm/cancel/close short), per-line dispatch (revenue/receivables and COGS per delivery), customer returns (`ReturnsService`), the sales read model (`SalesQuery`) |
 | `manufacturing` | Manufacturing-order lifecycle: snapshot, approval, reservation, issue, start/pause/resume, output, close/cancel |
 | `reporting` | `GET /api/state` (`StateQuery` + the `StateContributor` contract), `GET /api/manufacturing/{id}` (`OrderDetailsQuery`), cross-domain sections: inventory (lots, ledger), MRP, dashboard, audit/sync, finance |
 | `demo` | `DemoDatabase` (embedded PostgreSQL for the `demo`/`test` profiles), `DemoSeed` (demo tenant, or first-start bootstrap tenant outside demo), `DemoPersonas` |
@@ -57,9 +57,10 @@ Route ownership:
 |---|---|
 | `platform.AuthController` | `GET /health`, `GET /auth/config`, `GET /auth/csrf`, `GET /auth/me`, `POST /auth/demo` (`/auth/login`, `/auth/logout` are Spring Security filters) |
 | `catalog.CatalogController` | `POST /users`, `/organization`, `/partners`, `/machines`, `/items`, `/boms`, `/boms/{id}/approve` |
+| `catalog.PartnerController` | `GET /partners`, `GET /partners/{id}`, `POST /partners/{id}` |
 | `procurement.ProcurementController` | `POST /purchases`, `/purchases/{id}/approve`, `/purchases/{id}/receive`, `/receipts/{id}/invoice` |
 | `quality.QualityController` | `POST /quality/{id}/inspect` |
-| `sales.SalesController` | `POST /sales`, `/sales/{id}/dispatch` |
+| `sales.SalesController` | `GET /sales/orders`, `GET /sales/orders/{id}`; `POST /sales/orders`, `/sales/orders/{id}`, `/sales/orders/{id}/confirm`, `/cancel`, `/close`, `/sales/orders/{id}/lines/{lineId}/dispatch`, `/sales/deliveries/{id}/returns`; original contract `POST /sales`, `/sales/{id}/dispatch` |
 | `manufacturing.ManufacturingController` | `POST /manufacturing`, `/manufacturing/{id}/actions/{action}`, `/manufacturing/{id}/complete` |
 | `reporting.ReportingController` | `GET /state`, `GET /manufacturing/{id}` |
 
@@ -248,7 +249,7 @@ annotate contributors with `@Transactional`. Existing keys, in order:
 | 100–160 | `company`, `users` (ADMIN), `factories`, `warehouses`, `partners`, `machines`, `items` | catalog |
 | 170 | `orders` | manufacturing |
 | 180–190 | `boms`, `bomLines` | catalog |
-| 200 | `sales` | sales |
+| 200 | `sales` (one summary row per order) | sales |
 | 210 | `purchases` | procurement |
 | 220 | `lots` | reporting (inventory) |
 | 230 | `inspections` | quality |
@@ -258,6 +259,7 @@ annotate contributors with `@Transactional`. Existing keys, in order:
 | 270–280 | `trend`, `metrics` | reporting (dashboard) |
 | 290–300 | `audit`, `sync` | reporting (audit) |
 | 310–320 | `financial`, `journal` (ADMIN, PLANNER) | reporting (finance) |
+| 1300 | `salesLines` (open lines of confirmed orders, for planning) | sales |
 
 The frontend depends on these keys and their row shapes: changing an existing section's columns is an API change.
 
@@ -284,6 +286,8 @@ The database, not the Java code, is the last line of defence:
 | `apply_stock_balance` (V1) | `AFTER INSERT ON stock_ledger`: checks the entry's item/warehouse/unit against its lot (*"Ledger unit, item or warehouse mismatch"*), requires quantity and value signs to agree, and updates `stock_balances`, whose `CHECK`s reject negative stock/value and `reserved > quantity`. |
 | `journal_must_balance` (V1) | `DEFERRABLE INITIALLY DEFERRED` constraint trigger: at commit, every journal entry's debits must equal its credits. |
 | `approved_bom_immutable`, `approved_bom_line_immutable` (V2) | An `APPROVED` BOM and its lines cannot be changed or deleted; create a new revision. |
+| `customer_returns_immutable` (V3) | Posted customer returns cannot be changed or deleted. |
+| `sales_partner_active`, `purchase_partner_active` (V3) | `partner_must_be_active()`: a new sales/purchase order (or a sales order's changed customer) must reference an active partner; raises SQLSTATE 23514 → 409. |
 
 A new table of posted history gets the same protection by reusing the function:
 `CREATE TRIGGER <table>_immutable BEFORE UPDATE OR DELETE ON <table> FOR EACH ROW EXECUTE FUNCTION reject_history_mutation();`.
@@ -292,7 +296,9 @@ Trigger exceptions and constraint violations surface as `DataIntegrityViolationE
 
 ### 9. Demo data
 
-`demo.DemoSeed` seeds the base demo tenant once, when `app.demo=true`; never edit it for a feature. A feature that needs
+`demo.DemoSeed` seeds the base demo tenant once, when `app.demo=true`; never edit it for a feature (V3 only moved its
+sales orders to the draft → confirm → per-line dispatch commands). `demo.SalesDemoSeed` (`ORDER + 30`) adds the V3
+sales documents. A feature that needs
 demo data adds its own runner, ordered after the base seed and idempotent (it also runs against an existing
 `.local/postgres` demo database on the next start):
 

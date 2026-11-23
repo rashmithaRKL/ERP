@@ -127,18 +127,28 @@ public class CatalogService {
         if (a.role().equals("WAREHOUSE"))
             require(c.type().equals("SUPPLIER"), "Warehouse role can create suppliers only");
         return s.once(a, key, "partner", c, () -> {
+            require(c.creditLimit() == null || c.type().equals("CUSTOMER"), "Credit limits apply to customers only");
             String id = id();
             s.db().update(
-                            "INSERT INTO partners(id,tenant_id,name,type,email,payment_days) VALUES(?,?,?,?,?,?)",
+                            "INSERT INTO partners(id,tenant_id,name,type,email,payment_days,phone,billing_address,shipping_address,tax_id,credit_limit) VALUES(?,?,?,?,?,?,?,?,?,?,?)",
                             id,
                             a.tenant(),
-                            c.name(),
+                            c.name().strip(),
                             c.type(),
-                            c.email(),
-                            c.paymentDays());
-            s.audit(a, "PARTNER_CREATED", c.name(), c.type());
+                            blankToNull(c.email()),
+                            c.paymentDays(),
+                            blankToNull(c.phone()),
+                            blankToNull(c.billingAddress()),
+                            blankToNull(c.shippingAddress()),
+                            blankToNull(c.taxId()),
+                            c.creditLimit());
+            s.audit(a, "PARTNER_CREATED", c.name().strip(), c.type());
             return Map.of("id", id);
         });
+    }
+
+    private static String blankToNull(String value) {
+        return value == null || value.isBlank() ? null : value.strip();
     }
 
     @Transactional

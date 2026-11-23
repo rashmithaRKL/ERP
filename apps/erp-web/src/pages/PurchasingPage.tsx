@@ -1,7 +1,8 @@
-import { Plus } from 'lucide-react';
+import { Pencil, Plus } from 'lucide-react';
 import { useStateData, useWorkspace } from '../app/workspace';
 import { Badge, option, Panel, qtyField, selectField, Table } from '../components';
-import { createPartner } from '../features/partners/forms';
+import { createPartner, editPartner } from '../features/partners/forms';
+import { PartnerStatus } from '../features/partners/PartnerDirectory';
 import { date, fmt, money, num, text } from '../lib/format';
 
 /** Route `/purchasing`: purchase orders, goods receipts / invoice matching and suppliers. */
@@ -140,6 +141,17 @@ export default function PurchasingPage() {
             { label: 'Supplier', key: 'name' },
             { label: 'Email', key: 'email' },
             { label: 'Payment terms', render: (r) => `${r.payment_days} days` },
+            { label: 'Status', render: (r) => <PartnerStatus active={r.active} /> },
+            {
+              label: 'Action',
+              render: (r) =>
+                can('PLANNER', 'WAREHOUSE') && (
+                  <button className="button small secondary" onClick={() => editPartner(workspace, r)}>
+                    <Pencil size={13} />
+                    Edit
+                  </button>
+                ),
+            },
           ]}
         />
       </Panel>

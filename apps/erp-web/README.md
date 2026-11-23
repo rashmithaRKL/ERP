@@ -116,6 +116,24 @@ postForm(
 
 `Field` supports `type` (`text` by default, or `number`, `date`, `email`, `password`, `textarea`), `options` (renders a `<select>`), `defaultValue`, `min`, `step`, `hint` and `optional`. The dialog keeps one idempotency key per opening, so retrying after an error cannot double-post. On success it calls `refresh()` and shows the success toast. For non-POST or multi-step flows, call `openForm({ title, fields, run: (values, key) => ... })`. For editors that need dynamic rows, write a dedicated dialog on top of `Overlay` (see `features/boms/BomDialog.tsx`) and render it inside an `<AnimatePresence>`.
 
+### Multi-line documents: `LineItemsEditor`
+
+`components/LineItemsEditor.tsx` is the controlled line editor used by the sales order editor (and meant for purchase orders): item picker, quantity (whole numbers for `pcs` items), unit price, optional discount %, display-only line total and running totals, add/remove rows with motion. Enter moves to the next line (adding one after the last), Ctrl+Delete removes the current line. Helpers (`newLine`, `lineNet`, types) live in `components/lineItems.ts`.
+
+```tsx
+const [lines, setLines] = useState<LineItem[]>([newLine()]);
+<LineItemsEditor
+  lines={lines}
+  onChange={setLines}
+  options={items.map((i) => ({ value: i.id, label: text(i.name), unit: text(i.uom) }))}
+  itemLabel="Material"
+  priceLabel="Unit cost"
+  discount={false}
+/>;
+```
+
+Send `lines.map(({ id, itemId, quantity, unitPrice, discountPct }) => …)` to the API; the server recomputes totals.
+
 ## Tables: `Table`
 
 ```tsx

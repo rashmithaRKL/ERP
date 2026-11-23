@@ -5,7 +5,8 @@ A screen alone does not satisfy a business workflow. Each supported command has 
 | Workflow | Implemented slice | Boundary |
 |---|---|---|
 | Purchase to stock | Draft PO → independent approval → partial/full GRN → quarantine → QC → usable lot → PO/receipt invoice match | Single item per PO; requisitions/RFQs and supplier invoice price-variance handling later |
-| Sales to delivery | Confirmed SO → approved BOM MO → reserve → issue → start → output → final QC → finished stock → partial/full dispatch → revenue/COGS | Single item per SO; quotations, credit control, taxes and shipping integration later |
+| Sales to delivery | Draft multi-line SO → confirm (credit-limit warning) → MO per SO line from approved BOM → reserve → issue → start → output → final QC → finished stock → per-line partial/full dispatch → revenue/COGS per delivery; cancel (no delivery, no production in progress) or close short | Quotations, blocking credit control, taxes and shipping integration later |
+| Customer return | Return against a delivery (≤ delivered − returned) → quarantine lot at delivered cost → reversing revenue/receivable and COGS journals → RETURN inspection → pass restocks / fail holds | Replacement shipments are new orders; credit notes as documents and cash refunds later |
 | Material consumption | FIFO reservations → authorized issue → negative raw ledger → positive WIP value | Exact snapshot issue only; unplanned consumption requires a future controlled variance workflow |
 | Partial production | Partial good/scrap output → proportional cost allocation → retained WIP → final output → zero WIP | Conversion costs entered per posting; no implicit whole-order cost allocation |
 | Quality failure | Incoming failure → supplier return reversal; final failure → enforceable finished lot hold | Final rework/release/scrap disposition not implemented; unsafe dispatch remains blocked |

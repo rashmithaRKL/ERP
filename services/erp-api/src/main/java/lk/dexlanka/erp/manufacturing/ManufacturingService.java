@@ -47,16 +47,15 @@ public class ManufacturingService {
                             "uom"),
                     c.quantity());
             var m = s.one("SELECT * FROM machines WHERE tenant_id=? AND id=?", a.tenant(), c.machineId());
-            if (c.salesOrderId() != null && !c.salesOrderId().isBlank()) {
-                var so = s.one("SELECT * FROM sales_orders WHERE tenant_id=? AND id=?", a.tenant(), c.salesOrderId());
-                require(so.get("product_id").equals(b.get("product_id")), "Sales product and BOM product differ");
+            var demand = salesLine(a, c, str(b, "product_id"));
+            if (demand != null) {
                 var planned = s.db().queryForObject(
-                                "SELECT COALESCE(SUM(quantity-scrap_qty),0) FROM manufacturing_orders WHERE tenant_id=? AND sales_order_id=? AND status<>'CANCELLED'",
+                                "SELECT COALESCE(SUM(quantity-scrap_qty),0) FROM manufacturing_orders WHERE tenant_id=? AND sales_order_line_id=? AND status<>'CANCELLED'",
                                 BigDecimal.class,
                                 a.tenant(),
-                                c.salesOrderId());
+                                demand.get("id"));
                 require(
-                        planned.add(c.quantity()).compareTo(dec(so.get("quantity"))) <= 0,
+                        planned.add(c.quantity()).compareTo(dec(demand.get("quantity"))) <= 0,
                         "Manufacturing quantity exceeds unplanned customer demand");
             }
             String id = id();
@@ -71,14 +70,15 @@ public class ManufacturingService {
                     .map(l -> requirement(l, c.quantity(), outputBase).multiply(dec(l.get("standard_cost"))))
                     .reduce(BigDecimal.ZERO, BigDecimal::add);
             s.db().update(
-                            "INSERT INTO manufacturing_orders(id,tenant_id,number,product_id,bom_id,bom_revision,sales_order_id,machine_id,factory_id,quantity,priority,due_date,estimated_cost,created_by) VALUES(?,?,?,?,?,?,?,?,?,?,?,?::date,?,?)",
+                            "INSERT INTO manufacturing_orders(id,tenant_id,number,product_id,bom_id,bom_revision,sales_order_id,sales_order_line_id,machine_id,factory_id,quantity,priority,due_date,estimated_cost,created_by) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?::date,?,?)",
                             id,
                             a.tenant(),
                             num,
                             b.get("product_id"),
                             c.bomId(),
                             b.get("revision"),
-                            c.salesOrderId() == null || c.salesOrderId().isBlank() ? null : c.salesOrderId(),
+                            demand == null ? null : demand.get("sales_order_id"),
+                            demand == null ? null : demand.get("id"),
                             c.machineId(),
                             m.get("factory_id"),
                             c.quantity(),
@@ -352,6 +352,41 @@ public class ManufacturingService {
                     c.goodQty() + " good; " + c.scrapQty() + " scrap; WIP " + wip.subtract(allocated));
             return order(a, id);
         });
+    }
+
+    /**
+     * The confirmed customer order line an order is planned for, or null for make-to-stock. A bare {@code salesOrderId}
+     * (original contract) resolves to that order's only line of the BOM product.
+     */
+    private Map<String, Object> salesLine(Actor a, ManufacturingCommands.Manufacture c, String product) {
+        boolean byLine = c.salesOrderLineId() != null && !c.salesOrderLineId().isBlank();
+        boolean byOrder = c.salesOrderId() != null && !c.salesOrderId().isBlank();
+        if (!byLine && !byOrder) return null;
+        Map<String, Object> line;
+        if (byLine) {
+            line = s.one(
+                    "SELECT l.*,so.status AS order_status FROM sales_order_lines l JOIN sales_orders so ON so.tenant_id=l.tenant_id AND so.id=l.sales_order_id WHERE l.tenant_id=? AND l.id=?",
+                    a.tenant(),
+                    c.salesOrderLineId());
+            require(
+                    !byOrder || c.salesOrderId().equals(line.get("sales_order_id")),
+                    "The sales order line belongs to a different sales order");
+        } else {
+            s.one("SELECT id FROM sales_orders WHERE tenant_id=? AND id=?", a.tenant(), c.salesOrderId());
+            var lines = s.list(
+                    "SELECT l.*,so.status AS order_status FROM sales_order_lines l JOIN sales_orders so ON so.tenant_id=l.tenant_id AND so.id=l.sales_order_id WHERE l.tenant_id=? AND l.sales_order_id=? AND l.product_id=? ORDER BY l.line_no",
+                    a.tenant(),
+                    c.salesOrderId(),
+                    product);
+            require(!lines.isEmpty(), "Sales product and BOM product differ");
+            require(lines.size() == 1, "Several lines carry this product; choose the sales order line to plan");
+            line = lines.getFirst();
+        }
+        require(line.get("product_id").equals(product), "Sales product and BOM product differ");
+        require(
+                Set.of("CONFIRMED", "PARTIAL").contains(str(line, "order_status")),
+                "Plan production only for confirmed, open sales orders");
+        return line;
     }
 
     public static BigDecimal requirement(Map<String, Object> line, BigDecimal output, BigDecimal outputBase) {

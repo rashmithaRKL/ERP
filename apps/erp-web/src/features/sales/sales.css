@@ -1,0 +1,63 @@
+/* Sales documents (pages/SalesPage.tsx, features/sales/*, features/partners/*). Reuses the global tokens. */
+.dialog:has(.sales-editor){width:1000px}
+.sales-editor .form-fields .field:has(textarea){grid-column:auto}
+.sales-editor .form-fields textarea{min-height:39px}
+.sales-editor-lines{padding:0 22px 22px}
+.sales-editor-lines>h3{display:flex;align-items:center;gap:7px;padding:0 0 14px}
+.sales-editor-lines .form-error{margin-top:14px}
+.sales-editor-total{font-size:12px;font-variant-numeric:tabular-nums}
+
+.sales-drawer-loading{display:flex;justify-content:center;color:var(--muted)}
+.sales-spaced{margin-top:12px}
+.sales-notice{font-size:12px;line-height:1.6;padding:11px 13px;border-radius:5px;margin-bottom:16px;background:var(--soft);border:1px solid var(--border);color:var(--secondary)}
+.sales-notice.warn{background:#fdf6e9;border-color:#f4e8d0;color:#9a7230}
+.sales-notice.danger{background:#d7263809;border-color:#d7263822;color:#bc3343}
+[data-theme=dark] .sales-notice.warn{background:#ffffff08;border-color:#6b5a35;color:#d9b36a}
+[data-theme=dark] .sales-notice.danger{background:#ffffff08;border-color:#6b3540;color:#e48a95}
+.sales-empty-line{font-size:12px;color:var(--muted);padding:4px 0 6px}
+.sales-notes{font-size:13px;color:var(--secondary);white-space:pre-wrap}
+.sales-drawer .table-scroll{border:1px solid var(--border);border-radius:6px}
+
+.dispatch-price{font-size:15px;font-weight:600;color:var(--heading);padding:9px 0}
+.dispatch-price small{font-size:11px;font-weight:400;color:var(--muted)}
+.dispatch-lots{padding:0 22px 22px}
+.dispatch-lots-head{display:flex;align-items:center;justify-content:space-between;padding:0 0 12px}
+.dispatch-lots-head h3{display:flex;align-items:center;gap:7px}
+.dispatch-lot-list{border:1px solid var(--border);border-radius:6px}
+.dispatch-lot{display:grid;grid-template-columns:minmax(0,1fr) auto 130px;gap:14px;align-items:center;padding:11px 13px;border-bottom:1px solid var(--border)}
+.dispatch-lot:last-child{border-bottom:0}
+.dispatch-lot:focus-within{background:var(--soft)}
+.dispatch-lot input{border:1px solid #dce1e8;background:var(--surface);border-radius:5px;padding:8px;font-size:13px;width:100%}
+[data-theme=dark] .dispatch-lot input{border-color:var(--border)}
+.dispatch-lot-available{font-size:12px;text-align:right;color:var(--text);font-variant-numeric:tabular-nums}
+.dispatch-lot-available small{display:block;font-size:10px;color:var(--muted)}
+.dispatch-total{font-size:12px;color:var(--secondary);padding-top:12px;text-align:right}
+.dispatch-total strong{color:var(--heading)}
+.dispatch-total.overdue strong{color:inherit}
+.dispatch-lots .form-error{margin-top:12px}
+
+.server-table .table-scroll.compact td{padding:15px 18px}
+.server-table .table-scroll.compact th{padding:11px 18px}
+.server-table .products-cell{display:block;max-width:220px;overflow:hidden;text-overflow:ellipsis;font-size:11px;color:var(--muted)}
+.server-toolbar{display:flex;align-items:center;justify-content:space-between;gap:15px;padding:14px 18px}
+.server-toolbar .muted{font-size:11px;white-space:nowrap}
+.server-loading{padding:18px}
+.server-loading .skeleton{height:220px}
+.server-error{margin:18px}
+.server-error .button{margin-top:10px}
+.status-dot{display:inline-flex;align-items:center;gap:4px;font-size:10px;padding:3px 6px;border-radius:4px;border:1px solid transparent;font-weight:500;white-space:nowrap}
+.status-dot i{width:3.5px;height:3.5px;border-radius:100%;background:currentColor}
+
+@media(max-width:1100px){.dialog:has(.sales-editor){width:calc(100vw - 32px)}}
+@media(max-width:650px){
+  .sales-editor .form-fields{grid-template-columns:1fr}
+  .sales-editor-lines,.dispatch-lots{padding:0 18px 18px}
+  .sales-editor .dialog-footer{flex-wrap:wrap}
+  .sales-editor .dialog-footer .grow,.sales-editor-total{flex-basis:100%}
+  .dispatch-lot{grid-template-columns:1fr 110px}
+  .dispatch-lot-available{grid-column:1;text-align:left}
+  .dispatch-lot input{grid-row:1/3;grid-column:2}
+  .server-toolbar{flex-wrap:wrap;padding:12px 15px}
+  .server-toolbar .search-input{width:100%}
+  .server-table .table-scroll.compact td,.server-table .table-scroll.compact th{padding-left:13px;padding-right:13px}
+}

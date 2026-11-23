@@ -10,7 +10,10 @@ export type State = {
   orders: Row[];
   boms: Row[];
   bomLines: Row[];
+  /** One summary row per sales order (lines aggregated); documents come from `GET /sales/orders`. */
   sales: Row[];
+  /** Open lines of confirmed sales orders, for planning manufacturing against a customer line. */
+  salesLines?: Row[];
   purchases: Row[];
   lots: Row[];
   inspections: Row[];

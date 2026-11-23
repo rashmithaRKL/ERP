@@ -1,0 +1,43 @@
+/* Generic multi-line document editor (components/LineItemsEditor.tsx). */
+.line-editor{--line-cols:26px minmax(170px,1fr) 118px 118px 92px 118px 30px;display:flex;flex-direction:column}
+.line-editor.no-discount{--line-cols:26px minmax(170px,1fr) 118px 118px 118px 30px}
+.line-editor-head,.line-editor-row{display:grid;grid-template-columns:var(--line-cols);gap:10px;align-items:center}
+.line-editor-head{font-size:10px;font-weight:500;color:#8a95a6;background:var(--soft);border:1px solid var(--border);border-radius:5px 5px 0 0;padding:9px 10px;letter-spacing:.1px}
+.line-editor-row{padding:9px 10px;border:1px solid var(--border);border-top:0}
+.line-editor-row:focus-within{background:var(--soft)}
+.line-editor-no{font-size:11px;color:var(--muted);text-align:center;font-variant-numeric:tabular-nums}
+.line-editor-cell{display:flex;flex-direction:column;gap:5px;min-width:0}
+.line-editor-label{display:none;font-size:11px;color:var(--muted)}
+.line-editor-row input,.line-editor-row select{border:1px solid #dce1e8;background:var(--surface);border-radius:5px;padding:8px;font-size:13px;width:100%;min-width:0}
+[data-theme=dark] .line-editor-row input,[data-theme=dark] .line-editor-row select{border-color:var(--border)}
+.line-editor-row select{height:36px;text-overflow:ellipsis}
+.line-editor-input-unit{display:flex;align-items:center;gap:6px}
+.line-editor-input-unit small{font-size:11px;color:var(--muted)}
+.line-editor-amount{text-align:right;align-items:flex-end}
+.line-editor-amount strong{font-size:13px;font-weight:550;color:var(--heading);font-variant-numeric:tabular-nums;white-space:nowrap}
+.line-editor-empty{font-size:12px;color:var(--muted);padding:16px 10px;border:1px dashed var(--border);border-top:0;text-align:center}
+.line-editor-foot{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;padding-top:14px;flex-wrap:wrap}
+.line-editor-actions{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.line-editor-hint{font-size:11px;color:var(--muted);display:inline-flex;align-items:center;gap:3px}
+.line-editor-totals{display:grid;grid-template-columns:auto auto;gap:6px 22px;margin:0;font-size:12px;color:var(--secondary);font-variant-numeric:tabular-nums}
+.line-editor-totals dt{color:var(--muted)}
+.line-editor-totals dd{margin:0;text-align:right}
+.line-editor-totals .grand{font-size:14px;font-weight:650;color:var(--heading);padding-top:4px;border-top:1px solid var(--border)}
+
+@media(max-width:650px){
+  .line-editor-head{display:none}
+  .line-editor-row{grid-template-columns:1fr 1fr;grid-template-areas:'no remove' 'item item' 'qty price' 'disc total';border:1px solid var(--border);border-radius:6px;margin-bottom:10px;gap:10px}
+  .line-editor.no-discount .line-editor-row{grid-template-areas:'no remove' 'item item' 'qty price' 'total total'}
+  .line-editor-row>.line-editor-no{grid-area:no;text-align:left;font-weight:600;color:var(--secondary)}
+  .line-editor-row>.line-editor-no:before{content:'Line '}
+  .line-editor-row>.item{grid-area:item}
+  .line-editor-row>.qty{grid-area:qty}
+  .line-editor-row>.price{grid-area:price}
+  .line-editor-row>.disc{grid-area:disc}
+  .line-editor-row>.line-editor-amount{grid-area:total}
+  .line-editor-row>.line-editor-remove{grid-area:remove;justify-self:end}
+  .line-editor-label{display:block}
+  .line-editor-empty{border-top:1px dashed var(--border);border-radius:6px}
+  .line-editor-hint{display:none}
+  .line-editor-totals{width:100%}
+}

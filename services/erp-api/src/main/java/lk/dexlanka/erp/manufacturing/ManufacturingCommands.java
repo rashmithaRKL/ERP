@@ -29,7 +29,20 @@ public final class ManufacturingCommands {
             String priority,
 
             @NotBlank @Pattern(regexp = "\\d{4}-\\d{2}-\\d{2}")
-            String dueDate) {}
+            String dueDate,
+
+            /* The customer order line this run fulfils (V3); takes precedence over salesOrderId. */
+            @Size(max = 64) String salesOrderLineId) {
+        public Manufacture(
+                String bomId,
+                String machineId,
+                String salesOrderId,
+                BigDecimal quantity,
+                String priority,
+                String dueDate) {
+            this(bomId, machineId, salesOrderId, quantity, priority, dueDate, null);
+        }
+    }
 
     public record Complete(
             @NotNull @DecimalMin("0") @Digits(integer = 12, fraction = 6)

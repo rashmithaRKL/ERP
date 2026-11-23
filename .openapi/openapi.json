@@ -290,7 +290,7 @@
     },
     "/sales": {
       "post": {
-        "summary": "Confirm customer demand",
+        "summary": "Single-item order, created confirmed with one line (SALES/PLANNER)",
         "parameters": [
           {
             "$ref": "#/components/parameters/IdempotencyKey"
@@ -330,7 +330,7 @@
     },
     "/sales/{id}/dispatch": {
       "post": {
-        "summary": "Dispatch released finished lot and recognize sales",
+        "summary": "Single-lot dispatch of a sales order line (WAREHOUSE)",
         "parameters": [
           {
             "$ref": "#/components/parameters/IdempotencyKey"
@@ -457,6 +457,73 @@
       }
     },
     "/partners": {
+      "get": {
+        "summary": "Partner directory by name, keyset-paged: {items, next, total}",
+        "parameters": [
+          {
+            "name": "type",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "CUSTOMER",
+                "SUPPLIER"
+              ]
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "all",
+                "active",
+                "inactive"
+              ],
+              "default": "all"
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Name, email, phone or tax ID"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200,
+              "default": 25
+            }
+          },
+          {
+            "name": "before",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Page of partners"
+          },
+          "404": {
+            "description": "Missing or unowned"
+          }
+        }
+      },
       "post": {
         "summary": "Create supplier or customer",
         "parameters": [
@@ -920,6 +987,474 @@
           }
         }
       }
+    },
+    "/sales/orders": {
+      "get": {
+        "summary": "Sales orders, newest first, keyset-paged: {items, next, total, counts}",
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "all"
+            },
+            "description": "all, open (CONFIRMED+PARTIAL) or a status code"
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Number, customer, customer reference or line product"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200,
+              "default": 25
+            }
+          },
+          {
+            "name": "before",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Cursor: the previous page's next value"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Page of orders"
+          },
+          "404": {
+            "description": "Missing or unowned"
+          }
+        }
+      },
+      "post": {
+        "summary": "Create a draft multi-line sales order (SALES/PLANNER)",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SalesOrder"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Committed result; retry with same key returns prior result"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Role/CSRF denied"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "State/stock/period/idempotency conflict"
+          }
+        }
+      }
+    },
+    "/sales/orders/{id}": {
+      "get": {
+        "summary": "Sales order with lines, deliveries, returns, linked manufacturing orders, available lots, activity and credit",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Order detail"
+          },
+          "404": {
+            "description": "Missing or unowned"
+          }
+        }
+      },
+      "post": {
+        "summary": "Replace a draft order header and lines (SALES/PLANNER)",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SalesOrder"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Committed result; retry with same key returns prior result"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Role/CSRF denied"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "State/stock/period/idempotency conflict"
+          }
+        }
+      }
+    },
+    "/sales/orders/{id}/confirm": {
+      "post": {
+        "summary": "Confirm a draft; returns warnings when the credit limit is exceeded (SALES/PLANNER)",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Committed result; retry with same key returns prior result"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Role/CSRF denied"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "State/stock/period/idempotency conflict"
+          }
+        }
+      }
+    },
+    "/sales/orders/{id}/cancel": {
+      "post": {
+        "summary": "Cancel an order with nothing delivered and no production in progress (SALES/PLANNER)",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Reason"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Committed result; retry with same key returns prior result"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Role/CSRF denied"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "State/stock/period/idempotency conflict"
+          }
+        }
+      }
+    },
+    "/sales/orders/{id}/close": {
+      "post": {
+        "summary": "Close a partially delivered order short (SALES/PLANNER)",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Reason"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Committed result; retry with same key returns prior result"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Role/CSRF denied"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "State/stock/period/idempotency conflict"
+          }
+        }
+      }
+    },
+    "/sales/orders/{id}/lines/{lineId}/dispatch": {
+      "post": {
+        "summary": "Dispatch one line from released lots; revenue/receivable and COGS per delivery (WAREHOUSE)",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "lineId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DispatchLine"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Committed result; retry with same key returns prior result"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Role/CSRF denied"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "State/stock/period/idempotency conflict"
+          }
+        }
+      }
+    },
+    "/sales/deliveries/{id}/returns": {
+      "post": {
+        "summary": "Customer return: quarantine lot, reversing journals and RETURN inspection (SALES/PLANNER/WAREHOUSE)",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CustomerReturn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Committed result; retry with same key returns prior result"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Role/CSRF denied"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "State/stock/period/idempotency conflict"
+          }
+        }
+      }
+    },
+    "/partners/{id}": {
+      "get": {
+        "summary": "Partner with recent documents and activity",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Partner detail"
+          },
+          "404": {
+            "description": "Missing or unowned"
+          }
+        }
+      },
+      "post": {
+        "summary": "Edit a partner, including deactivation (audited)",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PartnerUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Committed result; retry with same key returns prior result"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Role/CSRF denied"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "State/stock/period/idempotency conflict"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -996,6 +1531,11 @@
           "dueDate": {
             "type": "string",
             "format": "date"
+          },
+          "salesOrderLineId": {
+            "type": "string",
+            "nullable": true,
+            "description": "Confirmed sales order line this order fulfils (takes precedence over salesOrderId)"
           }
         }
       },
@@ -1242,6 +1782,11 @@
           "reference": {
             "type": "string",
             "minLength": 1
+          },
+          "lineId": {
+            "type": "string",
+            "nullable": true,
+            "description": "Sales order line; defaults to the only open line of the lot product"
           }
         }
       },
@@ -1388,7 +1933,6 @@
         "required": [
           "name",
           "type",
-          "email",
           "paymentDays"
         ],
         "properties": {
@@ -1411,6 +1955,40 @@
             "type": "integer",
             "minimum": 0,
             "maximum": 365
+          },
+          "phone": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 40
+          },
+          "billingAddress": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 400
+          },
+          "shippingAddress": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 400
+          },
+          "taxId": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 40
+          },
+          "creditLimit": {
+            "oneOf": [
+              {
+                "type": "string",
+                "pattern": "^\\d+(\\.\\d{1,6})?$"
+              },
+              {
+                "type": "number",
+                "minimum": 0
+              }
+            ],
+            "nullable": true,
+            "description": "Customers only"
           }
         }
       },
@@ -1506,6 +2084,249 @@
               "SALES",
               "VIEWER"
             ]
+          }
+        }
+      },
+      "SalesLine": {
+        "type": "object",
+        "required": [
+          "productId",
+          "quantity",
+          "unitPrice"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "nullable": true,
+            "description": "Existing line id when editing a draft (keeps the line identity)"
+          },
+          "productId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "quantity": {
+            "oneOf": [
+              {
+                "type": "string",
+                "pattern": "^\\d+(\\.\\d{1,6})?$"
+              },
+              {
+                "type": "number",
+                "exclusiveMinimum": true,
+                "minimum": 0
+              }
+            ]
+          },
+          "unitPrice": {
+            "oneOf": [
+              {
+                "type": "string",
+                "pattern": "^\\d+(\\.\\d{1,6})?$"
+              },
+              {
+                "type": "number",
+                "minimum": 0
+              }
+            ]
+          },
+          "discountPct": {
+            "oneOf": [
+              {
+                "type": "string",
+                "pattern": "^\\d+(\\.\\d{1,6})?$"
+              },
+              {
+                "type": "number",
+                "minimum": 0
+              }
+            ],
+            "description": "Percent, 0-100; defaults to 0"
+          }
+        }
+      },
+      "SalesOrder": {
+        "type": "object",
+        "required": [
+          "customerId",
+          "dueDate",
+          "lines"
+        ],
+        "properties": {
+          "customerId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "customerReference": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 80
+          },
+          "dueDate": {
+            "type": "string",
+            "format": "date",
+            "description": "Required-by date"
+          },
+          "notes": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 2000
+          },
+          "lines": {
+            "type": "array",
+            "maxItems": 100,
+            "items": {
+              "$ref": "#/components/schemas/SalesLine"
+            }
+          }
+        }
+      },
+      "Reason": {
+        "type": "object",
+        "required": [
+          "reason"
+        ],
+        "properties": {
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 400
+          }
+        }
+      },
+      "Allocation": {
+        "type": "object",
+        "required": [
+          "lotId",
+          "quantity"
+        ],
+        "properties": {
+          "lotId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "quantity": {
+            "oneOf": [
+              {
+                "type": "string",
+                "pattern": "^\\d+(\\.\\d{1,6})?$"
+              },
+              {
+                "type": "number",
+                "exclusiveMinimum": true,
+                "minimum": 0
+              }
+            ]
+          }
+        }
+      },
+      "DispatchLine": {
+        "type": "object",
+        "required": [
+          "reference",
+          "lots"
+        ],
+        "properties": {
+          "reference": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          },
+          "lots": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 20,
+            "items": {
+              "$ref": "#/components/schemas/Allocation"
+            }
+          }
+        }
+      },
+      "CustomerReturn": {
+        "type": "object",
+        "required": [
+          "quantity",
+          "reason"
+        ],
+        "properties": {
+          "quantity": {
+            "oneOf": [
+              {
+                "type": "string",
+                "pattern": "^\\d+(\\.\\d{1,6})?$"
+              },
+              {
+                "type": "number",
+                "exclusiveMinimum": true,
+                "minimum": 0
+              }
+            ]
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 400
+          }
+        }
+      },
+      "PartnerUpdate": {
+        "type": "object",
+        "required": [
+          "name",
+          "paymentDays",
+          "active"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 160
+          },
+          "email": {
+            "type": "string",
+            "format": "email",
+            "nullable": true
+          },
+          "phone": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 40
+          },
+          "billingAddress": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 400
+          },
+          "shippingAddress": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 400
+          },
+          "taxId": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 40
+          },
+          "paymentDays": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 365
+          },
+          "creditLimit": {
+            "oneOf": [
+              {
+                "type": "string",
+                "pattern": "^\\d+(\\.\\d{1,6})?$"
+              },
+              {
+                "type": "number",
+                "minimum": 0
+              }
+            ],
+            "nullable": true,
+            "description": "Customers only"
+          },
+          "active": {
+            "type": "boolean"
           }
         }
       }

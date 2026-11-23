@@ -27,24 +27,27 @@ npm run dev
 - Shared Figma-style motion: spring navigation, page/card reveals, filter indicators, dialog/drawer exits, progress and BOM row transitions, plus saved reduced-motion preferences. See [the motion guide](docs/architecture/MOTION.md).
 - Responsive dashboard, light/dark themes, keyboard search (`⌘/Ctrl+K`), favorites, attention center, table search, sorting and pagination, CSV export.
 - Session authentication, bcrypt passwords, CSRF protection, rate-limited login, backend action permissions, tenant-scoped lookups and composite foreign keys.
-- Organization configuration, team account creation, customer and supplier creation, product master, explicit base units, work-center registration.
+- Organization configuration, team account creation, product master, explicit base units, work-center registration.
+- Customer and supplier management: contacts, billing/shipping addresses, tax ID, payment terms, customer credit limits, audited edits and deactivation (inactive partners cannot be used on new sales or purchase orders). Server-paged directories with search.
+- Multi-line sales orders: draft (editable header and lines with discounts and totals) → confirmation (credit-limit warning) → per-line partial/full dispatch → delivered; cancellation before delivery and close-short with a reason. Server-paged order list and a detail drawer with deliveries, returns, linked production and activity.
+- Customer returns against a delivery: quarantine lot at the delivered cost, compensating revenue/receivable and COGS journals, and a `RETURN` inspection that Quality control passes (restock) or fails (held).
 - Single-level BOM authoring, draft/approval, immutable approved revisions and order-specific material snapshots.
-- Single-item sales and purchase orders, independent purchase approval, partial receipt, quarantined lots, incoming quality decision, rejected receipt reversal and receipt/PO invoice matching.
+- Single-item purchase orders, independent purchase approval, partial receipt, quarantined lots, incoming quality decision, rejected receipt reversal and receipt/PO invoice matching.
 - Basic material planning against unreserved demand, available stock, approved incoming supply and safety stock.
 - Manufacturing approval → reservation → issue to WIP → release → start/pause/resume → partial/final output → final quality release → completion → close.
-- Lot-specific finished-goods dispatch with quality gates and partial delivery support. Dispatch posts sales revenue, receivables and cost of goods sold.
+- Lot-specific finished-goods dispatch per sales-order line (one or more released lots per dispatch) with quality gates and partial delivery support. Each delivery posts sales revenue, receivables and cost of goods sold.
 - FIFO material allocation, atomic reservations, immutable quantity/value ledger, nonnegative balance constraints, idempotent mutations and transactional audit/outbox records.
 - Decimal-safe costing. Raw material + conversion cost reconciles to remaining WIP + finished output + scrap expense. Partial lot depletion preserves monetary rounding residuals.
 
 ## Try the complete workflow
 
-1. Create a customer and sales order under **Sales orders**.
-2. Create a manufacturing order using an approved BOM and assign a work center.
+1. Create a customer and a multi-line sales order under **Sales orders**, then confirm it.
+2. In the order drawer, **Plan** a line: the manufacturing order takes the line's product (approved BOM) and unplanned quantity. Assign a work center.
 3. Approve as a **different** administrator/planner. In the demo, switch users from the avatar menu. Self-approval is blocked.
 4. In the order drawer, reserve materials, issue and release, then start production. Resolve shortages through **Material planning → Purchasing → Incoming QC**.
 5. Record output on **Shop floor**; partial output retains unfinished WIP cost. Output lots remain quarantined.
 6. Pass each final inspection in **Quality control**.
-7. Dispatch released goods from **Sales orders**. Review **Costs & reports**, **Inventory → Ledger** and **Administration → Audit trail**.
+7. Dispatch released goods per line from the sales order drawer; record a customer return against a delivery if needed (it waits in **Quality control**). Review **Costs & reports**, **Inventory → Ledger** and **Administration → Audit trail**.
 8. Close the fully reconciled manufacturing order.
 
 ## Verify

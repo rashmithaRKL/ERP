@@ -225,24 +225,23 @@ public class DemoSeed implements ApplicationRunner {
         }
         int[] daily = {7800, 9200, 8400, 10600, 9800, 6400, 7200, 8800, 10200, 9400, 11200, 10800, 10400};
         for (int d = 0; d < daily.length; d++) {
-            var sale = sales.sale(
+            var sale = salesOrder(
                     planner,
-                    new SalesCommands.Sale(
-                            d % 2 == 0 ? "ceylon" : "serendib",
-                            "bottle",
-                            new BigDecimal(daily[d]),
-                            new BigDecimal("26.5"),
-                            LocalDate.now().minusDays(13 - d).toString()),
-                    id());
+                    d % 2 == 0 ? "ceylon" : "serendib",
+                    "bottle",
+                    new BigDecimal(daily[d]),
+                    new BigDecimal("26.5"),
+                    LocalDate.now().minusDays(13 - d).toString());
             var order = mo.create(
                     planner,
                     new ManufacturingCommands.Manufacture(
                             "bom-bottle",
                             "bm01",
-                            str(sale, "id"),
+                            sale[0],
                             new BigDecimal(daily[d]),
                             "NORMAL",
-                            LocalDate.now().minusDays(13 - d).toString()),
+                            LocalDate.now().minusDays(13 - d).toString(),
+                            sale[1]),
                     id());
             String oid = str(order, "id");
             mo.transition(admin, oid, "approve", id());
@@ -272,11 +271,14 @@ public class DemoSeed implements ApplicationRunner {
                     new QualityCommands.Inspect(
                             "PASSED", "Weight, seal integrity and visual checks passed · demonstration"),
                     id());
-            sales.dispatch(
+            sales.dispatchLine(
                     admin,
-                    str(sale, "id"),
-                    new SalesCommands.Dispatch(
-                            str(inspection, "lot_id"), new BigDecimal(daily[d] - 40), "DN-DEMO-" + (d + 1)),
+                    sale[0],
+                    sale[1],
+                    new SalesCommands.DispatchLine(
+                            "DN-DEMO-" + (d + 1),
+                            List.of(new SalesCommands.Allocation(
+                                    str(inspection, "lot_id"), new BigDecimal(daily[d] - 40)))),
                     id());
             mo.transition(admin, oid, "close", id());
         }
@@ -289,24 +291,23 @@ public class DemoSeed implements ApplicationRunner {
             {"container", "ceylon", "10000", "im02", "NORMAL", "5", "DRAFT"}
         };
         for (var o : active) {
-            var sale = sales.sale(
+            var sale = salesOrder(
                     planner,
-                    new SalesCommands.Sale(
-                            o[1],
-                            o[0],
-                            new BigDecimal(o[2]),
-                            new BigDecimal(o[0].equals("cap") ? "7.5" : "38.5"),
-                            LocalDate.now().plusDays(Integer.parseInt(o[5])).toString()),
-                    id());
+                    o[1],
+                    o[0],
+                    new BigDecimal(o[2]),
+                    new BigDecimal(o[0].equals("cap") ? "7.5" : "38.5"),
+                    LocalDate.now().plusDays(Integer.parseInt(o[5])).toString());
             var order = mo.create(
                     planner,
                     new ManufacturingCommands.Manufacture(
                             "bom-" + o[0],
                             o[3],
-                            str(sale, "id"),
+                            sale[0],
                             new BigDecimal(o[2]),
                             o[4],
-                            LocalDate.now().plusDays(Integer.parseInt(o[5])).toString()),
+                            LocalDate.now().plusDays(Integer.parseInt(o[5])).toString(),
+                            sale[1]),
                     id());
             String oid = str(order, "id");
             if (!o[6].equals("DRAFT")) mo.transition(admin, oid, "approve", id());
@@ -356,6 +357,19 @@ public class DemoSeed implements ApplicationRunner {
                 "DEMO_INITIALIZED",
                 "DEMO",
                 "Fictional demonstration data. Historical output observations are backfilled; financial postings use entry date.");
+    }
+
+    /** A confirmed one-line customer order (created as a draft, then confirmed); returns {order id, line id}. */
+    String[] salesOrder(Actor actor, String customer, String product, BigDecimal qty, BigDecimal price, String due) {
+        var order = sales.create(
+                actor,
+                new SalesCommands.Order(
+                        customer, null, due, "", List.of(new SalesCommands.Line(null, product, qty, price, null))),
+                id());
+        sales.confirm(actor, str(order, "id"), id());
+        var line =
+                s.one("SELECT id FROM sales_order_lines WHERE tenant_id='demo' AND sales_order_id=?", order.get("id"));
+        return new String[] {str(order, "id"), str(line, "id")};
     }
 
     void addBomLine(String product, String material, String qty) {

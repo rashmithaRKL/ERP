@@ -50,11 +50,19 @@ public final class CatalogCommands {
 
             @NotEmpty @Size(max = 100) List<@Valid BomLine> lines) {}
 
+    /** New customer or supplier. The fields after {@code paymentDays} are optional (V3); see {@code PartnerService}. */
     public record Partner(
             @NotBlank @Size(max = 160) String name,
             @NotBlank @Pattern(regexp = "CUSTOMER|SUPPLIER") String type,
             @Email @Size(max = 160) String email,
-            @Min(0) @Max(365) int paymentDays) {}
+            @Min(0) @Max(365) int paymentDays,
+            @Size(max = 40) String phone,
+            @Size(max = 400) String billingAddress,
+            @Size(max = 400) String shippingAddress,
+            @Size(max = 40) String taxId,
+
+            @DecimalMin("0") @Digits(integer = 12, fraction = 6)
+            BigDecimal creditLimit) {}
 
     public record Machine(
             @NotBlank @Size(max = 30) String code,
