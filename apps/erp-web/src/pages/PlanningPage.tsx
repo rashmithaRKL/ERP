@@ -1,6 +1,7 @@
 import { ArrowUpRight, Layers } from 'lucide-react';
 import { useStateData, useWorkspace } from '../app/workspace';
 import { Panel, Table } from '../components';
+import { ItemTypeBadge } from '../features/products/ItemTypeBadge';
 import { createPurchase } from '../features/purchasing/forms';
 import { fmt, num, text } from '../lib/format';
 
@@ -37,8 +38,18 @@ export default function PlanningPage() {
                   <strong>{text(r.name)}</strong>
                   <span>
                     {text(r.sku)} · {text(r.uom)}
+                    {num(r.lead_time_days) > 0 ? ` · ${text(r.lead_time_days)} day lead time` : ''}
                   </span>
                 </div>
+              ),
+            },
+            {
+              label: 'Type',
+              render: (r) => (
+                <span className="cell-stack">
+                  <ItemTypeBadge type={r.type} />
+                  {r.active === false && <span>inactive</span>}
+                </span>
               ),
             },
             { label: 'Gross demand', render: (r) => fmt(r.gross, 3) },

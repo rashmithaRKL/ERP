@@ -55,16 +55,17 @@ export default function BomDialog({
       <form onSubmit={submit}>
         <div className="form-fields">
           <label className="field">
-            <span>Finished product</span>
+            <span>Finished or semi-finished product</span>
             <select required name="productId" defaultValue="">
               <option value="" disabled>
                 Select a product
               </option>
               {data.items
-                .filter((i) => i.type === 'FINISHED_GOOD')
+                .filter((i) => (i.type === 'FINISHED_GOOD' || i.type === 'SEMI_FINISHED') && i.active)
                 .map((i) => (
                   <option key={i.id} value={i.id}>
                     {text(i.name)}
+                    {i.type === 'SEMI_FINISHED' ? ' · semi-finished' : ''}
                   </option>
                 ))}
             </select>
@@ -102,7 +103,7 @@ export default function BomDialog({
                 key={line.key}
                 line={line}
                 index={index}
-                materials={data.items.filter((i) => i.type !== 'FINISHED_GOOD')}
+                materials={data.items.filter((i) => i.type !== 'FINISHED_GOOD' && i.active)}
                 reduced={reduced}
                 removable={lines.length > 1}
                 onUpdate={(field, value) => update(index, field, value)}
@@ -181,11 +182,11 @@ function MaterialRow({
           onChange={(e) => onUpdate('itemId', e.target.value)}
         >
           <option value="" disabled>
-            Select raw material / packaging
+            Select raw material / packaging / semi-finished
           </option>
           {materials.map((item) => (
             <option key={item.id} value={item.id}>
-              {text(item.name)} ({text(item.uom)})
+              {text(item.name)} ({text(item.uom)}){item.type === 'SEMI_FINISHED' ? ' · semi-finished' : ''}
             </option>
           ))}
         </select>

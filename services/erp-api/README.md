@@ -27,7 +27,7 @@ run by `target/surefire-reports/*.xml`.
 |---|---|
 | `lk.dexlanka.erp` | `ErpApplication` only (component scan root) |
 | `platform` | `Store` (posting primitives), `Actor` (identity + role checks), `ErpUser`, `SecurityConfig`, `LoginRateLimit`, `AuthController` (`/api/health`, `/api/auth/*`), `ApiErrors` (the single `@RestControllerAdvice`) |
-| `catalog` | Organization, user accounts, partners (maintenance and directory in `Partner*` files), items, work centers (machines), BOM revisions |
+| `catalog` | Organization, user accounts, partners (maintenance and directory in `Partner*` files), items, work centers (machines), BOM revisions; item master (V4: `ItemService`, `UnitService` conversion service, `CategoryService`, `VariantService`, `ItemQuery`) |
 | `procurement` | Purchase orders, approval, goods receipt, supplier invoice matching |
 | `quality` | Incoming and final inspections (including the supplier return of a failed incoming lot and MO completion after the last final release) |
 | `sales` | Multi-line sales orders (draft/confirm/cancel/close short), per-line dispatch (revenue/receivables and COGS per delivery), customer returns (`ReturnsService`), the sales read model (`SalesQuery`) |
@@ -58,6 +58,7 @@ Route ownership:
 | `platform.AuthController` | `GET /health`, `GET /auth/config`, `GET /auth/csrf`, `GET /auth/me`, `POST /auth/demo` (`/auth/login`, `/auth/logout` are Spring Security filters) |
 | `catalog.CatalogController` | `POST /users`, `/organization`, `/partners`, `/machines`, `/items`, `/boms`, `/boms/{id}/approve` |
 | `catalog.PartnerController` | `GET /partners`, `GET /partners/{id}`, `POST /partners/{id}` |
+| `catalog.ItemMasterController` | `GET /items`, `/items/{id}`, `/items/{id}/movements`, `/items/{id}/units`, `/items/{id}/convert`, `/items/by-barcode`, `/units`, `/item-categories`, `/item-templates`, `/item-templates/{id}`; `POST /items/{id}`, `/items/{id}/deactivate`, `/items/{id}/activate`, `/items/{id}/conversions`, `/items/{id}/conversions/{unit}/remove`, `/items/{id}/barcodes`, `/items/{id}/barcodes/{barcodeId}/remove`, `/units`, `/units/{code}`, `/item-categories`, `/item-categories/{id}`, `/item-templates`, `/item-templates/{id}`, `/item-templates/{id}/variants` |
 | `procurement.ProcurementController` | `POST /purchases`, `/purchases/{id}/approve`, `/purchases/{id}/receive`, `/receipts/{id}/invoice` |
 | `quality.QualityController` | `POST /quality/{id}/inspect` |
 | `sales.SalesController` | `GET /sales/orders`, `GET /sales/orders/{id}`; `POST /sales/orders`, `/sales/orders/{id}`, `/sales/orders/{id}/confirm`, `/cancel`, `/close`, `/sales/orders/{id}/lines/{lineId}/dispatch`, `/sales/deliveries/{id}/returns`; original contract `POST /sales`, `/sales/{id}/dispatch` |
@@ -288,6 +289,8 @@ The database, not the Java code, is the last line of defence:
 | `approved_bom_immutable`, `approved_bom_line_immutable` (V2) | An `APPROVED` BOM and its lines cannot be changed or deleted; create a new revision. |
 | `customer_returns_immutable` (V3) | Posted customer returns cannot be changed or deleted. |
 | `sales_partner_active`, `purchase_partner_active` (V3) | `partner_must_be_active()`: a new sales/purchase order (or a sales order's changed customer) must reference an active partner; raises SQLSTATE 23514 → 409. |
+| `tenant_default_units` (V4) | `AFTER INSERT ON tenants`: seeds the standard units of measure for every new tenant (`seed_default_units`). Items reference `units(tenant_id, code)`. |
+| `item_identity_guard` (V4) | `BEFORE UPDATE ON items`: the base unit cannot change once stock-ledger rows exist, and SKU/base unit/type cannot change once `item_is_referenced()` finds any row of any table with a foreign key to `items` (new document tables are covered automatically). |
 
 A new table of posted history gets the same protection by reusing the function:
 `CREATE TRIGGER <table>_immutable BEFORE UPDATE OR DELETE ON <table> FOR EACH ROW EXECUTE FUNCTION reject_history_mutation();`.

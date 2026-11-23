@@ -32,6 +32,16 @@ const LABELS: Record<string, string> = {
   DISPATCH_POSTED: 'Dispatch posted',
   // Master data and administration.
   ITEM_CREATED: 'Item created',
+  // Item master (V4): ITEM_UPDATED / ITEM_DEACTIVATED / UNIT_CREATED... use the fallback.
+  ITEM_CONVERSION_SET: 'Unit conversion set',
+  ITEM_CONVERSION_REMOVED: 'Unit conversion removed',
+  ITEM_BARCODE_ADDED: 'Barcode added',
+  ITEM_BARCODE_REMOVED: 'Barcode removed',
+  ITEM_TEMPLATE_CREATED: 'Variant family created',
+  ITEM_TEMPLATE_UPDATED: 'Variant family updated',
+  ITEM_VARIANTS_GENERATED: 'Variants generated',
+  ITEM_CATEGORY_CREATED: 'Category created',
+  ITEM_CATEGORY_UPDATED: 'Category updated',
   BOM_DRAFT_CREATED: 'BOM draft created',
   BOM_APPROVED: 'BOM approved',
   PARTNER_CREATED: 'Partner created',

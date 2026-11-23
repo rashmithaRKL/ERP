@@ -7,7 +7,8 @@ import org.springframework.stereotype.Component;
 
 /**
  * Material requirements planning: unreserved demand of DRAFT/APPROVED orders plus safety stock, against released
- * unreserved stock and approved incoming purchases.
+ * unreserved stock and approved incoming purchases. Covers every non-finished item type (raw materials, packaging and
+ * semi-finished intermediates); inactive items keep their open demand but no longer ask for safety stock.
  */
 @Component
 class PlanningStateSections implements StateContributor {
@@ -42,11 +43,12 @@ class PlanningStateSections implements StateContributor {
                     FROM purchase_orders
                     WHERE tenant_id=? AND status IN ('APPROVED','PARTIAL')
                     GROUP BY item_id)
-                SELECT i.id,i.sku,i.name,i.uom,i.reorder_level,
+                SELECT i.id,i.sku,i.name,i.uom,i.reorder_level,i.type,i.active,i.reorder_qty,i.lead_time_days,
                        COALESCE(d.gross,0) AS gross,
                        COALESCE(st.available,0) AS available,
                        COALESCE(p.incoming,0) AS incoming,
-                       GREATEST(0,COALESCE(d.gross,0)+i.reorder_level-COALESCE(st.available,0)-COALESCE(p.incoming,0)) AS shortage
+                       GREATEST(0,COALESCE(d.gross,0)+CASE WHEN i.active THEN i.reorder_level ELSE 0 END
+                                  -COALESCE(st.available,0)-COALESCE(p.incoming,0)) AS shortage
                 FROM items i
                 LEFT JOIN demand d ON d.item_id=i.id
                 LEFT JOIN stock st ON st.item_id=i.id

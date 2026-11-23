@@ -37,10 +37,11 @@ public class ManufacturingService {
         s.validDate(c.dueDate());
         return s.once(a, key, "manufacture", c, () -> {
             var b = s.one(
-                    "SELECT b.*,i.type FROM boms b JOIN items i ON i.id=b.product_id AND i.tenant_id=b.tenant_id WHERE b.tenant_id=? AND b.id=?",
+                    "SELECT b.*,i.type,i.active FROM boms b JOIN items i ON i.id=b.product_id AND i.tenant_id=b.tenant_id WHERE b.tenant_id=? AND b.id=?",
                     a.tenant(),
                     c.bomId());
             require(b.get("status").equals("APPROVED"), "Use an approved BOM revision");
+            require(Boolean.TRUE.equals(b.get("active")), "This product is inactive and cannot be planned");
             s.quantity(
                     str(
                             s.one("SELECT uom FROM items WHERE tenant_id=? AND id=?", a.tenant(), b.get("product_id")),
@@ -62,10 +63,18 @@ public class ManufacturingService {
             String num = s.number(a, "MO");
             BigDecimal outputBase = dec(b.get("output_qty")).multiply(dec(b.get("yield_factor")));
             var lines = s.list(
-                    "SELECT bl.*,i.standard_cost,i.uom FROM bom_lines bl JOIN items i ON i.tenant_id=bl.tenant_id AND i.id=bl.item_id WHERE bl.tenant_id=? AND bl.bom_id=? ORDER BY bl.item_id",
+                    "SELECT bl.*,i.standard_cost,i.uom,i.sku,i.active FROM bom_lines bl JOIN items i ON i.tenant_id=bl.tenant_id AND i.id=bl.item_id WHERE bl.tenant_id=? AND bl.bom_id=? ORDER BY bl.item_id",
                     a.tenant(),
                     c.bomId());
             require(!lines.isEmpty(), "The BOM has no materials");
+            var inactive = lines.stream()
+                    .filter(l -> !Boolean.TRUE.equals(l.get("active")))
+                    .map(l -> str(l, "sku"))
+                    .toList();
+            require(
+                    inactive.isEmpty(),
+                    "Inactive materials in this BOM: " + String.join(", ", inactive)
+                            + ". Reactivate them or approve a new revision");
             BigDecimal estimate = lines.stream()
                     .map(l -> requirement(l, c.quantity(), outputBase).multiply(dec(l.get("standard_cost"))))
                     .reduce(BigDecimal.ZERO, BigDecimal::add);
@@ -265,8 +274,12 @@ public class ManufacturingService {
             require(
                     Set.of("IN_PROGRESS", "PARTIALLY_COMPLETED").contains(o.get("status")),
                     "Start or resume production before recording output");
-            String uom = str(
-                    s.one("SELECT uom FROM items WHERE tenant_id=? AND id=?", a.tenant(), o.get("product_id")), "uom");
+            var product =
+                    s.one("SELECT uom,type FROM items WHERE tenant_id=? AND id=?", a.tenant(), o.get("product_id"));
+            String uom = str(product, "uom");
+            // Semi-finished output is an input of later production: it is stored with (and valued as) production
+            // inputs (RAW warehouse, RAW_INVENTORY), since material issue credits RAW_INVENTORY when it is consumed.
+            boolean semi = "SEMI_FINISHED".equals(product.get("type"));
             s.quantity(uom, c.goodQty());
             s.quantity(uom, c.scrapQty());
             BigDecimal remaining =
@@ -292,14 +305,15 @@ public class ManufacturingService {
                 lot = id();
                 String wh = str(
                         s.one(
-                                "SELECT id FROM warehouses WHERE tenant_id=? AND kind='FINISHED' ORDER BY id LIMIT 1",
-                                a.tenant()),
+                                "SELECT id FROM warehouses WHERE tenant_id=? AND kind=? ORDER BY id LIMIT 1",
+                                a.tenant(),
+                                semi ? "RAW" : "FINISHED"),
                         "id");
                 s.db().update(
                                 "INSERT INTO lots(id,tenant_id,number,item_id,warehouse_id,status,source_type,source_id,unit_cost) VALUES(?,?,?,?,?,'QUARANTINE','MANUFACTURING',?,?)",
                                 lot,
                                 a.tenant(),
-                                s.number(a, "FG"),
+                                s.number(a, semi ? "SF" : "FG"),
                                 o.get("product_id"),
                                 wh,
                                 id,
@@ -310,7 +324,13 @@ public class ManufacturingService {
                                 id(),
                                 a.tenant(),
                                 lot);
-                s.journal(a, num, "Accepted output awaiting final quality review", "FG_INVENTORY", "WIP", goodCost);
+                s.journal(
+                        a,
+                        num,
+                        "Accepted output awaiting final quality review",
+                        semi ? "RAW_INVENTORY" : "FG_INVENTORY",
+                        "WIP",
+                        goodCost);
             }
             s.journal(a, num, "Scrap recognized separately from WIP", "SCRAP_EXPENSE", "WIP", scrapCost);
             s.db().update(

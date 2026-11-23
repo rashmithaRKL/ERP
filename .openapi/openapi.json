@@ -414,6 +414,83 @@
             "description": "State/stock/period/idempotency conflict"
           }
         }
+      },
+      "get": {
+        "summary": "Item page (keyset by SKU) with search, type/category/active filters and facets",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "type",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "RAW_MATERIAL",
+                "SEMI_FINISHED",
+                "FINISHED_GOOD",
+                "PACKAGING"
+              ]
+            }
+          },
+          {
+            "name": "category",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "active",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200,
+              "default": 25
+            }
+          },
+          {
+            "name": "after",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Items, total, next cursor and facets"
+          },
+          "401": {
+            "description": "Sign-in required"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          }
+        }
       }
     },
     "/boms": {
@@ -1455,6 +1532,863 @@
           }
         }
       }
+    },
+    "/items/by-barcode": {
+      "get": {
+        "summary": "Barcode lookup",
+        "parameters": [
+          {
+            "name": "code",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Item, scanned unit and base quantity per scan"
+          },
+          "401": {
+            "description": "Sign-in required"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          }
+        }
+      }
+    },
+    "/items/{id}": {
+      "get": {
+        "summary": "Item detail: units, conversions, barcodes, variants, stock, where-used, movements, history",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Item detail"
+          },
+          "401": {
+            "description": "Sign-in required"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          }
+        }
+      },
+      "post": {
+        "summary": "Edit an item (SKU/base unit only while unused); audited",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EditItem"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Committed result; retry with same key returns prior result"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Role/CSRF denied"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "State/stock/period/idempotency conflict"
+          }
+        }
+      }
+    },
+    "/items/{id}/movements": {
+      "get": {
+        "summary": "Stock ledger of the item, newest first",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200,
+              "default": 25
+            }
+          },
+          {
+            "name": "before",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Movements and next cursor"
+          },
+          "401": {
+            "description": "Sign-in required"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          }
+        }
+      }
+    },
+    "/items/{id}/units": {
+      "get": {
+        "summary": "Units a quantity of the item can be entered in, with factors to the base unit",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Base unit, decimals and unit choices"
+          },
+          "401": {
+            "description": "Sign-in required"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          }
+        }
+      }
+    },
+    "/items/{id}/convert": {
+      "get": {
+        "summary": "Convert a quantity to the base unit (half-up at the base precision)",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "quantity",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "unit",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9]{1,12}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "quantity, unit, factor, baseQuantity, baseUnit, baseDecimals, exact"
+          },
+          "401": {
+            "description": "Sign-in required"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          }
+        }
+      }
+    },
+    "/items/{id}/deactivate": {
+      "post": {
+        "summary": "Deactivate: blocked on new documents and BOMs, kept in history",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Committed result; retry with same key returns prior result"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Role/CSRF denied"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "State/stock/period/idempotency conflict"
+          }
+        }
+      }
+    },
+    "/items/{id}/activate": {
+      "post": {
+        "summary": "Reactivate an item",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Committed result; retry with same key returns prior result"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Role/CSRF denied"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "State/stock/period/idempotency conflict"
+          }
+        }
+      }
+    },
+    "/items/{id}/conversions": {
+      "post": {
+        "summary": "Set an item unit conversion (1 unit = factor x base unit)",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Conversion"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Committed result; retry with same key returns prior result"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Role/CSRF denied"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "State/stock/period/idempotency conflict"
+          }
+        }
+      }
+    },
+    "/items/{id}/conversions/{unit}/remove": {
+      "post": {
+        "summary": "Remove an item unit conversion",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "unit",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Committed result; retry with same key returns prior result"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Role/CSRF denied"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "State/stock/period/idempotency conflict"
+          }
+        }
+      }
+    },
+    "/items/{id}/barcodes": {
+      "post": {
+        "summary": "Add a barcode (unique per tenant)",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Barcode"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Committed result; retry with same key returns prior result"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Role/CSRF denied"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "State/stock/period/idempotency conflict"
+          }
+        }
+      }
+    },
+    "/items/{id}/barcodes/{barcodeId}/remove": {
+      "post": {
+        "summary": "Remove a barcode",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "barcodeId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Committed result; retry with same key returns prior result"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Role/CSRF denied"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "State/stock/period/idempotency conflict"
+          }
+        }
+      }
+    },
+    "/units": {
+      "get": {
+        "summary": "Units of measure with usage counts",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Units"
+          },
+          "401": {
+            "description": "Sign-in required"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          }
+        }
+      },
+      "post": {
+        "summary": "Create a unit of measure",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Unit"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Committed result; retry with same key returns prior result"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Role/CSRF denied"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "State/stock/period/idempotency conflict"
+          }
+        }
+      }
+    },
+    "/units/{code}": {
+      "post": {
+        "summary": "Update a unit (decimals fixed once used)",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          },
+          {
+            "name": "code",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EditUnit"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Committed result; retry with same key returns prior result"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Role/CSRF denied"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "State/stock/period/idempotency conflict"
+          }
+        }
+      }
+    },
+    "/item-categories": {
+      "get": {
+        "summary": "Categories in tree order with paths and item counts",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Categories"
+          },
+          "401": {
+            "description": "Sign-in required"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          }
+        }
+      },
+      "post": {
+        "summary": "Create a category",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Category"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Committed result; retry with same key returns prior result"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Role/CSRF denied"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "State/stock/period/idempotency conflict"
+          }
+        }
+      }
+    },
+    "/item-categories/{id}": {
+      "post": {
+        "summary": "Update a category (cycles rejected)",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EditCategory"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Committed result; retry with same key returns prior result"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Role/CSRF denied"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "State/stock/period/idempotency conflict"
+          }
+        }
+      }
+    },
+    "/item-templates": {
+      "get": {
+        "summary": "Variant families",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Families with attributes and variant counts"
+          },
+          "401": {
+            "description": "Sign-in required"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          }
+        }
+      },
+      "post": {
+        "summary": "Create a variant family (not stocked)",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Template"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Committed result; retry with same key returns prior result"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Role/CSRF denied"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "State/stock/period/idempotency conflict"
+          }
+        }
+      }
+    },
+    "/item-templates/{id}": {
+      "get": {
+        "summary": "Variant family with its variant items",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Family and variants"
+          },
+          "401": {
+            "description": "Sign-in required"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          }
+        }
+      },
+      "post": {
+        "summary": "Update a variant family",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EditTemplate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Committed result; retry with same key returns prior result"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Role/CSRF denied"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "State/stock/period/idempotency conflict"
+          }
+        }
+      }
+    },
+    "/item-templates/{id}/variants": {
+      "post": {
+        "summary": "Generate variant items for attribute combinations",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GenerateVariants"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Committed result; retry with same key returns prior result"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Role/CSRF denied"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "State/stock/period/idempotency conflict"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -1813,16 +2747,15 @@
             "type": "string",
             "enum": [
               "RAW_MATERIAL",
+              "SEMI_FINISHED",
               "FINISHED_GOOD",
               "PACKAGING"
             ]
           },
           "uom": {
             "type": "string",
-            "enum": [
-              "kg",
-              "pcs"
-            ]
+            "pattern": "^[A-Za-z0-9]{1,12}$",
+            "description": "A unit code of the tenant (GET /units)"
           },
           "standardCost": {
             "oneOf": [
@@ -1847,6 +2780,31 @@
                 "minimum": 0
               }
             ]
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 2000
+          },
+          "categoryId": {
+            "type": "string",
+            "nullable": true
+          },
+          "reorderQuantity": {
+            "oneOf": [
+              {
+                "type": "string",
+                "pattern": "^\\d+(\\.\\d{1,6})?$"
+              },
+              {
+                "type": "number",
+                "minimum": 0
+              }
+            ]
+          },
+          "leadTimeDays": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 365
           }
         }
       },
@@ -2327,6 +3285,415 @@
           },
           "active": {
             "type": "boolean"
+          }
+        }
+      },
+      "EditItem": {
+        "type": "object",
+        "required": [
+          "sku",
+          "name",
+          "uom",
+          "standardCost",
+          "reorderLevel",
+          "reorderQuantity",
+          "leadTimeDays"
+        ],
+        "properties": {
+          "sku": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 50
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 160
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 2000
+          },
+          "categoryId": {
+            "type": "string",
+            "nullable": true
+          },
+          "uom": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9]{1,12}$"
+          },
+          "standardCost": {
+            "oneOf": [
+              {
+                "type": "string",
+                "pattern": "^\\d+(\\.\\d{1,6})?$"
+              },
+              {
+                "type": "number",
+                "minimum": 0
+              }
+            ]
+          },
+          "reorderLevel": {
+            "oneOf": [
+              {
+                "type": "string",
+                "pattern": "^\\d+(\\.\\d{1,6})?$"
+              },
+              {
+                "type": "number",
+                "minimum": 0
+              }
+            ],
+            "description": "Safety stock"
+          },
+          "reorderQuantity": {
+            "oneOf": [
+              {
+                "type": "string",
+                "pattern": "^\\d+(\\.\\d{1,6})?$"
+              },
+              {
+                "type": "number",
+                "minimum": 0
+              }
+            ]
+          },
+          "leadTimeDays": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 365
+          }
+        }
+      },
+      "Unit": {
+        "type": "object",
+        "required": [
+          "code",
+          "name",
+          "kind",
+          "decimals"
+        ],
+        "properties": {
+          "code": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9]{1,12}$"
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 60
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "MASS",
+              "VOLUME",
+              "LENGTH",
+              "AREA",
+              "COUNT",
+              "PACKAGE"
+            ]
+          },
+          "decimals": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 6
+          },
+          "ratio": {
+            "oneOf": [
+              {
+                "type": "string",
+                "pattern": "^\\d+(\\.\\d{1,12})?$"
+              },
+              {
+                "type": "number",
+                "exclusiveMinimum": true,
+                "minimum": 0
+              }
+            ],
+            "description": "Size in the kind's reference unit; omit for PACKAGE units"
+          }
+        }
+      },
+      "EditUnit": {
+        "type": "object",
+        "required": [
+          "name",
+          "decimals",
+          "active"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 60
+          },
+          "decimals": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 6
+          },
+          "active": {
+            "type": "boolean"
+          }
+        }
+      },
+      "Conversion": {
+        "type": "object",
+        "required": [
+          "unit",
+          "factor",
+          "purchase",
+          "sales"
+        ],
+        "properties": {
+          "unit": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9]{1,12}$"
+          },
+          "factor": {
+            "oneOf": [
+              {
+                "type": "string",
+                "pattern": "^\\d+(\\.\\d{1,12})?$"
+              },
+              {
+                "type": "number",
+                "exclusiveMinimum": true,
+                "minimum": 0
+              }
+            ],
+            "description": "Base units in one unit (1 bag = 25 kg)"
+          },
+          "purchase": {
+            "type": "boolean"
+          },
+          "sales": {
+            "type": "boolean"
+          }
+        }
+      },
+      "Barcode": {
+        "type": "object",
+        "required": [
+          "barcode"
+        ],
+        "properties": {
+          "barcode": {
+            "type": "string",
+            "pattern": "^[!-~]{3,64}$"
+          },
+          "unit": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9]{1,12}$",
+            "nullable": true,
+            "description": "One scan = one of this unit; omit for the base unit"
+          }
+        }
+      },
+      "Category": {
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 80
+          },
+          "parentId": {
+            "type": "string",
+            "nullable": true
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 400
+          }
+        }
+      },
+      "EditCategory": {
+        "type": "object",
+        "required": [
+          "name",
+          "active"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 80
+          },
+          "parentId": {
+            "type": "string",
+            "nullable": true
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 400
+          },
+          "active": {
+            "type": "boolean"
+          }
+        }
+      },
+      "Attribute": {
+        "type": "object",
+        "required": [
+          "name",
+          "values"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 40
+          },
+          "values": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 30,
+            "items": {
+              "type": "string",
+              "maxLength": 40
+            }
+          }
+        }
+      },
+      "Template": {
+        "type": "object",
+        "required": [
+          "code",
+          "name",
+          "type",
+          "uom",
+          "attributes"
+        ],
+        "properties": {
+          "code": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9._-]{1,40}$"
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 160
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 2000
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "RAW_MATERIAL",
+              "SEMI_FINISHED",
+              "FINISHED_GOOD",
+              "PACKAGING"
+            ]
+          },
+          "uom": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9]{1,12}$"
+          },
+          "categoryId": {
+            "type": "string",
+            "nullable": true
+          },
+          "attributes": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 5,
+            "items": {
+              "$ref": "#/components/schemas/Attribute"
+            }
+          }
+        }
+      },
+      "EditTemplate": {
+        "type": "object",
+        "required": [
+          "name",
+          "attributes"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 160
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 2000
+          },
+          "categoryId": {
+            "type": "string",
+            "nullable": true
+          },
+          "attributes": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 5,
+            "items": {
+              "$ref": "#/components/schemas/Attribute"
+            }
+          }
+        }
+      },
+      "GenerateVariants": {
+        "type": "object",
+        "required": [
+          "variants"
+        ],
+        "properties": {
+          "variants": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 100,
+            "items": {
+              "type": "object",
+              "required": [
+                "values",
+                "sku",
+                "standardCost"
+              ],
+              "properties": {
+                "values": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "description": "Attribute name -> value, one per family attribute"
+                },
+                "sku": {
+                  "type": "string",
+                  "maxLength": 50
+                },
+                "name": {
+                  "type": "string",
+                  "maxLength": 160,
+                  "nullable": true
+                },
+                "standardCost": {
+                  "oneOf": [
+                    {
+                      "type": "string",
+                      "pattern": "^\\d+(\\.\\d{1,6})?$"
+                    },
+                    {
+                      "type": "number",
+                      "minimum": 0
+                    }
+                  ]
+                },
+                "reorderLevel": {
+                  "oneOf": [
+                    {
+                      "type": "string",
+                      "pattern": "^\\d+(\\.\\d{1,6})?$"
+                    },
+                    {
+                      "type": "number",
+                      "minimum": 0
+                    }
+                  ]
+                }
+              }
+            }
           }
         }
       }

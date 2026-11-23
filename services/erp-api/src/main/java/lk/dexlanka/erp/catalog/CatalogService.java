@@ -18,10 +18,12 @@ import org.springframework.transaction.annotation.Transactional;
 public class CatalogService {
     private final Store s;
     private final PasswordEncoder passwords;
+    private final ItemService items;
 
-    CatalogService(Store s, PasswordEncoder passwords) {
+    CatalogService(Store s, PasswordEncoder passwords, ItemService items) {
         this.s = s;
         this.passwords = passwords;
+        this.items = items;
     }
 
     @Transactional
@@ -69,10 +71,12 @@ public class CatalogService {
     public Map<String, Object> bom(Actor a, CatalogCommands.Bom c, String key) {
         a.allow("PLANNER");
         return s.once(a, key, "bom", c, () -> {
-            s.one(
-                    "SELECT id FROM items WHERE tenant_id=? AND id=? AND type='FINISHED_GOOD'",
+            // Finished goods and semi-finished intermediates (single level: a semi-finished BOM consumes materials).
+            var product = s.one(
+                    "SELECT id,active FROM items WHERE tenant_id=? AND id=? AND type IN ('FINISHED_GOOD','SEMI_FINISHED')",
                     a.tenant(),
                     c.productId());
+            require(Boolean.TRUE.equals(product.get("active")), "This product is inactive; reactivate it first");
             s.quantity("pcs", c.outputQty());
             String id = id();
             s.db().update(
@@ -86,10 +90,14 @@ public class CatalogService {
             var seen = new HashSet<String>();
             for (var l : c.lines()) {
                 require(seen.add(l.itemId()), "A material can appear only once per BOM");
+                require(!l.itemId().equals(c.productId()), "A product cannot be a component of its own BOM");
                 var material = s.one(
                         "SELECT * FROM items WHERE tenant_id=? AND id=? AND type<>'FINISHED_GOOD'",
                         a.tenant(),
                         l.itemId());
+                require(
+                        Boolean.TRUE.equals(material.get("active")),
+                        "Material " + str(material, "sku") + " is inactive and cannot be used on new BOMs");
                 s.quantity(str(material, "uom"), l.quantity());
                 s.db().update(
                                 "INSERT INTO bom_lines(id,tenant_id,bom_id,item_id,quantity) VALUES(?,?,?,?,?)",
@@ -114,6 +122,18 @@ public class CatalogService {
                     !s.list("SELECT id FROM bom_lines WHERE tenant_id=? AND bom_id=?", a.tenant(), id)
                             .isEmpty(),
                     "A BOM requires at least one component");
+            var inactive = s.list(
+                    "SELECT i.sku FROM items i WHERE i.tenant_id=? AND i.active=false AND (i.id=? OR i.id IN (SELECT item_id FROM bom_lines WHERE tenant_id=? AND bom_id=?)) ORDER BY i.sku",
+                    a.tenant(),
+                    b.get("product_id"),
+                    a.tenant(),
+                    id);
+            require(
+                    inactive.isEmpty(),
+                    "Inactive items cannot be approved into a BOM: "
+                            + String.join(
+                                    ", ",
+                                    inactive.stream().map(r -> str(r, "sku")).toList()));
             s.db().update("UPDATE boms SET status='APPROVED' WHERE tenant_id=? AND id=?", a.tenant(), id);
             s.audit(a, "BOM_APPROVED", str(b, "revision"), "Material formula frozen for manufacturing");
             return Map.of("id", id, "status", "APPROVED");
@@ -186,24 +206,9 @@ public class CatalogService {
         });
     }
 
+    /** Item creation lives with the rest of the item master in {@link ItemService#create}. */
     @Transactional
     public Map<String, Object> item(Actor a, CatalogCommands.Item c, String key) {
-        a.allow("PLANNER");
-        return s.once(a, key, "item", c, () -> {
-            s.quantity(c.uom(), c.reorderLevel());
-            String id = id();
-            s.db().update(
-                            "INSERT INTO items(id,tenant_id,sku,name,type,uom,standard_cost,reorder_level) VALUES(?,?,?,?,?,?,?,?)",
-                            id,
-                            a.tenant(),
-                            c.sku(),
-                            c.name(),
-                            c.type(),
-                            c.uom(),
-                            c.standardCost(),
-                            c.reorderLevel());
-            s.audit(a, "ITEM_CREATED", c.sku(), c.name());
-            return Map.of("id", id);
-        });
+        return items.create(a, c, key);
     }
 }

@@ -77,18 +77,37 @@ public final class CatalogCommands {
             @NotBlank @Size(max = 120) String factoryName,
             @NotBlank @Size(max = 160) String location) {}
 
+    /**
+     * A new item. {@code uom} is a unit code of the tenant (V4 {@code units}); {@code reorderLevel} is the safety stock.
+     * The trailing components (V4) are optional.
+     */
     public record Item(
             @NotBlank @Size(max = 50) String sku,
             @NotBlank @Size(max = 160) String name,
 
-            @Pattern(regexp = "RAW_MATERIAL|FINISHED_GOOD|PACKAGING") @NotNull
+            @Pattern(regexp = ItemCommands.ITEM_TYPES) @NotNull
             String type,
 
-            @Pattern(regexp = "kg|pcs") @NotNull String uom,
+            @Pattern(regexp = ItemCommands.UNIT_CODE) @NotNull
+            String uom,
 
             @NotNull @DecimalMin("0") @Digits(integer = 12, fraction = 6)
             BigDecimal standardCost,
 
             @NotNull @DecimalMin("0") @Digits(integer = 12, fraction = 6)
-            BigDecimal reorderLevel) {}
+            BigDecimal reorderLevel,
+
+            @Size(max = 2000) String description,
+            @Size(max = 64) String categoryId,
+
+            @DecimalMin("0") @Digits(integer = 12, fraction = 6)
+            BigDecimal reorderQuantity,
+
+            @Min(0) @Max(365) Integer leadTimeDays) {
+        /** The original (pre-V4) shape. */
+        public Item(
+                String sku, String name, String type, String uom, BigDecimal standardCost, BigDecimal reorderLevel) {
+            this(sku, name, type, uom, standardCost, reorderLevel, null, null, null, null);
+        }
+    }
 }
