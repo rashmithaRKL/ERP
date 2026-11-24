@@ -26,9 +26,11 @@ import org.springframework.web.server.ResponseStatusException;
  * rejects the document's creator, including an ADMIN.
  *
  * <p>Without a stored row a document type uses its {@link #defaults built-in default}, which reproduces the behaviour
- * before policies existed. Wired today: stock adjustments (and cycle-count variances, which post through them).
- * Manufacturing and purchase order approval still use their fixed rules until the integration release calls
- * {@link #evaluate} from those services.
+ * before policies existed. Every document type is wired (V9): stock adjustments (and cycle-count variances, which post
+ * through them) are evaluated when posted, manufacturing orders when created (amount = estimated cost) and purchase
+ * orders when submitted (amount = order total). A document whose evaluation needs no approval takes effect directly
+ * and is audited as auto-approved by policy ({@link #autoApproval}); the others wait for an approver chosen by the
+ * current policy's roles ({@link #approverDecision}).
  *
  * <p>Read methods are not transactional: they join the caller's transaction (a command holding the tenant lock, or a
  * read-only snapshot).
@@ -39,8 +41,8 @@ public class ApprovalPolicyService {
     public static final String PURCHASE_ORDER = "PURCHASE_ORDER";
     public static final String STOCK_ADJUSTMENT = "STOCK_ADJUSTMENT";
     public static final List<String> DOCUMENT_TYPES = List.of(MANUFACTURING_ORDER, PURCHASE_ORDER, STOCK_ADJUSTMENT);
-    /** Document types whose commands evaluate the policy in this release. */
-    public static final List<String> WIRED = List.of(STOCK_ADJUSTMENT);
+    /** Document types whose commands evaluate the policy (all of them since V9). */
+    public static final List<String> WIRED = DOCUMENT_TYPES;
 
     static final BigDecimal DEFAULT_ADJUSTMENT_THRESHOLD = new BigDecimal("50000");
 
@@ -167,6 +169,44 @@ public class ApprovalPolicyService {
     /** 403 unless {@code a} is ADMIN or has one of the policy's approver roles. */
     public void requireApproverRole(Actor a, String documentType) {
         a.allow(policy(a.tenant(), documentType).approverRoles().toArray(String[]::new));
+    }
+
+    /**
+     * Who may approve a document that is already waiting for approval: the current policy's approver roles (ADMIN
+     * always), never its creator. Whether the document needed approval was decided when it was created or submitted; a
+     * later policy change only changes who may approve it, so a waiting document is never stranded.
+     */
+    public Decision approverDecision(String tenant, String documentType, String creatorId) {
+        var p = policy(tenant, documentType);
+        return new Decision(documentType, true, p.amountThreshold(), p.approverRoles(), creatorId);
+    }
+
+    /** The audit detail of a document that took effect without a second person ({@code d} needed no approval). */
+    public static String autoApproval(Decision d, BigDecimal amount) {
+        require(!d.approvalRequired(), "This document needs a second person's approval");
+        return d.threshold() == null
+                ? "Auto-approved by policy: no second approval required"
+                : "Auto-approved by policy: Rs. " + rupees(amount == null ? BigDecimal.ZERO : amount)
+                        + " is within the Rs. " + rupees(d.threshold()) + " approval threshold";
+    }
+
+    /**
+     * The policies every signed-in user may read (which documents need a second person, above which value and who
+     * approves them), so the workspace offers approve buttons to the right roles.
+     */
+    @Transactional(readOnly = true)
+    public List<Map<String, Object>> summaries(Actor a) {
+        var out = new ArrayList<Map<String, Object>>();
+        for (String type : DOCUMENT_TYPES) {
+            var p = policy(a.tenant(), type);
+            var m = new LinkedHashMap<String, Object>();
+            m.put("documentType", type);
+            m.put("approvalRequired", p.approvalRequired());
+            m.put("amountThreshold", p.amountThreshold());
+            m.put("approverRoles", p.approverRoles());
+            out.add(m);
+        }
+        return out;
     }
 
     public List<Map<String, Object>> policies(Actor a) {

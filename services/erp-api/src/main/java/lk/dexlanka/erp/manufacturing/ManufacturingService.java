@@ -11,20 +11,31 @@ import java.math.RoundingMode;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import lk.dexlanka.erp.admin.ApprovalPolicyService;
 import lk.dexlanka.erp.platform.Actor;
 import lk.dexlanka.erp.platform.Store;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
-/** Manufacturing-order lifecycle: BOM snapshot, approval, FIFO reservation, material issue to WIP and output. */
+/**
+ * Manufacturing-order lifecycle: BOM snapshot, approval, FIFO reservation, material issue to WIP and output.
+ *
+ * <p>Approval follows the tenant's {@code MANUFACTURING_ORDER} approval policy (V9, {@link ApprovalPolicyService}): a new
+ * order whose estimated cost needs no second person is approved on creation ("auto-approved by policy"); otherwise it
+ * stays a draft until an approver role of the policy other than its creator approves it. The default policy (every
+ * order, PLANNER or ADMIN) is the behaviour before policies existed.
+ */
 @Service
 public class ManufacturingService {
     private final Store s;
+    private final ApprovalPolicyService policies;
 
-    ManufacturingService(Store s) {
+    ManufacturingService(Store s, ApprovalPolicyService policies) {
         this.s = s;
+        this.policies = policies;
     }
 
     public Map<String, Object> order(Actor a, String id) {
@@ -119,6 +130,15 @@ public class ManufacturingService {
                     num,
                     "BOM " + b.get("revision") + " snapshotted; " + c.quantity() + " units"
                             + (parent == null ? "" : "; child of " + parent.get("number")));
+            var decision =
+                    policies.evaluate(a.tenant(), ApprovalPolicyService.MANUFACTURING_ORDER, money(estimate), a.id());
+            if (!decision.approvalRequired()) {
+                s.db().update(
+                                "UPDATE manufacturing_orders SET status='APPROVED' WHERE tenant_id=? AND id=?",
+                                a.tenant(),
+                                id);
+                s.audit(a, "MO_AUTO_APPROVED", num, ApprovalPolicyService.autoApproval(decision, money(estimate)));
+            }
             return order(a, id);
         }
     }
@@ -160,7 +180,12 @@ public class ManufacturingService {
             String next;
             switch (action) {
                 case "approve" -> {
-                    a.allow("PLANNER");
+                    // The approver roles of the MANUFACTURING_ORDER policy (default PLANNER; ADMIN always), never the
+                    // order's creator.
+                    var approver = policies.approverDecision(
+                            a.tenant(), ApprovalPolicyService.MANUFACTURING_ORDER, str(o, "created_by"));
+                    if (!approver.roleMayApprove(a))
+                        throw new AccessDeniedException("Your role cannot perform this action");
                     require(state.equals("DRAFT"), "Only a draft can be approved");
                     require(
                             !a.id().equals(o.get("created_by")),

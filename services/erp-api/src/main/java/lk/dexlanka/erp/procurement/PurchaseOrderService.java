@@ -20,6 +20,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
+import lk.dexlanka.erp.admin.ApprovalPolicyService;
 import lk.dexlanka.erp.catalog.UnitService;
 import lk.dexlanka.erp.platform.Actor;
 import lk.dexlanka.erp.platform.Store;
@@ -29,6 +30,11 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * Purchase-order documents: draft multi-line orders in purchase units, submission, independent approval,
  * cancellation, close-short and draft orders created from material-planning recommendations.
+ *
+ * <p>Approval follows the tenant's {@code PURCHASE_ORDER} approval policy (V9, {@link ApprovalPolicyService}),
+ * evaluated on submission with the order total: an order that needs no second person is approved on submission
+ * ("auto-approved by policy"); otherwise an approver role of the policy who neither created nor submitted it approves
+ * it. The default policy (every order, PLANNER or ADMIN) is the behaviour before policies existed.
  */
 @Service
 public class PurchaseOrderService {
@@ -37,11 +43,13 @@ public class PurchaseOrderService {
     private final Store s;
     private final PurchaseRules rules;
     private final UnitService units;
+    private final ApprovalPolicyService policies;
 
-    PurchaseOrderService(Store s, PurchaseRules rules, UnitService units) {
+    PurchaseOrderService(Store s, PurchaseRules rules, UnitService units, ApprovalPolicyService policies) {
         this.s = s;
         this.rules = rules;
         this.units = units;
+        this.policies = policies;
     }
 
     // ------------------------------------------------------------------ documents
@@ -104,7 +112,10 @@ public class PurchaseOrderService {
         });
     }
 
-    /** Sends a complete draft for independent approval. */
+    /**
+     * Sends a complete draft for independent approval, or approves it directly when the approval policy needs no second
+     * person for its total.
+     */
     @Transactional
     public Map<String, Object> submit(Actor a, String id, String key) {
         a.allow("PLANNER", "WAREHOUSE");
@@ -117,22 +128,44 @@ public class PurchaseOrderService {
                             a.id(),
                             a.tenant(),
                             id);
+            boolean auto = autoApproved(a, po);
             s.audit(
                     a,
                     "PO_SUBMITTED",
                     str(po, "number"),
-                    "Total " + amount(dec(po.get("total"))) + " · awaiting independent approval");
-            return result(po, "SUBMITTED");
+                    "Total " + amount(dec(po.get("total"))) + (auto ? "" : " · awaiting independent approval"));
+            if (auto) approveByPolicy(a, po);
+            return result(po, auto ? "APPROVED" : "SUBMITTED");
         });
     }
 
+    /** True when the {@code PURCHASE_ORDER} policy needs no second person for this order's total. */
+    private boolean autoApproved(Actor a, Map<String, Object> po) {
+        return !policies.evaluate(
+                        a.tenant(), ApprovalPolicyService.PURCHASE_ORDER, dec(po.get("total")), str(po, "created_by"))
+                .approvalRequired();
+    }
+
+    /** Approves a submitted order without an approver (approved_by stays empty) and audits the policy decision. */
+    private void approveByPolicy(Actor a, Map<String, Object> po) {
+        BigDecimal total = dec(po.get("total"));
+        var decision =
+                policies.evaluate(a.tenant(), ApprovalPolicyService.PURCHASE_ORDER, total, str(po, "created_by"));
+        s.db().update(
+                        "UPDATE purchase_orders SET status='APPROVED',approved_by=NULL,approved_at=now(),updated_at=now() WHERE tenant_id=? AND id=?",
+                        a.tenant(),
+                        po.get("id"));
+        s.audit(a, "PO_AUTO_APPROVED", str(po, "number"), ApprovalPolicyService.autoApproval(decision, total));
+    }
+
     /**
-     * Independent approval: the approver must be a PLANNER or ADMIN other than the person who created or submitted the
-     * order (the rule applies to ADMIN too).
+     * Independent approval: the approver must have an approver role of the {@code PURCHASE_ORDER} policy (default
+     * PLANNER; ADMIN always) and be someone other than the person who created or submitted the order (the rule applies
+     * to ADMIN too).
      */
     @Transactional
     public Map<String, Object> approve(Actor a, String id, String key) {
-        a.allow("PLANNER");
+        policies.requireApproverRole(a, ApprovalPolicyService.PURCHASE_ORDER);
         return s.once(a, key, "approve-po:" + id, Map.of(), () -> {
             var po = rules.locked(a, id);
             require(
@@ -243,13 +276,16 @@ public class PurchaseOrderService {
                     .getFirst();
             rules.totals(a, id);
             var po = rules.header(a, id);
+            boolean auto = autoApproved(a, po);
             s.audit(
                     a,
                     "PO_CREATED",
                     str(po, "number"),
                     plain(c.quantity()) + " " + item.get("uom") + " of " + item.get("sku") + " from "
-                            + supplier.get("name") + " · purchase awaiting independent approval");
-            return po;
+                            + supplier.get("name") + (auto ? "" : " · purchase awaiting independent approval"));
+            if (!auto) return po;
+            approveByPolicy(a, po);
+            return rules.header(a, id);
         });
     }
 

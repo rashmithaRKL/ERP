@@ -57,10 +57,10 @@ class ApprovalPolicyTest extends AdminTestSupport {
                 .containsEntry("amountThreshold", null)
                 .containsEntry("approverRoles", List.of("PLANNER"))
                 .containsEntry("customized", false)
-                .containsEntry("wired", false);
+                .containsEntry("wired", true);
         assertThat(items.get(1))
                 .containsEntry("approverRoles", List.of("PLANNER"))
-                .containsEntry("wired", false);
+                .containsEntry("wired", true);
         assertThat(items.get(2))
                 .containsEntry("approverRoles", List.of("PLANNER", "WAREHOUSE"))
                 .containsEntry("wired", true);

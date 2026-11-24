@@ -3,6 +3,7 @@ import { ArrowRight, Check, LoaderCircle, ShieldCheck } from 'lucide-react';
 import { useWorkspace } from '../../app/workspace';
 import { Overlay, Table } from '../../components';
 import { labelState, money, num, text } from '../../lib/format';
+import { approversText, useApprovalPolicy } from '../approvals/policies';
 import { OPERATORS, useDetail, useInventoryCommand } from './api';
 import type { AdjustmentDetail } from './api';
 import { ActivityFeed, dateTime, Delta, Lifecycle, MoneyDelta, QueryState, StatusBadge } from './shared';
@@ -14,6 +15,8 @@ export function AdjustmentDrawer({ id, onClose }: { id: string; onClose: () => v
   const { user, can } = useWorkspace();
   const detail = useDetail<AdjustmentDetail>('adjustment', `/inventory/adjustments/${id}`);
   const { run, busy } = useInventoryCommand();
+  // Approvers follow the STOCK_ADJUSTMENT approval policy; the creator and the submitter never approve.
+  const { approverRoles } = useApprovalPolicy('STOCK_ADJUSTMENT');
   const [error, setError] = useState('');
   const d = detail.data?.adjustment;
   async function act(action: string, success: string) {
@@ -183,7 +186,7 @@ export function AdjustmentDrawer({ id, onClose }: { id: string; onClose: () => v
                   </button>
                 )}
                 {status === 'APPROVAL_REQUIRED' &&
-                  (can(...OPERATORS) && !ownDocument ? (
+                  (can(...approverRoles) && !ownDocument ? (
                     <button
                       className="button primary"
                       disabled={busy}
@@ -196,7 +199,7 @@ export function AdjustmentDrawer({ id, onClose }: { id: string; onClose: () => v
                     <span className="muted inv-small">
                       {ownDocument
                         ? 'Awaiting approval by a different authorized person.'
-                        : 'Awaiting approval by an administrator, planner or warehouse lead.'}
+                        : `Awaiting approval by ${approversText(approverRoles)}.`}
                     </span>
                   ))}
               </div>

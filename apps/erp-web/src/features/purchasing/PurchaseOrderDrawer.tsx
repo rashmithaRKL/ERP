@@ -17,6 +17,7 @@ import { useWorkspace } from '../../app/workspace';
 import { Badge, Empty, Overlay, Progress, Table } from '../../components';
 import type { Row } from '../../lib/api';
 import { date, fmt, money, num, text, today } from '../../lib/format';
+import { approversText, useApprovalPolicy } from '../approvals/policies';
 import { auditLabel } from '../audit/auditLabel';
 import { statusLabel, usePurchaseCommand, usePurchaseOrder } from './api';
 import type { PurchaseOrderDetail } from './api';
@@ -112,6 +113,8 @@ function Detail({
   const { can, user } = workspace;
   const qc = useQueryClient();
   const { run, pending, error } = usePurchaseCommand();
+  // Approvers follow the PURCHASE_ORDER approval policy; the creator and the submitter never approve.
+  const { approverRoles } = useApprovalPolicy('PURCHASE_ORDER');
   const o = data.order;
   const status = text(o.status);
   const ended = ['CANCELLED', 'CLOSED'].includes(status);
@@ -172,8 +175,14 @@ function Detail({
           <div className="sales-notice">
             Submitted by {text(o.submitted_by_name)} on {date(o.submitted_at)}.{' '}
             {self
-              ? 'You created or submitted this order, so another planner or administrator must approve it.'
-              : 'Approval commits the order and adds it to material planning supply.'}
+              ? `You created or submitted this order, so it needs approval from someone else (${approversText(approverRoles)}).`
+              : `Approval by ${approversText(approverRoles)} commits the order and adds it to material planning supply.`}
+          </div>
+        )}
+        {status === 'APPROVED' && o.approved_at && !o.approved_by && (
+          <div className="sales-notice">
+            Auto-approved by policy on {date(o.approved_at)}: the approval policy needs no second person for
+            this order total.
           </div>
         )}
         {ended && (
@@ -572,7 +581,7 @@ function Detail({
             </button>
           </>
         )}
-        {status === 'SUBMITTED' && can('PLANNER') && !self && (
+        {status === 'SUBMITTED' && can(...approverRoles) && !self && (
           <button
             className="button primary"
             disabled={!!pending}

@@ -4,8 +4,9 @@ import { Pencil, Plus, ShieldCheck } from 'lucide-react';
 import { useWorkspace } from '../../app/workspace';
 import { Table } from '../../components';
 import { request } from '../../lib/api';
-import { labelState, money, text } from '../../lib/format';
+import { labelState, money, num, text } from '../../lib/format';
 import { Tabs } from '../../motion/motion';
+import { approversText } from '../approvals/policies';
 import { OPERATORS, REASONS, useDebounced, useInventoryCommand, usePaged, useSettings } from './api';
 import { AdjustmentDialog } from './AdjustmentDialog';
 import { AdjustmentDrawer } from './AdjustmentDrawer';
@@ -31,11 +32,13 @@ export function AdjustmentsTab({ pending }: { pending: number }) {
     limit: 50,
   });
   const threshold = settings.data?.approvalThreshold;
+  // The chip describes the STOCK_ADJUSTMENT approval policy; it is hidden while the policy requires no approval.
+  const approvalOff = settings.data?.approvalRequired === false;
+  const approvers = approversText(settings.data?.approverRoles ?? OPERATORS);
   function editThreshold() {
     openForm({
       title: 'Adjustment approval threshold',
-      description:
-        'Adjustments whose gross value (increases plus decreases) exceeds this amount need approval by a different administrator, planner or warehouse user.',
+      description: `Adjustments whose gross value (increases plus decreases) exceeds this amount need approval by a different person: ${approvers}.`,
       submit: 'Save threshold',
       fields: [
         {
@@ -79,15 +82,21 @@ export function AdjustmentsTab({ pending }: { pending: number }) {
           </select>
         </div>
         <div className="inv-actions">
-          <span className="inv-chip">
-            <ShieldCheck size={13} />
-            Approval above {threshold === undefined ? '…' : money(threshold)}
-            {can() && (
-              <button className="icon-button" aria-label="Edit approval threshold" onClick={editThreshold}>
-                <Pencil size={13} />
-              </button>
-            )}
-          </span>
+          {!approvalOff && (
+            <span className="inv-chip">
+              <ShieldCheck size={13} />
+              {threshold === undefined
+                ? 'Approval above …'
+                : num(threshold) === 0
+                  ? 'Approval for every adjustment'
+                  : `Approval above ${money(threshold)}`}
+              {can() && (
+                <button className="icon-button" aria-label="Edit approval threshold" onClick={editThreshold}>
+                  <Pencil size={13} />
+                </button>
+              )}
+            </span>
+          )}
           {can(...OPERATORS) && (
             <button className="button primary small" onClick={() => setCreating(true)}>
               <Plus size={14} />

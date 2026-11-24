@@ -58,6 +58,8 @@ export function CountSheet({
   const summary = detail.data?.summary;
   const gross = num(summary?.value_increase) + num(summary?.value_decrease);
   const threshold = num(settings.data?.approvalThreshold ?? 50000);
+  // Variances above the threshold need a second person only while the adjustment approval policy is on.
+  const needsApproval = settings.data?.approvalRequired !== false && gross > threshold;
 
   async function attempt(work: () => Promise<unknown>) {
     setError('');
@@ -209,10 +211,10 @@ export function CountSheet({
                     </div>
                   </div>
                   {status === 'REVIEW' && (
-                    <p className={`inv-threshold ${gross > threshold ? 'over' : ''}`}>
+                    <p className={`inv-threshold ${needsApproval ? 'over' : ''}`}>
                       {num(summary?.variances) === 0
                         ? 'No variances: posting closes the count without changing stock.'
-                        : gross > threshold
+                        : needsApproval
                           ? `Variance value above the ${money(threshold)} threshold: posting creates a count-variance adjustment that a different authorized person must approve.`
                           : 'Posting creates and posts a count-variance adjustment at each lot’s current value.'}
                     </p>

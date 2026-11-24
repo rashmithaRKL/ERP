@@ -1,7 +1,9 @@
 import { ArrowRight, Check, LoaderCircle, Plus } from 'lucide-react';
+import { useWorkspace } from '../../app/workspace';
 import { Badge, Table } from '../../components';
 import type { Row } from '../../lib/api';
 import { date, fmt, labelState, money, num, text } from '../../lib/format';
+import { approversText, useApprovalPolicy } from '../approvals/policies';
 import { auditLabel } from '../audit/auditLabel';
 import { ProductMark } from '../products/ProductMark';
 import { OrderStructure } from './OrderStructure';
@@ -24,7 +26,11 @@ export function OrderDetail({
   onAction: (a: string) => void;
   onOutput: () => void;
 }) {
+  const { user } = useWorkspace();
+  // Who approves a draft follows the MANUFACTURING_ORDER approval policy; nobody approves their own order.
+  const { approverRoles } = useApprovalPolicy('MANUFACTURING_ORDER');
   const o = data.order;
+  const ownDraft = o.status === 'DRAFT' && o.created_by === user.id;
   const steps = [
     'DRAFT',
     'APPROVED',
@@ -37,7 +43,7 @@ export function OrderDetail({
   ];
   const index = o.status === 'PARTIALLY_COMPLETED' ? 4 : steps.indexOf(text(o.status));
   const next: Record<string, { action: string; label: string; roles: string[] }> = {
-    DRAFT: { action: 'approve', label: 'Approve order', roles: ['PLANNER'] },
+    DRAFT: { action: 'approve', label: 'Approve order', roles: approverRoles },
     APPROVED: { action: 'reserve', label: 'Reserve materials', roles: ['PLANNER', 'WAREHOUSE'] },
     MATERIALS_RESERVED: { action: 'issue', label: 'Issue materials & release', roles: ['WAREHOUSE'] },
     RELEASED: { action: 'start', label: 'Start production', roles: ['OPERATOR', 'PLANNER'] },
@@ -142,7 +148,12 @@ export function OrderDetail({
           </button>
         )}
         <span className="grow" />
-        {action && can(...action.roles) && (
+        {ownDraft && can(...approverRoles) && (
+          <span className="muted">
+            You created this order, so it needs approval from someone else ({approversText(approverRoles)}).
+          </span>
+        )}
+        {action && can(...action.roles) && !ownDraft && (
           <button className="button primary" disabled={busy} onClick={() => onAction(action.action)}>
             {busy && <LoaderCircle size={15} className="spin" />}
             {action.label}

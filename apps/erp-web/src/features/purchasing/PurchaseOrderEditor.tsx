@@ -160,12 +160,16 @@ export function PurchaseOrderEditor({
         id = text(created.id);
         setOrderId(id);
       }
-      if (submit) await request(`/purchases/orders/${id}/submit`, {}, key(`submit:${id}`));
+      const submitted = submit
+        ? await request<Row>(`/purchases/orders/${id}/submit`, {}, key(`submit:${id}`))
+        : undefined;
       await Promise.all([invalidatePurchasing(qc), refresh()]);
       notify(
-        submit
-          ? 'Purchase order submitted successfully; another planner or administrator approves it.'
-          : 'Draft saved successfully.',
+        !submitted
+          ? 'Draft saved successfully.'
+          : submitted.status === 'APPROVED'
+            ? 'Purchase order submitted successfully and auto-approved by policy; goods can be received.'
+            : 'Purchase order submitted successfully; it now waits for an independent approver.',
       );
       onSaved(id);
       onClose();

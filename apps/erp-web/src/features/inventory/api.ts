@@ -26,7 +26,16 @@ export type CountDetail = {
   events: Row[];
 };
 export type Valuation = { warehouses: Row[]; accounts: Rec[]; total: number };
-export type Settings = { approvalThreshold: number; updatedAt: string | null; updatedBy: string | null };
+/** `GET /inventory/settings`: the STOCK_ADJUSTMENT approval policy (threshold 0 when every adjustment needs approval). */
+export type Settings = {
+  approvalThreshold: number;
+  updatedAt: string | null;
+  updatedBy: string | null;
+  /** False when the policy lets every adjustment post directly. */
+  approvalRequired?: boolean;
+  /** Roles besides ADMIN that approve adjustments above the threshold. */
+  approverRoles?: string[];
+};
 
 /** All inventory queries share this prefix, so one invalidation refreshes every tab. */
 export const INVENTORY = 'inventory';
