@@ -5,8 +5,9 @@ const ACRONYMS = new Set(['MO', 'PO', 'SO', 'QC', 'BOM', 'GRN', 'FIFO', 'WIP']);
 
 /**
  * Readable, past-tense labels for the action codes the API writes to `audit_events`
- * (every `Store.audit(...)` call in services/erp-api). Keep this in sync when the backend adds codes;
- * unknown codes still get a sensible label from {@link auditLabel}'s fallback.
+ * (every `Store.audit(...)` call in services/erp-api). Keep this in sync when the backend adds codes:
+ * `AuditLabelCoverageTest` (services/erp-api) fails for a code without a label here. Unknown codes still get a
+ * sensible label from {@link auditLabel}'s fallback.
  */
 const LABELS: Record<string, string> = {
   // Manufacturing orders: MO_CREATED, then MO_<action> for each lifecycle transition.
@@ -19,10 +20,20 @@ const LABELS: Record<string, string> = {
   MO_RESUME: 'Production resumed',
   MO_CLOSE: 'MO closed',
   MO_CANCEL: 'MO cancelled',
+  MO_AUTO_APPROVED: 'MO auto-approved by policy',
+  MO_CHILDREN_CREATED: 'Child MOs created',
   PRODUCTION_POSTED: 'Output recorded',
   // Purchasing, receiving and quality.
   PO_CREATED: 'PO created',
   PO_APPROVED: 'PO approved',
+  // Procurement documents (V6) and approval policies (V9).
+  PO_DRAFT_CREATED: 'PO draft created',
+  PO_DRAFT_UPDATED: 'PO draft updated',
+  PO_SUBMITTED: 'PO submitted for approval',
+  PO_AUTO_APPROVED: 'PO auto-approved by policy',
+  PO_CANCELLED: 'PO cancelled',
+  PO_CLOSED_SHORT: 'PO closed short',
+  SUPPLIER_RETURN_POSTED: 'Supplier return posted',
   GOODS_RECEIVED: 'Goods received',
   INVOICE_MATCHED: 'Supplier invoice matched',
   QC_PASSED: 'QC passed',
@@ -30,9 +41,37 @@ const LABELS: Record<string, string> = {
   // Sales and delivery.
   SALE_CONFIRMED: 'SO confirmed',
   DISPATCH_POSTED: 'Dispatch posted',
+  // Sales documents (V3).
+  SO_DRAFT_CREATED: 'SO draft created',
+  SO_DRAFT_UPDATED: 'SO draft updated',
+  SO_CANCELLED: 'SO cancelled',
+  SO_CLOSED_SHORT: 'SO closed short',
+  CUSTOMER_RETURN_POSTED: 'Customer return posted',
+  // Inventory operations (V5).
+  ADJUSTMENT_CREATED: 'Adjustment drafted',
+  ADJUSTMENT_APPROVAL_REQUESTED: 'Adjustment sent for approval',
+  ADJUSTMENT_APPROVED: 'Adjustment approved',
+  ADJUSTMENT_POSTED: 'Adjustment posted',
+  ADJUSTMENT_CANCELLED: 'Adjustment cancelled',
+  TRANSFER_CREATED: 'Transfer drafted',
+  TRANSFER_POSTED: 'Transfer posted',
+  TRANSFER_CANCELLED: 'Transfer cancelled',
+  COUNT_STARTED: 'Cycle count started',
+  COUNT_QUANTITIES_RECORDED: 'Count quantities recorded',
+  COUNT_SUBMITTED: 'Count submitted for review',
+  COUNT_REOPENED: 'Count reopened',
+  COUNT_POSTED: 'Cycle count posted',
+  COUNT_CANCELLED: 'Cycle count cancelled',
+  WAREHOUSE_CREATED: 'Warehouse created',
+  WAREHOUSE_UPDATED: 'Warehouse updated',
   // Master data and administration.
   ITEM_CREATED: 'Item created',
-  // Item master (V4): ITEM_UPDATED / ITEM_DEACTIVATED / UNIT_CREATED... use the fallback.
+  // Item master (V4).
+  ITEM_UPDATED: 'Item updated',
+  ITEM_DEACTIVATED: 'Item deactivated',
+  ITEM_REACTIVATED: 'Item reactivated',
+  UNIT_CREATED: 'Unit created',
+  UNIT_UPDATED: 'Unit updated',
   ITEM_CONVERSION_SET: 'Unit conversion set',
   ITEM_CONVERSION_REMOVED: 'Unit conversion removed',
   ITEM_BARCODE_ADDED: 'Barcode added',
@@ -44,7 +83,12 @@ const LABELS: Record<string, string> = {
   ITEM_CATEGORY_UPDATED: 'Category updated',
   BOM_DRAFT_CREATED: 'BOM draft created',
   BOM_APPROVED: 'BOM approved',
+  BOM_DRAFT_UPDATED: 'BOM draft updated',
+  BOM_COPIED: 'BOM revision copied',
   PARTNER_CREATED: 'Partner created',
+  PARTNER_UPDATED: 'Partner updated',
+  PARTNER_DEACTIVATED: 'Partner deactivated',
+  PARTNER_REACTIVATED: 'Partner reactivated',
   WORK_CENTER_CREATED: 'Work center created',
   ORGANIZATION_UPDATED: 'Organization updated',
   USER_CREATED: 'User created',
