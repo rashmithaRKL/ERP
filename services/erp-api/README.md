@@ -26,15 +26,15 @@ run by `target/surefire-reports/*.xml`.
 | Package | Owns |
 |---|---|
 | `lk.dexlanka.erp` | `ErpApplication` only (component scan root) |
-| `platform` | `Store` (posting primitives), `Actor` (identity + role checks), `ErpUser` (principal with its session version), `SecurityConfig`, `LoginRateLimit`, `SessionGuard` (per-request revocation, role refresh, forced password change), `Passwords` (the password rule, temporary passwords), `PasswordService` + `AccountCommands` (self-service change), `AuthController` (`/api/health`, `/api/auth/*`), `ApiErrors` (the single `@RestControllerAdvice`) |
+| `platform` | `Store` (posting primitives), `Actor` (identity + role checks), `ErpUser` (principal with its session version), `SecurityConfig`, `LoginRateLimit`, `SessionGuard` (per-request revocation, role refresh, forced password change), `Passwords` (the password rule, temporary passwords), `PasswordService` + `AccountCommands` (self-service change), `PasswordAttemptLimit` (V9: 5 wrong current passwords per account in 15 minutes, then 429), `AuthController` (`/api/health`, `/api/auth/*`), `ApiErrors` (the single `@RestControllerAdvice`) |
 | `catalog` | Organization, user accounts, partners (maintenance and directory in `Partner*` files), items, work centers (machines), BOM revisions; item master (V4: `ItemService`, `UnitService` conversion service, `CategoryService`, `VariantService`, `ItemQuery`); multi-level BOMs (V7: `BomGraph` structure + roll-up, `BomService` copy/edit-draft + approval rules called from `CatalogService.approveBom`, `BomQuery` explosion/where-used/compare/cost, `BomStateSections`) |
 | `procurement` | Multi-line purchase orders in purchase units (`PurchaseOrderService`: draft/submit/independent approval/cancel/close short, drafts from MRP shortages), goods receipts per line (`ReceivingService`), supplier invoices with quantity/price variances (`SupplierInvoiceService`), supplier returns (`SupplierReturnService`), the read model (`ProcurementQuery`), open MRP supply (`ProcurementSupply`), shared rules (`PurchaseRules`) and the original single-item contract (`ProcurementService`) |
-| `quality` | Incoming and final inspections (including the supplier return of a failed incoming lot and MO completion after the last final release) |
-| `sales` | Multi-line sales orders (draft/confirm/cancel/close short), per-line dispatch (revenue/receivables and COGS per delivery), customer returns (`ReturnsService`), the sales read model (`SalesQuery`) |
-| `manufacturing` | Manufacturing-order lifecycle: snapshot, approval, reservation, issue, start/pause/resume, output, close/cancel; parent/child orders (V7: `ChildPlanning` shortages, `OrderTreeService` child orders, `OrderTreeQuery` order tree) |
-| `reporting` | `GET /api/state` (`StateQuery` + the `StateContributor` contract), `GET /api/manufacturing/{id}` (`OrderDetailsQuery`), cross-domain sections: inventory (lots, ledger), MRP, dashboard, audit/sync, finance; multi-level MRP (V7: `MrpPlanner` engine, `PlanningStateSections` with the isolated `incomingPurchaseSupply(tenant)` query, `PlanningQuery`) |
-| `demo` | `DemoDatabase` (embedded PostgreSQL for the `demo`/`test` profiles), `DemoSeed` (demo tenant, or first-start bootstrap tenant outside demo), `DemoPersonas` |
-| `admin` | V8 administration (ADMIN only): `UserAdminService` + `UserQuery` (edit, deactivate/reactivate, temporary passwords, directory), `ApprovalPolicyService` (public `evaluate(tenant, documentType, amount, creatorId)` → `Decision`, used by `inventory` for stock adjustments), `ImportService` with `ImportKind`s `ItemImport`, `PartnerImport`, `OpeningStockImport` and the `CsvFile` reader, `AuditQuery` (paged trail, facets, streamed CSV export), `PeriodService` (close/reopen accounting periods), `AdminController` |
+| `quality` | Incoming and final inspections (including the supplier return of a failed incoming lot and MO completion after the last final release); the paged inspection list (V9: `InspectionQuery`) |
+| `sales` | Multi-line sales orders in sales units (V9: entered quantity/unit/factor/base quantity through `catalog.UnitService`; draft/confirm/cancel/close short), per-line dispatch (revenue/receivables and COGS per delivery), customer returns (`ReturnsService`), the sales read model (`SalesQuery`) |
+| `manufacturing` | Manufacturing-order lifecycle: snapshot, approval (V9: per the `MANUFACTURING_ORDER` approval policy), reservation, issue, start/pause/resume, output, close/cancel; parent/child orders (V7: `ChildPlanning` shortages, `OrderTreeService` child orders, `OrderTreeQuery` order tree); the paged order list (V9: `ManufacturingQuery`) |
+| `reporting` | `GET /api/state` (`StateQuery` + the `StateContributor` contract), `GET /api/manufacturing/{id}` (`OrderDetailsQuery`), cross-domain sections: inventory (lots, ledger), MRP, dashboard, audit/sync, finance; multi-level MRP (V7: `MrpPlanner` engine, `PlanningStateSections` with the isolated `incomingPurchaseSupply(tenant)` query, `PlanningQuery`); Costs & reports (V9: `ReportQuery` paged cost register and journal, `ReportsController`) |
+| `demo` | `DemoDatabase` (embedded PostgreSQL for the `demo`/`test` profiles), `DemoSeed` (demo tenant, or first-start bootstrap tenant outside demo), `DemoPersonas`, `IntegrationDemoSeed` (V9) |
+| `admin` | V8 administration (ADMIN only): `UserAdminService` + `UserQuery` (edit, deactivate/reactivate, temporary passwords, directory), `ApprovalPolicyService` (public `evaluate(tenant, documentType, amount, creatorId)` → `Decision`, `approverDecision`, `autoApproval`; used by `inventory` for stock adjustments and, since V9, by `manufacturing` and `procurement` for order approval) + `ApprovalPolicyController` (`GET /api/approval-policies` for every role), `ImportService` with `ImportKind`s `ItemImport`, `PartnerImport`, `OpeningStockImport` and the `CsvFile` reader, `AuditQuery` (paged trail, facets, streamed CSV export), `PeriodService` (close/reopen accounting periods), `AdminController` |
 
 A domain package contains, by convention:
 
@@ -52,7 +52,7 @@ Dependency direction: domain packages → `platform` and `reporting` (contract o
 tenant-scoped schema inside the same transaction (for example, `quality` completes a manufacturing order).
 Two deliberate exceptions: `admin` imports call the public `catalog.ItemService` / `catalog.CatalogService#partner`
 commands (joining the import's transaction), and domains that require approvals ask `admin.ApprovalPolicyService`
-(non-transactional reads inside the caller's transaction; today `inventory` for stock adjustments).
+(non-transactional reads inside the caller's transaction: `inventory` for stock adjustments, `manufacturing` for orders, `procurement` for purchase orders).
 Make a class or method `public` only when another package (or a test in another package) needs it.
 
 Route ownership:
@@ -60,18 +60,20 @@ Route ownership:
 | Controller | Routes under `/api` |
 |---|---|
 | `platform.AuthController` | `GET /health`, `GET /auth/config`, `GET /auth/csrf`, `GET /auth/me`, `POST /auth/password`, `POST /auth/demo` (`/auth/login`, `/auth/logout` are Spring Security filters) |
+| `admin.ApprovalPolicyController` | `GET /approval-policies` (V9, every role) |
 | `admin.AdminController` | `GET /admin/users`, `/admin/approval-policies`, `/admin/imports`, `/admin/imports/{kind}/template`, `/admin/audit`, `/admin/audit/facets`, `/admin/audit/export`, `/admin/periods`; `POST /admin/users/{id}`, `/admin/users/{id}/deactivate`, `/reactivate`, `/reset-password`, `/admin/approval-policies/{documentType}`, `/admin/imports/{kind}/validate`, `/admin/imports/{kind}/commit`, `/admin/periods/close`, `/admin/periods/reopen` |
 | `catalog.CatalogController` | `POST /users`, `/organization`, `/partners`, `/machines`, `/items`, `/boms`, `/boms/{id}/approve` |
 | `catalog.PartnerController` | `GET /partners`, `GET /partners/{id}`, `POST /partners/{id}` |
 | `catalog.ItemMasterController` | `GET /items`, `/items/{id}`, `/items/{id}/movements`, `/items/{id}/units`, `/items/{id}/convert`, `/items/by-barcode`, `/units`, `/item-categories`, `/item-templates`, `/item-templates/{id}`; `POST /items/{id}`, `/items/{id}/deactivate`, `/items/{id}/activate`, `/items/{id}/conversions`, `/items/{id}/conversions/{unit}/remove`, `/items/{id}/barcodes`, `/items/{id}/barcodes/{barcodeId}/remove`, `/units`, `/units/{code}`, `/item-categories`, `/item-categories/{id}`, `/item-templates`, `/item-templates/{id}`, `/item-templates/{id}/variants` |
 | `procurement.ProcurementController` | `GET /purchases/orders`, `/purchases/orders/{id}`, `/purchases/receipts`, `/purchases/invoices`, `/purchases/returns`, `/purchases/sources`; `POST /purchases/orders`, `/purchases/orders/{id}`, `/purchases/orders/{id}/submit`, `/approve`, `/cancel`, `/close`, `/receipts`, `/invoices`, `/purchases/receipts/{id}/returns`, `/purchases/recommendations`; original contract `POST /purchases`, `/purchases/{id}/approve`, `/purchases/{id}/receive`, `/receipts/{id}/invoice` |
-| `quality.QualityController` | `POST /quality/{id}/inspect` |
+| `quality.QualityController` | `GET /quality/inspections` (V9); `POST /quality/{id}/inspect` |
 | `sales.SalesController` | `GET /sales/orders`, `GET /sales/orders/{id}`; `POST /sales/orders`, `/sales/orders/{id}`, `/sales/orders/{id}/confirm`, `/cancel`, `/close`, `/sales/orders/{id}/lines/{lineId}/dispatch`, `/sales/deliveries/{id}/returns`; original contract `POST /sales`, `/sales/{id}/dispatch` |
 | `catalog.BomController` | `GET /boms/{id}/explosion`, `/boms/explosion`, `/boms/where-used`, `/boms/compare`, `/boms/{id}/cost`; `POST /boms/{id}/copy`, `/boms/{id}` (edit draft) |
-| `manufacturing.ManufacturingController` | `POST /manufacturing`, `/manufacturing/{id}/actions/{action}`, `/manufacturing/{id}/complete` |
+| `manufacturing.ManufacturingController` | `GET /manufacturing/orders` (V9); `POST /manufacturing`, `/manufacturing/{id}/actions/{action}`, `/manufacturing/{id}/complete` |
 | `manufacturing.OrderTreeController` | `GET /manufacturing/{id}/tree`; `POST /manufacturing/{id}/children` |
 | `reporting.ReportingController` | `GET /state`, `GET /manufacturing/{id}` |
 | `reporting.PlanningController` | `GET /planning/mrp` |
+| `reporting.ReportsController` | `GET /reports/costs`, `/reports/journal` (V9, ADMIN/PLANNER) |
 
 ## How to add a feature module
 
@@ -255,21 +257,21 @@ annotate contributors with `@Transactional`. Existing keys, in order:
 
 | Order | Keys | Owner |
 |---|---|---|
-| 100–160 | `company`, `users` (ADMIN), `factories`, `warehouses`, `partners`, `machines`, `items` | catalog |
+| 100–160 | `company`, `factories`, `warehouses`, `partners`, `machines`, `items` (`users` at 110 was removed in V9; use `GET /api/admin/users`) | catalog |
 | 170 | `orders` | manufacturing |
 | 180–190 | `boms`, `bomLines` | catalog |
-| 200 | `sales` (one summary row per order) | sales |
+| 200 | `sales` (one summary row per order; summed base quantities) | sales |
 | 210 | `purchases` (one summary row per order, V6) | procurement |
 | 220 | `lots` | reporting (inventory) |
 | 230 | `inspections` | quality |
-| 240 | `receipts` (one row per received line and lot, V6) | procurement |
-| 250 | `ledger` | reporting (inventory) |
 | 260 | `mrp` | reporting (planning) |
 | 270–280 | `trend`, `metrics` | reporting (dashboard) |
 | 300 | `sync` (the `audit` key at 290 was removed in V8; use `GET /api/admin/audit`) | reporting (audit) |
-| 310–320 | `financial`, `journal` (ADMIN, PLANNER) | reporting (finance) |
-| 1300 | `salesLines` (open lines of confirmed orders, for planning) | sales |
+| 310 | `financial` (ADMIN, PLANNER) | reporting (finance) |
+| 1300 | `salesLines` (open lines of confirmed orders, for planning; `quantity` is the base quantity, V9 adds `entered_quantity` and `unit`) | sales |
 | 1700 | `bomCosts` (multi-level standard-cost roll-up per revision; V7) | catalog |
+
+V9 removed keys no screen reads any more: `users` (110), `receipts` (240, `GET /api/purchases/receipts`), `ledger` (250, `GET /api/inventory/ledger`) and `journal` (320, `GET /api/reports/journal`). The Manufacturing orders, Shop floor, Quality control and Costs & reports screens read the V9 paged endpoints; `orders` and `inspections` stay for the dashboard and attention counts. V9 contributes no new keys (range 1900–1999 unused).
 
 V7 also added columns to existing keys: `orders` rows carry `parent_order_id`, and `mrp` rows (now computed by the
 multi-level `MrpPlanner`) keep their original columns and add `level`, `independent_demand`, `dependent_demand`,
@@ -327,7 +329,8 @@ approve → receive-lines commands). `demo.SalesDemoSeed` (`ORDER + 30`) adds th
 documents, `demo.ProcurementDemoSeed` (`ORDER + 60`) the V6 purchase orders (one per state), an invoice with a price
 variance and a supplier return, and `demo.PlanningDemoSeed` (`ORDER + 70`) the V7 two-level bottle/preform structure,
 an R02 draft copy, an approved parent order with a preform child order and a draft parent that drives planned
-production. A feature that needs
+production, and `demo.IntegrationDemoSeed` (`ORDER + 90`) a confirmed sales order with a bottle line entered in
+cartons (`box` = 50 pcs, V9). A feature that needs
 demo data adds its own runner, ordered after the base seed and idempotent (it also runs against an existing
 `.local/postgres` demo database on the next start):
 
@@ -416,6 +419,8 @@ partial work on failure.
 | Missing/expired CSRF token | 403 | `{"message":"Access denied or session token expired. Refresh and try again."}` |
 | Temporary password not yet replaced (`SessionGuard`) | 403 | `{"message":"Change your temporary password to continue","code":"PASSWORD_CHANGE_REQUIRED"}` |
 | Not signed in, account deactivated or session revoked | 401 | `{"message":"Please sign in"}` |
+| Too many sign-in attempts (`LoginRateLimit`, per address) | 429 | `{"message":"Too many sign-in attempts. Try again in one minute."}` |
+| Too many wrong current passwords (`PasswordAttemptLimit`, per account, V9) | 429 | `application/problem+json`, `detail` "Too many incorrect current passwords. Try again in N minutes." |
 | Database trigger `RAISE EXCEPTION` (SQLSTATE P0001) | 409 | `application/problem+json`, the trigger's message in `detail` |
 | Constraint violation or `check_violation` trigger | 409 | `{"message":"This transaction violates a record, quantity or accounting constraint. …"}` |
 | Other database failure | 500 | `application/problem+json`, generic `detail` (no SQL) |

@@ -76,7 +76,7 @@ Shared state and helpers from `src/app/workspace.tsx`. The members pages normall
 | `mutate(url, body?)` | POST, then refresh data and toast. `busy` is true while it runs. Disable buttons with `disabled={busy}` |
 | `postForm(title, url, fields, description?, submit?)` / `openForm(spec)` | Open the shared form dialog |
 | `notify(message)` | Toast. Text containing "success" or "downloaded" gets the success style |
-| `refresh()` | Invalidate the `['state']` and `['order']` queries |
+| `refresh()` | Invalidate the `['state']` and `['order']` queries and the paged `['manufacturing']`, `['quality']` and `['reports']` lists |
 | `openOrder(id)` | Open the manufacturing order drawer |
 | `openBomEditor()` | Open the BOM revision editor |
 | `search` / `setSearch` | Workspace text filter used with `filterRows()` from `lib/rows.ts`. It resets on navigation |
@@ -90,7 +90,9 @@ Page-local UI state (selected tab, local filters) belongs in the page with `useS
 
 - Use `@tanstack/react-query` with `request<T>(url, body?, idempotencyKey?)` from `lib/api.ts`. `request` prefixes `/api`, sends cookies, adds the CSRF header and an `Idempotency-Key` on POST, and throws an `Error` carrying the server's message.
 - **New features call their own endpoints with their own query keys** (for example `['maintenance', 'plans']`). Do not grow `/api/state` or its `State` type: that payload is shared by every page and refetched after every transaction. The order drawer (`features/manufacturing/OrderDrawer.tsx`, key `['order', id]`) is the reference example.
-- After a write, invalidate your own keys (`queryClient.invalidateQueries({ queryKey: ['maintenance'] })`). `workspace.refresh()` covers only `['state']` and `['order']`.
+- After a write, invalidate your own keys (`queryClient.invalidateQueries({ queryKey: ['maintenance'] })`). `workspace.refresh()` covers `['state']`, `['order']` and the V9 paged lists (`['manufacturing']`, `['quality']`, `['reports']`).
+- Keyset-paged lists with previous/next paging use `useCursorPage(key, path, filters, limit)` with `PageFooter` and `PageState` from `features/lists/cursorPage.tsx` (Manufacturing orders, Shop floor, Quality control, Costs & reports). The cursor stack resets when the filters change.
+- Approve buttons follow the tenant's approval policy: `useApprovalPolicy('MANUFACTURING_ORDER' | 'PURCHASE_ORDER' | 'STOCK_ADJUSTMENT')` from `features/approvals/policies.ts` returns the approver roles (`GET /api/approval-policies`); pass them to `can(...)` and hide the button for the document's creator.
 - Formatting helpers live in `lib/format.ts`: `fmt`, `num`, `money`, `date`, `text`, `today`, `labelState`, `csv`. Show audit action codes with `auditLabel()` from `features/audit/auditLabel.ts`.
 
 ## Forms: `FormDialog`
@@ -134,7 +136,7 @@ const [lines, setLines] = useState<LineItem[]>([newLine()]);
 
 Send `lines.map(({ id, itemId, quantity, unitPrice, discountPct }) => …)` to the API; the server recomputes totals.
 
-Optional `units={(line) => UnitChoice[] | undefined}` adds a unit picker to the quantity cell (bound to `line.unit`; the quantity step follows the chosen unit's `decimals`). The purchase-order editor (`features/purchasing/PurchaseOrderEditor.tsx`) feeds it the purchase units of `GET /items/{id}/units` and rescales the unit price when the unit changes.
+Optional `units={(line) => UnitChoice[] | undefined}` adds a unit picker to the quantity cell (bound to `line.unit`; the quantity step follows the chosen unit's `decimals`). The purchase-order editor (`features/purchasing/PurchaseOrderEditor.tsx`) feeds it the purchase units of `GET /items/{id}/units` (`purchaseUnits`) and the sales-order editor the sales units (`salesUnits`, V9); both rescale the unit price when the unit changes and show the base quantity.
 
 ## Tables: `Table`
 

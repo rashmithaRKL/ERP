@@ -8,15 +8,17 @@ Every authenticated request is revalidated against the account (`platform.Sessio
 
 | Method | Path | Purpose |
 |---|---|---|
-| POST | `/auth/password` | `{currentPassword, newPassword}` (16–128 characters, not the email address, not the current password); any signed-in role; clears `mustChangePassword`, signs out the user's other sessions and keeps this one (new session id); audited `PASSWORD_CHANGED`. Wrong current password → 409 |
+| POST | `/auth/password` | `{currentPassword, newPassword}` (16–128 characters, not the email address, not the current password); any signed-in role; clears `mustChangePassword`, signs out the user's other sessions and keeps this one (new session id); audited `PASSWORD_CHANGED`. Wrong current password → 409; after 5 wrong current passwords within 15 minutes the account's further attempts (even correct ones) get 429 until the oldest failure is 15 minutes old (V9; in memory per process, like the login limit); a successful change clears the failures |
 
 All business mutations require a unique `Idempotency-Key` header; keep it across retries of the **same** request. Different payload/action with the same key returns 409. Body decimal values may be JSON strings to avoid browser floating-point conversions. Responses use six-decimal PostgreSQL numeric values; UI quantities are display-only. Record IDs are opaque strings. Tenant IDs in request JSON are not accepted or used for authorization.
 
 | Method | Path | Purpose / allowed roles (ADMIN also allowed) |
 |---|---|---|
-| GET | `/state?days=7|14|30|90` | Tenant read snapshot; all signed-in roles; financial aggregates PLANNER/ADMIN, user directory ADMIN |
+| GET | `/state?days=7|14|30|90` | Tenant read snapshot; all signed-in roles; financial aggregates PLANNER/ADMIN |
+| GET | `/approval-policies` | V9: `{items:[{documentType, approvalRequired, amountThreshold, approverRoles}]}` for `MANUFACTURING_ORDER`, `PURCHASE_ORDER`, `STOCK_ADJUSTMENT` (built-in default when none is stored); all roles, so screens show approve buttons to the approver roles |
+| GET | `/manufacturing/orders?status=&q=&limit=&before=` | V9: manufacturing orders, newest first, keyset-paged (`limit` 1–200, default 25). `status`: `all` (default), a group `active` (not completed/closed/cancelled), `floor` (RELEASED, IN_PROGRESS, ON_HOLD, PARTIALLY_COMPLETED, QUALITY_REVIEW: the shop floor) or `production` (IN_PROGRESS, PARTIALLY_COMPLETED), or one status code; `q` matches number, product name/SKU, work center code and customer. Returns `{items, next, total, counts}`: rows have the `orders` columns of `/state` plus `parent_number`; `total` counts the filter, `counts` are the tenant's orders per status (unfiltered); all roles |
 | GET | `/manufacturing/{id}` | Tenant-owned snapshot/materials/actuals/audit |
-| POST | `/manufacturing` | Create snapshotted order; optional `parentOrderId` (V7) makes it a child order; PLANNER |
+| POST | `/manufacturing` | Create snapshotted order; optional `parentOrderId` (V7) makes it a child order. V9: when the `MANUFACTURING_ORDER` approval policy needs no second person for the estimated cost (switched off, or cost at/below the threshold) the order is created APPROVED and audited `MO_AUTO_APPROVED` ("Auto-approved by policy…"); otherwise it is a DRAFT awaiting approval; PLANNER |
 | POST | `/manufacturing/{id}/children` | V7: child orders for the semi-finished shortages of a DRAFT/APPROVED order `{machineId?, priority?, itemIds?}`; returns `{parentId, created, skipped}`; PLANNER |
 | GET | `/manufacturing/{id}/tree` | V7: `{order, parent, ancestors, children (nested), descendants, shortages, canPlanChildren}`; all roles |
 | GET | `/planning/mrp` | V7: multi-level plan `{today, summary, rows (with pegging), plannedProduction, purchases}`; ADMIN/PLANNER/WAREHOUSE |
@@ -27,9 +29,12 @@ All business mutations require a unique `Idempotency-Key` header; keep it across
 | POST | `/purchases/{id}/receive` | Original single-lot receipt `{quantity, warehouseId, supplierLot}` of the order's only open line; WAREHOUSE |
 | POST | `/receipts/{id}/invoice` | Original whole-receipt match `{reference}` at the order price (creates a matched supplier invoice); ADMIN |
 | POST | `/quality/{id}/inspect` | Finalize pending inspection; QUALITY |
+| GET | `/quality/inspections?status=&type=&q=&limit=&before=` | V9: inspections, newest first, keyset-paged. `status` `all`/PENDING/PASSED/FAILED, `type` INCOMING/FINAL/RETURN/OPENING, `q` matches lot number, item name/SKU and notes. `{items, next, total, counts}`; rows add `sku`, `uom`, `lot_status` and `source_number` (MO, PO or SO number); `counts` per status are tenant-wide; all roles |
+| GET | `/reports/costs?status=&q=&limit=&before=` | V9: manufacturing cost register, newest first, keyset-paged: estimated, material, conversion, actual, WIP, finished and scrap cost per order; `status` `all`/`active`/a code, `q` matches number, product name/SKU. `{items, next, total, summary}`; `summary` = tenant-wide `{orders, estimated_cost, material_cost, conversion_cost, wip_cost, finished_cost, scrap_cost}`; ADMIN/PLANNER |
+| GET | `/reports/journal?account=&q=&from=&to=&limit=&before=` | V9: posted journal lines, newest entry first, debits before credits (keyset on entry `created_at, id`, line `debit, id`; `limit` default 50). `account` exact, `q` matches reference/description, `from`/`to` inclusive Asia/Colombo dates (400 when malformed, 409 when `to` < `from`). `{items, next, totals:{debit, credit}, accounts}` (`accounts` = posted account codes, first page only); ADMIN/PLANNER |
 | GET | `/sales/orders?status=&q=&limit=&before=` | Sales orders, newest first, keyset-paged (`limit` 1–200, default 25; `before` = previous page's `next`). `status`: `all` (default), `open` (CONFIRMED+PARTIAL) or a status code; `q` matches number, customer, customer reference, line product name/SKU. Returns `{items, next, total, counts}` (`counts` per status for the same search) |
 | GET | `/sales/orders/{id}` | `{order, lines, deliveries, returns, manufacturing, lots, activity, credit}`; `lots` are released, unreserved lots of the open lines' products (FIFO); `credit` = `{limit, receivables, exceeded}` |
-| POST | `/sales/orders` | Create a draft multi-line order; SALES/PLANNER |
+| POST | `/sales/orders` | Create a draft multi-line order `{customerId, customerReference?, dueDate, notes?, lines:[{id?, productId, quantity, unitPrice, discountPct?, unit?}]}`; V9: `quantity`/`unitPrice` are in `unit` (default the base unit; otherwise a conversion flagged for sales or a same-kind standard unit), converted exactly to `base_quantity` (409 when not exact or not a sales unit); SALES/PLANNER |
 | POST | `/sales/orders/{id}` | Replace a draft's header and lines (lines that keep their `id` keep their identity); SALES/PLANNER |
 | POST | `/sales/orders/{id}/confirm` | DRAFT → CONFIRMED; returns `warnings` when open receivables + order total exceed the customer's credit limit (not blocked); SALES/PLANNER |
 | POST | `/sales/orders/{id}/cancel` | `{reason}`; DRAFT/CONFIRMED with nothing delivered and no linked MO in progress (RELEASED…QUALITY_REVIEW); returns `warnings` for linked MOs still open; SALES/PLANNER |
@@ -79,8 +84,8 @@ All business mutations require a unique `Idempotency-Key` header; keep it across
 | GET | `/purchases/orders/{id}` | `{order, lines, receipts, invoices, invoiceLines, returns, activity, warehouses}`; lines add `outstanding`, `received_in_unit`, `awaiting_qc`, `invoiced`, `expected`; receipts add the QC decision, `invoiceable` and `returnable`; `warehouses` = active RAW warehouses for receiving |
 | POST | `/purchases/orders` | Create a draft `{supplierId?, supplierReference?, dueDate, notes?, lines:[{id?, itemId, quantity, unit?, unitCost, expectedDate?}]}`; PLANNER/WAREHOUSE |
 | POST | `/purchases/orders/{id}` | Replace a draft (lines that keep their `id` keep their identity); PLANNER/WAREHOUSE |
-| POST | `/purchases/orders/{id}/submit` | DRAFT → SUBMITTED; needs an active supplier, at least one line and active items; PLANNER/WAREHOUSE |
-| POST | `/purchases/orders/{id}/approve` | SUBMITTED → APPROVED by a PLANNER/ADMIN who neither created nor submitted it; supplier and items must still be active |
+| POST | `/purchases/orders/{id}/submit` | DRAFT → SUBMITTED; needs an active supplier, at least one line and active items. V9: when the `PURCHASE_ORDER` approval policy needs no second person for the order total, the order goes straight to APPROVED (`approved_by` empty, audited `PO_AUTO_APPROVED`) and the response `status` is `APPROVED`; PLANNER/WAREHOUSE |
+| POST | `/purchases/orders/{id}/approve` | SUBMITTED → APPROVED by an approver role of the `PURCHASE_ORDER` policy (default PLANNER; ADMIN always; 403 otherwise) who neither created nor submitted it (409); supplier and items must still be active |
 | POST | `/purchases/orders/{id}/cancel` | `{reason}`; DRAFT/SUBMITTED/APPROVED (or PARTIAL whose receipts were all rejected) with nothing received; PLANNER, WAREHOUSE for drafts |
 | POST | `/purchases/orders/{id}/close` | `{reason}`; PARTIAL → CLOSED (close short); the remainder leaves MRP supply; PLANNER |
 | POST | `/purchases/orders/{id}/receipts` | `{warehouseId, deliveryNote, lines:[{lineId, quantity, unit?, supplierLot?}]}`: one goods receipt (shared `GRN-…` number) into an **active RAW** warehouse; per line a quarantined lot at the line's base unit cost, a `GOODS_RECEIPT` ledger entry, Dr RAW_INVENTORY / Cr GRNI and an INCOMING inspection; WAREHOUSE |
@@ -132,7 +137,7 @@ Supplier returns: only quality-released receipt lots; quantity ≤ received − 
 | GET | `/inventory/transfers?status&warehouseId&q&limit&before`, `/inventory/transfers/{id}` | Transfers; detail adds lines, ledger pair, audit events |
 | POST | `/inventory/transfers`, `/inventory/transfers/{id}/post`, `/inventory/transfers/{id}/cancel` | Draft `{fromWarehouseId, toWarehouseId, notes, lines[{lotId, quantity}]}`, post, cancel; WAREHOUSE/PLANNER |
 | GET | `/inventory/counts?status&warehouseId&q&limit&before`, `/inventory/counts/{id}` | Counts (`status=OPEN` = COUNTING + REVIEW); detail hides system quantities of a blind count while COUNTING |
-| POST | `/inventory/counts` | Start `{warehouseId, itemId?, itemType?, blind, notes}`: snapshots every countable lot; WAREHOUSE/PLANNER |
+| POST | `/inventory/counts` | Start `{warehouseId, itemId?, itemType?, blind, notes, categoryId?}`: snapshots every countable lot; V9: `categoryId` limits the count to items of that category and all of its sub-categories (combinable with `itemType`; list and detail rows carry `category_id`, `category`); WAREHOUSE/PLANNER |
 | POST | `/inventory/counts/{id}/entries` | `{entries[{lineId, countedQty}]}` while COUNTING; WAREHOUSE/PLANNER |
 | POST | `/inventory/counts/{id}/submit`, `/reopen`, `/post`, `/cancel` | COUNTING → REVIEW → POSTED (variance adjustment), REVIEW → COUNTING, cancel; WAREHOUSE/PLANNER |
 
@@ -163,8 +168,8 @@ MRP (`GET /planning/mrp`, and the `mrp` rows of `/state`): gross demand = unrese
 | POST | `/admin/users/{id}` | `{name, role}`; a role change applies to the user's next request; the last active ADMIN cannot be demoted (409); audited `USER_UPDATED` |
 | POST | `/admin/users/{id}/deactivate`, `/reactivate` | Deactivation blocks sign-in and signs out open sessions; not yourself, not the last active ADMIN (409); audited |
 | POST | `/admin/users/{id}/reset-password` | Issues a one-time temporary password, returned once as `temporaryPassword` (an idempotent replay returns `null`; the password is never stored in clear text); the user must change it at the next sign-in and open sessions end; not for yourself; audited `USER_PASSWORD_RESET` |
-| GET | `/admin/approval-policies` | `{items}`: one policy per `MANUFACTURING_ORDER`, `PURCHASE_ORDER`, `STOCK_ADJUSTMENT` with `approvalRequired, amountThreshold, approverRoles, customized, wired, updatedAt, updatedBy` |
-| POST | `/admin/approval-policies/{documentType}` | `{approvalRequired, amountThreshold (null = every document), approverRoles ⊆ PLANNER, WAREHOUSE, QUALITY, SALES, OPERATOR}`; ADMIN always approves, a creator never approves their own document; audited `APPROVAL_POLICY_UPDATED`. In effect for stock adjustments (and count variances); manufacturing and purchase orders keep their fixed rule until the integration release (`wired: false`) |
+| GET | `/admin/approval-policies` | `{items}`: one policy per `MANUFACTURING_ORDER`, `PURCHASE_ORDER`, `STOCK_ADJUSTMENT` with `approvalRequired, amountThreshold, approverRoles, customized, wired, updatedAt, updatedBy` (`wired` is true for all three since V9) |
+| POST | `/admin/approval-policies/{documentType}` | `{approvalRequired, amountThreshold (null = every document), approverRoles ⊆ PLANNER, WAREHOUSE, QUALITY, SALES, OPERATOR}`; ADMIN always approves, a creator never approves their own document; audited `APPROVAL_POLICY_UPDATED`. In effect for every document type (V9): stock adjustments and count variances when posted (gross value), manufacturing orders when created (estimated cost), purchase orders when submitted (order total). A document at or below the threshold, or any document while approval is off, takes effect directly (`MO_AUTO_APPROVED` / `PO_AUTO_APPROVED` / posted adjustment); approve rights always follow the current approver roles, so a document already waiting is never stranded |
 | POST | `/admin/imports/{kind}/validate` | `kind` = `items`, `partners` or `opening-stock`. Dry run of `{fileName, content}` (CSV text): runs the whole import in a rolled-back transaction and returns `{rows, validRows, valid, errors:[{row, column, message}], preview, summary, alreadyImported}`; no Idempotency-Key needed, nothing is kept |
 | POST | `/admin/imports/{kind}/commit` | Imports the same file in one transaction, only when every row is valid (409 with the first error otherwise). Idempotent per file content: an already imported file returns its batch with `duplicate: true`. Audited `IMPORT_COMMITTED` plus the per-record audit of each created record |
 | GET | `/admin/imports?limit&before` | Committed batches, newest first |
@@ -184,7 +189,7 @@ Import columns (header names are matched case-insensitively; spaces and hyphens 
 
 Accounting periods: a period ends on `end_date` and starts the day after the previous period's end. Posting semantics are unchanged: every posting is dated now, and `Store.openPeriod` rejects postings while a closed period covers the current date, so closing a past period locks it and closing a period that ends today stops all postings for the rest of the day.
 
-Lifecycle actions: `approve` (PLANNER, distinct from creator); `reserve` (PLANNER/WAREHOUSE); `issue` (WAREHOUSE); `start`, `pause`, `resume` (OPERATOR/PLANNER); `close`, `cancel` (PLANNER). Cancellation is available only before material issue, with reservations safely released. Issued order cancellation is blocked until a controlled return/variance procedure exists.
+Lifecycle actions: `approve` (an approver role of the `MANUFACTURING_ORDER` policy — default PLANNER, ADMIN always — distinct from the creator; orders the policy auto-approves are created APPROVED); `reserve` (PLANNER/WAREHOUSE); `issue` (WAREHOUSE); `start`, `pause`, `resume` (OPERATOR/PLANNER); `close`, `cancel` (PLANNER). Cancellation is available only before material issue, with reservations safely released. Issued order cancellation is blocked until a controlled return/variance procedure exists.
 
 Examples:
 
@@ -192,19 +197,19 @@ Examples:
 {"bomId":"opaque-approved-revision","machineId":"opaque-work-center","salesOrderId":null,"quantity":"1000","priority":"NORMAL","dueDate":"2026-11-05","salesOrderLineId":"opaque-sales-line"}
 ```
 
-`salesOrderLineId` (optional) plans the order for a line of a CONFIRMED/PARTIAL sales order: the BOM product must match the line's product and planned quantity (non-cancelled orders, less scrap) cannot exceed the line quantity. A bare `salesOrderId` still works when that order has exactly one line of the BOM product.
+`salesOrderLineId` (optional) plans the order for a line of a CONFIRMED/PARTIAL sales order: the BOM product must match the line's product and planned quantity (non-cancelled orders, less scrap) cannot exceed the line's base quantity. A bare `salesOrderId` still works when that order has exactly one line of the BOM product.
 
 ```json
 {"customerId":"opaque-customer","customerReference":"PO-4471","dueDate":"2026-12-05","notes":"",
- "lines":[{"id":null,"productId":"opaque-bottle","quantity":"6000","unitPrice":"27.5","discountPct":"5"},
-          {"id":null,"productId":"opaque-cap","quantity":"12000","unitPrice":"7.8","discountPct":"0"}]}
+ "lines":[{"id":null,"productId":"opaque-bottle","quantity":"120","unit":"box","unitPrice":"1375","discountPct":"5"},
+          {"id":null,"productId":"opaque-cap","quantity":"12000","unit":null,"unitPrice":"7.8","discountPct":"0"}]}
 ```
 
 ```json
 {"reference":"DN-2026-01","lots":[{"lotId":"opaque-lot-a","quantity":"4000"},{"lotId":"opaque-lot-b","quantity":"500"}]}
 ```
 
-Per delivery, revenue/receivable = quantity × unit price × (1 − discount); the delivery that completes a line absorbs the rounding residual so line revenue equals the line total. A customer return reverses `credit_amount` (Dr SALES_REVENUE / Cr ACCOUNTS_RECEIVABLE) and `cost_amount` (Dr FG_INVENTORY / Cr COST_OF_GOODS_SOLD) for the returned share of the delivery; returning the rest of a delivery reverses exactly what remains.
+Sales lines (V9) store the entered `quantity`, `unit`, `factor` (base units per entered unit), `base_quantity` (exact), `unit_price` per entered unit and `base_unit_price` (= unit price / factor, 6 dp); `line_total` = quantity × unit price × (1 − discount). Dispatch, `delivered`/`returned`, `outstanding`, manufacturing demand and planning are base quantities; the detail's lines add `uom` (base unit). Per delivery, revenue/receivable = base quantity ÷ factor × unit price × (1 − discount), rounded once; the delivery that completes a line absorbs the rounding residual so line revenue equals the line total. A customer return reverses `credit_amount` (Dr SALES_REVENUE / Cr ACCOUNTS_RECEIVABLE) and `cost_amount` (Dr FG_INVENTORY / Cr COST_OF_GOODS_SOLD) for the returned share of the delivery; returning the rest of a delivery reverses exactly what remains.
 
 ```json
 {"goodQty":"400","scrapQty":"5","labourCost":"2500.00","machineCost":"1800.00","notes":"Five startup rejects; partial run"}
@@ -218,9 +223,9 @@ Per delivery, revenue/receivable = quantity × unit price × (1 − discount); t
 {"unit":"bag","factor":"25","purchase":true,"sales":false}
 ```
 
-Units: stock, BOM quantities and documents are stored in the item's base unit. `GET /items/{id}/convert?quantity=3&unit=bag` returns `{"baseQuantity":75,"baseUnit":"kg","exact":true,...}`. Other features convert with `catalog.UnitService.toBase(actor, itemId, quantity, unit)` (or `toBaseExact`, which refuses rounding) inside their own transaction; purchase-order lines and goods receipts use it since V6, sales documents follow in the V9 integration pass.
+Units: stock, BOM quantities and documents are stored in the item's base unit. `GET /items/{id}/convert?quantity=3&unit=bag` returns `{"baseQuantity":75,"baseUnit":"kg","exact":true,...}`. Other features convert with `catalog.UnitService.toBase(actor, itemId, quantity, unit)` (or `toBaseExact`, which refuses rounding) inside their own transaction; purchase-order lines and goods receipts use it since V6, sales-order lines since V9 (supplier invoice lines are still entered in the base unit).
 
-Errors use HTTP 400 (invalid input), 401 (unauthenticated), 403 (role/CSRF/password change required), 404 (missing/unowned record), 409 (business state/quantity/reference conflict), 429 (login limit), and sanitized 500s. The body depends on where the error is raised:
+Errors use HTTP 400 (invalid input), 401 (unauthenticated), 403 (role/CSRF/password change required), 404 (missing/unowned record), 409 (business state/quantity/reference conflict), 429 (login limit; repeated wrong current passwords), and sanitized 500s. The body depends on where the error is raised:
 
 | Cause | Status | Body |
 |---|---|---|
@@ -233,12 +238,13 @@ Errors use HTTP 400 (invalid input), 401 (unauthenticated), 403 (role/CSRF/passw
 | Temporary password not yet replaced | 403 | `{"message":"Change your temporary password to continue","code":"PASSWORD_CHANGE_REQUIRED"}` |
 | Not signed in, or session revoked | 401 | `{"message":"Please sign in"}` |
 | Login rate limit | 429 | `{"message":"Too many sign-in attempts. Try again in one minute."}` |
+| Password change attempt limit (V9) | 429 | `application/problem+json`; `detail` "Too many incorrect current passwords. Try again in N minutes." |
 
 Clients should show `message`, falling back to `detail`. A lost response is resolved by retrying with the same key, not creating another logical transaction.
 
-`/state` key `purchases` is one summary row per purchase order (supplier, status, total, `line_count`, aggregated item names as `item`, summed base `quantity`/`received`/`returned` with `uom` when all lines share one) and `receipts` one row per received line and lot (GRN `number`, `delivery_note`, lot and its quality `status`, `invoiced`, `returned`); both replace the former single-item rows. MRP `incoming` = open base quantity on lines of APPROVED/PARTIAL orders.
+`/state` key `purchases` is one summary row per purchase order (supplier, status, total, `line_count`, aggregated item names as `item`, summed base `quantity`/`received`/`returned` with `uom` when all lines share one); it replaces the former single-item rows. MRP `incoming` = open base quantity on lines of APPROVED/PARTIAL orders.
 `/state` key `bomCosts` (V7) carries the roll-up of every revision (`bom_id, unitCost, singleLevelCost, levels, depth, missingBoms, cycle, active, source_bom_id, source_revision, semi_finished`); `orders` rows carry `parent_order_id`; `mrp` rows keep their original columns and add the multi-level ones listed above (without `pegging`).
 
-`/state` keys `sales` (one summary row per order: totals, line count, aggregated product names, summed quantity/delivered/returned with `uom` when all lines share one) and `salesLines` (open lines of confirmed orders with `planned` quantity, for the manufacturing-order dialog) replace the former single-item `sales` rows.
+`/state` keys `sales` (one summary row per order: totals, line count, aggregated product names, summed base quantity/delivered/returned with `uom` when all lines share one) and `salesLines` (open lines of confirmed orders with `planned` quantity, for the manufacturing-order dialog; `quantity` is the base quantity, V9 adds `entered_quantity` and `unit`) replace the former single-item `sales` rows.
 
-The workspace snapshot caps each operational list at 250 and BOM lines at 1,000. UI pagination applies inside those bounds; exports contain the loaded records. Replace this contract with cursor-based list/report endpoints before large-customer deployment. Since V8 the snapshot no longer contains the `audit` key: administrators read the audit trail from `GET /admin/audit`.
+The workspace snapshot caps each operational list at 250 and BOM lines at 1,000. UI pagination applies inside those bounds; exports contain the loaded records. Lists move to cursor-based endpoints feature by feature. Since V8 the snapshot no longer contains the `audit` key (`GET /admin/audit`); V9 removed `users` (`GET /admin/users`), `receipts` (`GET /purchases/receipts`), `ledger` (`GET /inventory/ledger`) and `journal` (`GET /reports/journal`). The Manufacturing orders, Shop floor, Quality control and Costs & reports screens read `GET /manufacturing/orders`, `/quality/inspections`, `/reports/costs` and `/reports/journal`; `orders`, `inspections`, `lots`, `sales`, `purchases` remain for the dashboard, attention counts, pickers and exports.

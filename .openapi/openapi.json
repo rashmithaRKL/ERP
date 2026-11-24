@@ -18,7 +18,7 @@
   "paths": {
     "/manufacturing": {
       "post": {
-        "summary": "Snapshot an approved BOM into a draft manufacturing order",
+        "summary": "Snapshot an approved BOM into a draft manufacturing order; created APPROVED (auto-approved by policy) when the MANUFACTURING_ORDER approval policy needs no second person for the estimated cost (V9)",
         "parameters": [
           {
             "$ref": "#/components/parameters/IdempotencyKey"
@@ -876,7 +876,7 @@
     },
     "/state": {
       "get": {
-        "summary": "Bounded tenant workspace snapshot",
+        "summary": "Bounded tenant workspace snapshot (V9 removed the users, receipts, ledger and journal keys)",
         "parameters": [
           {
             "name": "days",
@@ -895,7 +895,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Snapshot with bounded lists; financial report aggregates and user directory depend on role"
+            "description": "Snapshot with bounded lists; financial aggregates for ADMIN/PLANNER"
           },
           "401": {
             "description": "Sign-in required"
@@ -3700,7 +3700,7 @@
     },
     "/purchases/orders/{id}/submit": {
       "post": {
-        "summary": "DRAFT → SUBMITTED; needs an active supplier, lines and active items (PLANNER/WAREHOUSE)",
+        "summary": "DRAFT → SUBMITTED; needs an active supplier, lines and active items; APPROVED directly when the PURCHASE_ORDER approval policy needs no second person for the total (V9) (PLANNER/WAREHOUSE)",
         "parameters": [
           {
             "$ref": "#/components/parameters/IdempotencyKey"
@@ -3738,7 +3738,7 @@
     },
     "/purchases/orders/{id}/approve": {
       "post": {
-        "summary": "SUBMITTED → APPROVED by a PLANNER/ADMIN other than the creator and submitter",
+        "summary": "SUBMITTED → APPROVED by an approver role of the PURCHASE_ORDER policy (default PLANNER; ADMIN always) who neither created nor submitted it",
         "parameters": [
           {
             "$ref": "#/components/parameters/IdempotencyKey"
@@ -4646,6 +4646,9 @@
           },
           "409": {
             "description": "Current password incorrect, password equals the email or the current password"
+          },
+          "429": {
+            "description": "V9: 5 wrong current passwords within 15 minutes; retry after the window (problem+json detail)"
           }
         }
       }
@@ -5352,6 +5355,270 @@
           },
           "409": {
             "description": "Business rule, last-administrator or idempotency conflict"
+          }
+        }
+      }
+    },
+    "/approval-policies": {
+      "get": {
+        "summary": "Approval policies every role may read: which documents need a second person, above which value, who approves (V9)",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "`{items:[{documentType, approvalRequired, amountThreshold, approverRoles}]}` for MANUFACTURING_ORDER, PURCHASE_ORDER, STOCK_ADJUSTMENT"
+          }
+        }
+      }
+    },
+    "/manufacturing/orders": {
+      "get": {
+        "summary": "Manufacturing orders, newest first, keyset-paged (V9): {items, next, total, counts}",
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "all"
+            },
+            "description": "all, a group (active, floor, production) or a status code"
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Order number, product name/SKU, work center code or customer"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200,
+              "default": 25
+            }
+          },
+          {
+            "name": "before",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Cursor: the previous page's next value"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Page of orders: the `orders` columns of /state plus `parent_number`; `counts` per status are tenant-wide"
+          },
+          "409": {
+            "description": "Unknown status filter or page size outside 1-200"
+          }
+        }
+      }
+    },
+    "/quality/inspections": {
+      "get": {
+        "summary": "Quality inspections, newest first, keyset-paged (V9): {items, next, total, counts}",
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "all"
+            },
+            "description": "all, PENDING, PASSED or FAILED"
+          },
+          {
+            "name": "type",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "INCOMING, FINAL, RETURN or OPENING"
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Lot number, item name/SKU or notes"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200,
+              "default": 25
+            }
+          },
+          {
+            "name": "before",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Cursor: the previous page's next value"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Page of inspections with lot, item, sku, uom, quantity, lot_status and source_number; `counts` per status are tenant-wide"
+          },
+          "409": {
+            "description": "Unknown filter or page size outside 1-200"
+          }
+        }
+      }
+    },
+    "/reports/costs": {
+      "get": {
+        "summary": "Manufacturing cost register, newest first, keyset-paged (V9, ADMIN/PLANNER): {items, next, total, summary}",
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "all"
+            },
+            "description": "all, active or a status code"
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Order number or product name/SKU"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200,
+              "default": 25
+            }
+          },
+          {
+            "name": "before",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Cursor: the previous page's next value"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Per order estimated, material, conversion, actual, WIP, finished and scrap cost; `summary` = tenant-wide totals"
+          },
+          "403": {
+            "description": "ADMIN/PLANNER only"
+          },
+          "409": {
+            "description": "Unknown status filter or page size outside 1-200"
+          }
+        }
+      }
+    },
+    "/reports/journal": {
+      "get": {
+        "summary": "Posted journal lines, newest entry first, debits before credits, keyset-paged (V9, ADMIN/PLANNER)",
+        "parameters": [
+          {
+            "name": "account",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Exact account code"
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Entry reference or description"
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date"
+            },
+            "description": "First posting day (Asia/Colombo), inclusive"
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date"
+            },
+            "description": "Last posting day (Asia/Colombo), inclusive"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200,
+              "default": 50
+            }
+          },
+          {
+            "name": "before",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Cursor: the previous page's next value"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "`{items, next, totals:{debit, credit}, accounts}`; `accounts` (posted account codes) on the first page only"
+          },
+          "400": {
+            "description": "Malformed date"
+          },
+          "403": {
+            "description": "ADMIN/PLANNER only"
+          },
+          "409": {
+            "description": "End date before start date, or page size outside 1-200"
           }
         }
       }
@@ -6070,6 +6337,12 @@
               }
             ],
             "description": "Percent, 0-100; defaults to 0"
+          },
+          "unit": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 20,
+            "description": "V9: unit of quantity and unitPrice: the base unit (default), a conversion flagged for sales or a same-kind standard unit; converted exactly to the base quantity"
           }
         }
       },
@@ -6924,6 +7197,12 @@
           "notes": {
             "type": "string",
             "maxLength": 1000
+          },
+          "categoryId": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 64,
+            "description": "V9: only items of this category and all of its sub-categories"
           }
         }
       },
@@ -7508,7 +7787,7 @@
           },
           "wired": {
             "type": "boolean",
-            "description": "true when the policy is enforced in this release"
+            "description": "true when the policy is enforced (every document type since V9)"
           },
           "updatedAt": {
             "type": "string",
