@@ -64,6 +64,8 @@ export function AdjustmentDialog({ onClose, onDone }: { onClose: () => void; onD
   const items = data.items.filter((i) => i.active !== false);
   const warehouses = data.warehouses.filter((w) => w.active !== false);
   const threshold = num(settings.data?.approvalThreshold ?? 50000);
+  // No approval at all while the STOCK_ADJUSTMENT policy is switched off.
+  const approvalOff = settings.data?.approvalRequired === false;
 
   const update = (index: number, patch: Partial<Line>) =>
     setLines((prev) => prev.map((l, i) => (i === index ? { ...l, ...patch } : l)));
@@ -296,11 +298,13 @@ export function AdjustmentDialog({ onClose, onDone }: { onClose: () => void; onD
             <Plus size={14} />
             Add line
           </button>
-          <p className={`inv-threshold ${gross > threshold ? 'over' : ''}`}>
+          <p className={`inv-threshold ${!approvalOff && gross > threshold ? 'over' : ''}`}>
             Gross value {money(gross)} ·{' '}
-            {gross > threshold
-              ? `above the ${money(threshold)} approval threshold: posting sends it to a second authorized person.`
-              : `posts immediately (approval needed above ${money(threshold)}).`}
+            {approvalOff
+              ? 'posts immediately (the approval policy requires no second person).'
+              : gross > threshold
+                ? `above the ${money(threshold)} approval threshold: posting sends it to a second authorized person.`
+                : `posts immediately (approval needed above ${money(threshold)}).`}
           </p>
           {error && (
             <div className="form-error" role="alert">

@@ -11,7 +11,7 @@ import {
   TriangleAlert,
   Upload,
 } from 'lucide-react';
-import { useWorkspace } from '../../app/workspace';
+import { useStateData, useWorkspace } from '../../app/workspace';
 import { Panel, Table } from '../../components';
 import type { Column } from '../../components';
 import type { Row, Value } from '../../lib/api';
@@ -133,6 +133,11 @@ const PREVIEW_COLUMNS: Record<Kind, Column[]> = {
 /** Two-step CSV import (validate → import) with templates and the import history. ADMIN only. */
 export function ImportsTab() {
   const { notify, refresh } = useWorkspace();
+  const data = useStateData();
+  // Opening stock goes only into active warehouses (the server refuses inactive ones row by row).
+  const warehouseCodes = data.warehouses
+    .filter((w) => w.active !== false && w.code)
+    .map((w) => `${text(w.code)} (${text(w.name)})`);
   const qc = useQueryClient();
   const invalidate = useInvalidateAdmin();
   const [kind, setKind] = useState<Kind>('items');
@@ -264,7 +269,12 @@ export function ImportsTab() {
               </button>
             ))}
           </div>
-          <p className="adm-muted">{meta.description}</p>
+          <p className="adm-muted">
+            {meta.description}
+            {kind === 'opening-stock' && warehouseCodes.length > 0
+              ? ` Active warehouse codes: ${warehouseCodes.join(', ')}. Inactive items and warehouses are refused.`
+              : ''}
+          </p>
           <div className="adm-columns">
             Columns (bold = required):
             {meta.required.map((c) => (

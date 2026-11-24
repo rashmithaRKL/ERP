@@ -47,7 +47,17 @@ export function CountsTab({ open: openCount }: { open: number }) {
             'name',
           ),
         ),
-        { ...selectField('itemId', 'Only this item', option(data.items, 'name')), optional: true },
+        {
+          ...selectField(
+            'itemId',
+            'Only this item',
+            option(
+              data.items.filter((i) => i.active !== false),
+              'name',
+            ),
+          ),
+          optional: true,
+        },
         {
           ...selectField(
             'itemType',

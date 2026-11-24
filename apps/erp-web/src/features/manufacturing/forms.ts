@@ -5,6 +5,10 @@ import type { Row } from '../../lib/api';
 import { fmt, labelState, num, text } from '../../lib/format';
 import type { PlannedProduction } from '../planning/api';
 
+/** Item ids marked inactive in the workspace item list (unknown items count as active; the server decides). */
+const inactiveItems = (data: NonNullable<Workspace['data']>) =>
+  new Set(data.items.filter((i) => i.active === false).map((i) => i.id));
+
 /** Quantity of a sales order line not yet covered by (non-cancelled) manufacturing orders. */
 const unplanned = (line: Row) => Math.max(0, num(line.quantity) - num(line.planned));
 
@@ -15,9 +19,11 @@ const unplanned = (line: Row) => Math.max(0, num(line.quantity) - num(line.plann
  */
 export function createOrder({ data, openForm }: Workspace, line?: Row, onDone?: () => unknown) {
   if (!data) return;
-  const lines = [...(data.salesLines || [])];
+  // Inactive products cannot be planned: their BOMs and customer lines are not offered.
+  const inactive = inactiveItems(data);
+  const lines = (data.salesLines || []).filter((l) => !inactive.has(text(l.product_id)));
   if (line && !lines.some((l) => l.id === line.id)) lines.unshift(line);
-  const boms = data.boms.filter((b) => b.status === 'APPROVED');
+  const boms = data.boms.filter((b) => b.status === 'APPROVED' && !inactive.has(text(b.product_id)));
   const bomFor = (product: unknown) => boms.find((b) => b.product_id === product);
   openForm({
     title: 'New manufacturing order',
@@ -154,7 +160,10 @@ export function createPlannedOrder(
   onDone?: () => unknown,
 ) {
   if (!data) return;
-  const boms = data.boms.filter((b) => b.status === 'APPROVED' && b.product_id === planned.item_id);
+  const inactive = inactiveItems(data);
+  const boms = data.boms.filter(
+    (b) => b.status === 'APPROVED' && b.product_id === planned.item_id && !inactive.has(text(b.product_id)),
+  );
   const parents = planned.parent_orders || [];
   openForm({
     title: `Create MO · ${text(planned.name)}`,
