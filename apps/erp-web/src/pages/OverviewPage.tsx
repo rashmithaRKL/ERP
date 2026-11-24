@@ -13,6 +13,7 @@ import {
   Factory,
   Package,
   ShieldCheck,
+  ShoppingCart,
   SlidersHorizontal,
   Timer,
 } from 'lucide-react';
@@ -20,17 +21,23 @@ import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YA
 import { useStateData, useWorkspace } from '../app/workspace';
 import { Badge, Panel, Stat, Table } from '../components';
 import { useOrderColumns } from '../features/manufacturing/orderColumns';
-import { fmt, num, text } from '../lib/format';
+import { fmt, num, text, today } from '../lib/format';
 import { stagger, Tabs } from '../motion/motion';
 
 /** Route `/`: factory overview dashboard. */
 export default function OverviewPage() {
   const navigate = useNavigate();
-  const { days, openOrder, summary } = useWorkspace();
+  const { can, days, openOrder, summary } = useWorkspace();
   const { active, shortages, pendingQc, output, scrap, yieldPct } = summary;
   const data = useStateData();
   const orderColumns = useOrderColumns();
   const [tab, setTab] = useState('all');
+  // Purchasing: orders waiting for an approver other than their creator, and approved deliveries that are late.
+  const awaitingApproval = can('PLANNER') ? data.purchases.filter((p) => p.status === 'SUBMITTED') : [];
+  const lateDeliveries = data.purchases.filter(
+    (p) => ['APPROVED', 'PARTIAL'].includes(text(p.status)) && text(p.due_date).substring(0, 10) < today(),
+  );
+  const purchaseAttention = awaitingApproval.length + lateDeliveries.length;
   return (
     <>
       <motion.div className="stats-grid" variants={stagger} initial="hidden" animate="visible">
@@ -266,7 +273,7 @@ export default function OverviewPage() {
           title="Needs your attention"
           action={
             <span className="attention-count">
-              {shortages.length + pendingQc.length + num(data.metrics.overdue)}
+              {shortages.length + pendingQc.length + num(data.metrics.overdue) + (purchaseAttention ? 1 : 0)}
             </span>
           }
           className="attention-panel"
@@ -299,6 +306,31 @@ export default function OverviewPage() {
                   <p>Quarantined stock needs a quality decision.</p>
                   <span>
                     Open quality control
+                    <ArrowRight size={11} />
+                  </span>
+                </div>
+              </button>
+            )}
+            {purchaseAttention > 0 && (
+              <button className="attention-item" onClick={() => navigate('/purchasing')}>
+                <span className="attention-symbol amber">
+                  <ShoppingCart size={16} />
+                </span>
+                <div>
+                  <strong>
+                    {awaitingApproval.length
+                      ? `${awaitingApproval.length} purchase ${awaitingApproval.length === 1 ? 'order' : 'orders'} awaiting approval`
+                      : `${lateDeliveries.length} supplier ${lateDeliveries.length === 1 ? 'delivery is' : 'deliveries are'} late`}
+                  </strong>
+                  <p>
+                    {awaitingApproval.length && lateDeliveries.length
+                      ? `${lateDeliveries.length} approved ${lateDeliveries.length === 1 ? 'order is' : 'orders are'} also past the expected date.`
+                      : awaitingApproval.length
+                        ? 'Another planner must approve before goods can be received.'
+                        : 'Approved purchase orders are past their expected delivery date.'}
+                  </p>
+                  <span>
+                    Open purchasing
                     <ArrowRight size={11} />
                   </span>
                 </div>

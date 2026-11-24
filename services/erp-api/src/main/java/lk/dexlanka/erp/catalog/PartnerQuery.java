@@ -34,7 +34,7 @@ public class PartnerQuery {
                    AND so.status IN ('DRAFT','CONFIRMED','PARTIAL'))
             ELSE
                 (SELECT COUNT(*) FROM purchase_orders po WHERE po.tenant_id=p.tenant_id AND po.supplier_id=p.id
-                   AND po.status IN ('DRAFT','APPROVED','PARTIAL'))
+                   AND po.status IN ('DRAFT','SUBMITTED','APPROVED','PARTIAL'))
             END AS open_documents,
             CASE WHEN p.type='CUSTOMER' THEN""" + " " + RECEIVABLES + " END AS receivables";
 
@@ -115,7 +115,7 @@ public class PartnerQuery {
                         a.tenant(),
                         id)
                 : s.list(
-                        "SELECT id,number,status,due_date,quantity*unit_cost AS total,created_at FROM purchase_orders WHERE tenant_id=? AND supplier_id=? ORDER BY created_at DESC,id DESC LIMIT 10",
+                        "SELECT id,number,status,due_date,total,created_at FROM purchase_orders WHERE tenant_id=? AND supplier_id=? ORDER BY created_at DESC,id DESC LIMIT 10",
                         a.tenant(),
                         id);
         var activity = s.list(

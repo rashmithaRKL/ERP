@@ -8,7 +8,12 @@ export type LineItem = {
   quantity: string;
   unitPrice: string;
   discountPct: string;
+  /** Entered unit code when the editor offers unit choices (empty: the first choice, normally the base unit). */
+  unit?: string;
 };
+
+/** A unit a line's quantity can be entered in; `decimals` sets the quantity step. */
+export type UnitChoice = { code: string; label?: string; decimals?: number };
 
 /** A choice in the item picker. `unit` sets the quantity step (`pcs` = whole numbers); `price` pre-fills new lines. */
 export type LineItemOption = { value: string; label: string; unit?: string; price?: string };

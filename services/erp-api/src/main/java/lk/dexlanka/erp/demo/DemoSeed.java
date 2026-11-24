@@ -327,30 +327,19 @@ public class DemoSeed implements ApplicationRunner {
                         id());
             }
         }
-        var purchase = procurement.purchase(
-                planner,
-                new ProcurementCommands.Purchase(
-                        "resinco",
-                        "pet",
-                        new BigDecimal("2000"),
-                        new BigDecimal("515"),
-                        LocalDate.now().plusDays(2).toString()),
-                id());
-        procurement.approvePurchase(admin, str(purchase, "id"), id());
-        var p2 = procurement.purchase(
-                planner,
-                new ProcurementCommands.Purchase(
-                        "colorco",
-                        "color",
-                        new BigDecimal("100"),
-                        new BigDecimal("1850"),
-                        LocalDate.now().plusDays(1).toString()),
-                id());
-        procurement.approvePurchase(admin, str(p2, "id"), id());
-        procurement.receive(
+        // Purchasing (V6 documents): drafted and submitted by the planner, approved by the administrator.
+        approvedPurchase(planner, admin, "resinco", "pet", "2000", "515", 2);
+        String p2 = approvedPurchase(planner, admin, "colorco", "color", "100", "1850", 1);
+        var colourLine =
+                s.one("SELECT id FROM purchase_order_lines WHERE tenant_id='demo' AND purchase_order_id=?", p2);
+        procurement.receiveLines(
                 admin,
-                str(p2, "id"),
-                new ProcurementCommands.Receive(new BigDecimal("25"), "demo-raw", "CB-261029-008"),
+                p2,
+                new ProcurementCommands.GoodsReceipt(
+                        "demo-raw",
+                        "DN-CT-261029",
+                        List.of(new ProcurementCommands.ReceiptLine(
+                                str(colourLine, "id"), new BigDecimal("25"), null, "CB-261029-008"))),
                 id());
         s.audit(
                 admin,
@@ -370,6 +359,26 @@ public class DemoSeed implements ApplicationRunner {
         var line =
                 s.one("SELECT id FROM sales_order_lines WHERE tenant_id='demo' AND sales_order_id=?", order.get("id"));
         return new String[] {str(order, "id"), str(line, "id")};
+    }
+
+    /** A one-line purchase order (base unit) drafted and submitted by {@code buyer}, approved by {@code approver}. */
+    String approvedPurchase(
+            Actor buyer, Actor approver, String supplier, String item, String qty, String cost, int days) {
+        String due = LocalDate.now().plusDays(days).toString();
+        var order = procurement.createOrder(
+                buyer,
+                new ProcurementCommands.Order(
+                        supplier,
+                        null,
+                        due,
+                        "",
+                        List.of(new ProcurementCommands.OrderLine(
+                                null, item, new BigDecimal(qty), null, new BigDecimal(cost), null))),
+                id());
+        String id = str(order, "id");
+        procurement.submit(buyer, id, id());
+        procurement.approvePurchase(approver, id, id());
+        return id;
     }
 
     void addBomLine(String product, String material, String qty) {

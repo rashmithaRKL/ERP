@@ -1,0 +1,74 @@
+/* Procurement documents (pages/PurchasingPage.tsx, features/purchasing/*). Builds on sales.css and the global tokens. */
+.dialog:has(.purchase-editor),.dialog:has(.purchase-receive),.dialog:has(.purchase-invoice-form),.dialog:has(.purchase-replenish){width:1000px}
+.purchase-toolbar-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+
+/* Editor: base quantities and per-line delivery dates under the line editor. */
+.purchase-schedule{margin-top:18px;border:1px solid var(--border);border-radius:6px}
+.purchase-schedule h4{display:flex;align-items:center;gap:7px;font-size:12px;font-weight:600;color:var(--heading);margin:0;padding:10px 13px;background:var(--soft);border-bottom:1px solid var(--border);border-radius:6px 6px 0 0}
+.purchase-schedule-row{display:grid;grid-template-columns:minmax(0,1fr) 190px;gap:14px;align-items:center;padding:9px 13px;border-bottom:1px solid var(--border)}
+.purchase-schedule-row:last-child{border-bottom:0}
+.purchase-schedule-row label{display:flex;align-items:center;gap:8px}
+.purchase-schedule-row input{border:1px solid #dce1e8;background:var(--surface);border-radius:5px;padding:7px 8px;font-size:12px;width:140px}
+.purchase-schedule-row small{font-size:10px;color:var(--muted);white-space:nowrap}
+[data-theme=dark] .purchase-schedule-row input{border-color:var(--border)}
+
+/* Receive dialog. */
+.purchase-receive-lines{border:1px solid var(--border);border-radius:6px}
+.purchase-receive-line{display:grid;grid-template-columns:minmax(0,1fr) 230px 170px;gap:14px;align-items:start;padding:12px 13px;border-bottom:1px solid var(--border)}
+.purchase-receive-line:last-child{border-bottom:0}
+.purchase-receive-line:focus-within{background:var(--soft)}
+.purchase-receive-line>.cell-stack{padding-top:20px}
+.purchase-receive-line .field{gap:5px}
+.purchase-receive-line .field>span{font-size:11px}
+.purchase-receive-line input,.purchase-receive-line select{border:1px solid #dce1e8;background:var(--surface);border-radius:5px;padding:8px;font-size:13px;width:100%}
+[data-theme=dark] .purchase-receive-line input,[data-theme=dark] .purchase-receive-line select{border-color:var(--border)}
+.purchase-receive-line .field em{font-size:10px;font-style:normal;color:var(--muted)}
+
+/* Invoice matching and planning drafts: one row per receipt / shortage. */
+.purchase-wide-field{grid-column:1/-1}
+.purchase-match-list{border:1px solid var(--border);border-radius:6px}
+.purchase-match{display:grid;grid-template-columns:minmax(0,1fr) 120px 150px 160px;gap:14px;align-items:end;padding:11px 13px;border-bottom:1px solid var(--border)}
+.purchase-replenish .purchase-match{grid-template-columns:minmax(0,1fr) 120px 200px 150px}
+.purchase-match:last-child{border-bottom:0}
+.purchase-match:focus-within{background:var(--soft)}
+.purchase-match.excluded{opacity:.55}
+.purchase-match-pick{display:flex;align-items:center;gap:10px;align-self:center;min-width:0;cursor:pointer}
+.purchase-match-pick input{width:16px;height:16px;flex:none;accent-color:#d72638}
+.purchase-match .field{gap:5px}
+.purchase-match .field>span{font-size:11px}
+.purchase-match .field input,.purchase-match .field select{border:1px solid #dce1e8;background:var(--surface);border-radius:5px;padding:8px;font-size:13px;width:100%}
+[data-theme=dark] .purchase-match .field input,[data-theme=dark] .purchase-match .field select{border-color:var(--border)}
+.purchase-match-result{display:flex;flex-direction:column;align-items:flex-end;gap:3px;font-size:11px;text-align:right;align-self:center;font-variant-numeric:tabular-nums}
+.purchase-match-result strong{font-size:13px;color:var(--heading)}
+.purchase-match-total{display:flex;justify-content:flex-end;gap:22px;flex-wrap:wrap;padding-top:12px;font-size:12px;color:var(--secondary);font-variant-numeric:tabular-nums}
+.purchase-match-total strong{color:var(--heading)}
+.purchase-match-total .negative strong{color:inherit}
+
+/* Drawer: invoices with their matched lines. */
+.purchase-invoices{display:flex;flex-direction:column;gap:10px;margin-bottom:6px}
+.purchase-invoice{border:1px solid var(--border);border-radius:6px}
+.purchase-invoice-head{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:16px;align-items:center;padding:11px 13px;background:var(--soft);border-radius:6px 6px 0 0}
+.purchase-invoice-amounts{display:flex;flex-direction:column;align-items:flex-end;font-size:11px;color:var(--muted);font-variant-numeric:tabular-nums}
+.purchase-invoice-amounts strong{font-size:13px;color:var(--heading)}
+.purchase-invoice-amounts em{font-style:normal}
+.purchase-invoice-lines{list-style:none;margin:0;padding:0}
+.purchase-invoice-lines li{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(120px,auto);gap:14px;padding:8px 13px;border-top:1px solid var(--border);font-size:12px;color:var(--secondary);font-variant-numeric:tabular-nums}
+.purchase-invoice-lines li>span:last-child{text-align:right}
+
+@media(max-width:1100px){
+  .dialog:has(.purchase-editor),.dialog:has(.purchase-receive),.dialog:has(.purchase-invoice-form),.dialog:has(.purchase-replenish){width:calc(100vw - 32px)}
+}
+@media(max-width:650px){
+  .purchase-toolbar-actions{width:100%;justify-content:stretch}
+  .purchase-toolbar-actions .button{flex:1}
+  .purchase-schedule-row{grid-template-columns:1fr}
+  .purchase-schedule-row input{width:100%}
+  .purchase-receive-line,.purchase-match,.purchase-replenish .purchase-match{grid-template-columns:1fr 1fr}
+  .purchase-receive-line>.cell-stack,.purchase-match-pick{grid-column:1/-1;padding-top:0}
+  .purchase-receive-line>.unit-quantity{grid-column:1/-1}
+  .purchase-match-result{grid-column:1/-1;flex-direction:row;justify-content:space-between;align-items:center}
+  .purchase-invoice-head{grid-template-columns:1fr auto}
+  .purchase-invoice-amounts{grid-column:1/-1;align-items:flex-start}
+  .purchase-invoice-lines li{grid-template-columns:1fr}
+  .purchase-invoice-lines li>span:last-child{text-align:left}
+}

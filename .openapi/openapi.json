@@ -106,7 +106,7 @@
     },
     "/purchases": {
       "post": {
-        "summary": "Create purchase order",
+        "summary": "Original single-item contract: creates a purchase order with one base-unit line and submits it for approval (PLANNER/WAREHOUSE)",
         "parameters": [
           {
             "$ref": "#/components/parameters/IdempotencyKey"
@@ -146,7 +146,7 @@
     },
     "/purchases/{id}/receive": {
       "post": {
-        "summary": "Receive materials into quarantine",
+        "summary": "Original single-lot receipt of the order's only open line into quarantine (WAREHOUSE)",
         "parameters": [
           {
             "$ref": "#/components/parameters/IdempotencyKey"
@@ -194,7 +194,7 @@
     },
     "/receipts/{id}/invoice": {
       "post": {
-        "summary": "Match supplier invoice to released receipt",
+        "summary": "Original whole-receipt match at the order price; creates a matched supplier invoice (ADMIN)",
         "parameters": [
           {
             "$ref": "#/components/parameters/IdempotencyKey"
@@ -812,7 +812,7 @@
     },
     "/purchases/{id}/approve": {
       "post": {
-        "summary": "Validated document transition",
+        "summary": "Independent approval of a submitted order (PLANNER, not its creator or submitter)",
         "parameters": [
           {
             "$ref": "#/components/parameters/IdempotencyKey"
@@ -3536,6 +3536,699 @@
           }
         }
       }
+    },
+    "/purchases/orders": {
+      "get": {
+        "summary": "Purchase orders, newest first, keyset-paged: {items, next, total, counts}",
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "all"
+            },
+            "description": "all, open (APPROVED+PARTIAL), action (DRAFT+SUBMITTED) or a status code"
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Free-text search"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200,
+              "default": 25
+            }
+          },
+          {
+            "name": "before",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Cursor: the previous page's next value"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "404": {
+            "description": "Missing or unowned"
+          }
+        }
+      },
+      "post": {
+        "summary": "Create a draft multi-line purchase order (PLANNER/WAREHOUSE)",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PurchaseOrder"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Committed result; retry with same key returns prior result"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Role/CSRF denied"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "State/stock/period/idempotency conflict"
+          }
+        }
+      }
+    },
+    "/purchases/orders/{id}": {
+      "get": {
+        "summary": "{order, lines, receipts, invoices, invoiceLines, returns, activity, warehouses}",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "404": {
+            "description": "Missing or unowned"
+          }
+        }
+      },
+      "post": {
+        "summary": "Replace a draft's header and lines (PLANNER/WAREHOUSE)",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PurchaseOrder"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Committed result; retry with same key returns prior result"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Role/CSRF denied"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "State/stock/period/idempotency conflict"
+          }
+        }
+      }
+    },
+    "/purchases/orders/{id}/submit": {
+      "post": {
+        "summary": "DRAFT → SUBMITTED; needs an active supplier, lines and active items (PLANNER/WAREHOUSE)",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Committed result; retry with same key returns prior result"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Role/CSRF denied"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "State/stock/period/idempotency conflict"
+          }
+        }
+      }
+    },
+    "/purchases/orders/{id}/approve": {
+      "post": {
+        "summary": "SUBMITTED → APPROVED by a PLANNER/ADMIN other than the creator and submitter",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Committed result; retry with same key returns prior result"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Role/CSRF denied"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "State/stock/period/idempotency conflict"
+          }
+        }
+      }
+    },
+    "/purchases/orders/{id}/cancel": {
+      "post": {
+        "summary": "Cancel while nothing is received (PLANNER; WAREHOUSE for drafts)",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Reason"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Committed result; retry with same key returns prior result"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Role/CSRF denied"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "State/stock/period/idempotency conflict"
+          }
+        }
+      }
+    },
+    "/purchases/orders/{id}/close": {
+      "post": {
+        "summary": "PARTIAL → CLOSED (close short with a reason) (PLANNER)",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Reason"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Committed result; retry with same key returns prior result"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Role/CSRF denied"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "State/stock/period/idempotency conflict"
+          }
+        }
+      }
+    },
+    "/purchases/orders/{id}/receipts": {
+      "post": {
+        "summary": "Goods receipt of one or more lines into an active RAW warehouse; one quarantined lot, GOODS_RECEIPT ledger entry, RAW_INVENTORY/GRNI journal and incoming inspection per line (WAREHOUSE)",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GoodsReceipt"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Committed result; retry with same key returns prior result"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Role/CSRF denied"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "State/stock/period/idempotency conflict"
+          }
+        }
+      }
+    },
+    "/purchases/orders/{id}/invoices": {
+      "post": {
+        "summary": "Supplier invoice matched to released receipts: Dr GRNI / Cr ACCOUNTS_PAYABLE at receipt cost plus PURCHASE_PRICE_VARIANCE for the billed difference (ADMIN)",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SupplierInvoice"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Committed result; retry with same key returns prior result"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Role/CSRF denied"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "State/stock/period/idempotency conflict"
+          }
+        }
+      }
+    },
+    "/purchases/receipts/{id}/returns": {
+      "post": {
+        "summary": "Return released stock of a receipt to the supplier: SUPPLIER_RETURN ledger at lot balance value; Dr GRNI (uninvoiced part) / Dr ACCOUNTS_PAYABLE (invoiced part), Cr RAW_INVENTORY (WAREHOUSE)",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SupplierReturn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Committed result; retry with same key returns prior result"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Role/CSRF denied"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "State/stock/period/idempotency conflict"
+          }
+        }
+      }
+    },
+    "/purchases/recommendations": {
+      "post": {
+        "summary": "Draft purchase orders from material-planning shortages: one draft per (preferred) supplier plus one without a supplier (PLANNER/WAREHOUSE)",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Recommendations"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Committed result; retry with same key returns prior result"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Role/CSRF denied"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "State/stock/period/idempotency conflict"
+          }
+        }
+      }
+    },
+    "/purchases/receipts": {
+      "get": {
+        "summary": "Goods receipts, newest first: {items, next}",
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "all"
+            },
+            "description": "all, QUARANTINE, RELEASED, REJECTED or uninvoiced"
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Free-text search"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200,
+              "default": 25
+            }
+          },
+          {
+            "name": "before",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Cursor: the previous page's next value"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "404": {
+            "description": "Missing or unowned"
+          }
+        }
+      }
+    },
+    "/purchases/invoices": {
+      "get": {
+        "summary": "Supplier invoices, newest first: {items, next}",
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "all"
+            },
+            "description": "all, MATCHED or VARIANCE"
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Free-text search"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200,
+              "default": 25
+            }
+          },
+          {
+            "name": "before",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Cursor: the previous page's next value"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "404": {
+            "description": "Missing or unowned"
+          }
+        }
+      }
+    },
+    "/purchases/returns": {
+      "get": {
+        "summary": "Supplier returns, newest first: {items, next}",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Free-text search"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200,
+              "default": 25
+            }
+          },
+          {
+            "name": "before",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Cursor: the previous page's next value"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "404": {
+            "description": "Missing or unowned"
+          }
+        }
+      }
+    },
+    "/purchases/sources": {
+      "get": {
+        "summary": "Preferred supplier (last ordered from, active) and its last base unit cost per item: {items}",
+        "parameters": [
+          {
+            "name": "items",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Comma-separated item ids (1-200)"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "404": {
+            "description": "Missing or unowned"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -5138,6 +5831,333 @@
                 }
               }
             }
+          }
+        }
+      },
+      "PurchaseOrderLine": {
+        "type": "object",
+        "required": [
+          "itemId",
+          "quantity",
+          "unitCost"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "nullable": true,
+            "description": "Existing line id when editing a draft (keeps the line identity)"
+          },
+          "itemId": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Active raw material, packaging or semi-finished item"
+          },
+          "quantity": {
+            "oneOf": [
+              {
+                "type": "string",
+                "pattern": "^\\d+(\\.\\d{1,6})?$"
+              },
+              {
+                "type": "number",
+                "exclusiveMinimum": true,
+                "minimum": 0
+              }
+            ],
+            "description": "In `unit`; converted exactly to the base unit (UnitService.toBaseExact)"
+          },
+          "unit": {
+            "type": "string",
+            "maxLength": 20,
+            "nullable": true,
+            "description": "Base unit (default), a conversion flagged for purchase, or a same-kind standard unit"
+          },
+          "unitCost": {
+            "oneOf": [
+              {
+                "type": "string",
+                "pattern": "^\\d+(\\.\\d{1,6})?$"
+              },
+              {
+                "type": "number",
+                "minimum": 0
+              }
+            ],
+            "description": "Price per entered unit; the base unit cost is unitCost / factor (6 dp)"
+          },
+          "expectedDate": {
+            "type": "string",
+            "format": "date",
+            "nullable": true,
+            "description": "Defaults to the order's dueDate"
+          }
+        }
+      },
+      "PurchaseOrder": {
+        "type": "object",
+        "required": [
+          "dueDate",
+          "lines"
+        ],
+        "properties": {
+          "supplierId": {
+            "type": "string",
+            "maxLength": 64,
+            "nullable": true,
+            "description": "Active supplier; optional on a draft, required to submit"
+          },
+          "supplierReference": {
+            "type": "string",
+            "maxLength": 80,
+            "nullable": true,
+            "description": "Supplier quotation / reference"
+          },
+          "dueDate": {
+            "type": "string",
+            "format": "date",
+            "description": "Expected delivery date of the order"
+          },
+          "notes": {
+            "type": "string",
+            "maxLength": 2000,
+            "nullable": true
+          },
+          "lines": {
+            "type": "array",
+            "maxItems": 100,
+            "items": {
+              "$ref": "#/components/schemas/PurchaseOrderLine"
+            }
+          }
+        }
+      },
+      "ReceiptLine": {
+        "type": "object",
+        "required": [
+          "lineId",
+          "quantity"
+        ],
+        "properties": {
+          "lineId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "quantity": {
+            "oneOf": [
+              {
+                "type": "string",
+                "pattern": "^\\d+(\\.\\d{1,6})?$"
+              },
+              {
+                "type": "number",
+                "exclusiveMinimum": true,
+                "minimum": 0
+              }
+            ]
+          },
+          "unit": {
+            "type": "string",
+            "maxLength": 20,
+            "nullable": true,
+            "description": "Default: the line's purchase unit"
+          },
+          "supplierLot": {
+            "type": "string",
+            "maxLength": 80,
+            "nullable": true,
+            "description": "Lot number (unique per tenant); generated from the GRN number when empty"
+          }
+        }
+      },
+      "GoodsReceipt": {
+        "type": "object",
+        "required": [
+          "warehouseId",
+          "deliveryNote",
+          "lines"
+        ],
+        "properties": {
+          "warehouseId": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Active RAW warehouse"
+          },
+          "deliveryNote": {
+            "type": "string",
+            "maxLength": 120,
+            "minLength": 1
+          },
+          "lines": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 100,
+            "items": {
+              "$ref": "#/components/schemas/ReceiptLine"
+            }
+          }
+        }
+      },
+      "SupplierInvoiceLine": {
+        "type": "object",
+        "required": [
+          "receiptId",
+          "quantity",
+          "unitPrice"
+        ],
+        "properties": {
+          "receiptId": {
+            "type": "string",
+            "minLength": 1,
+            "description": "A quality-released receipt of this order"
+          },
+          "quantity": {
+            "oneOf": [
+              {
+                "type": "string",
+                "pattern": "^\\d+(\\.\\d{1,6})?$"
+              },
+              {
+                "type": "number",
+                "exclusiveMinimum": true,
+                "minimum": 0
+              }
+            ],
+            "description": "Billed base quantity; at most the open (received, not invoiced or returned) quantity"
+          },
+          "unitPrice": {
+            "oneOf": [
+              {
+                "type": "string",
+                "pattern": "^\\d+(\\.\\d{1,6})?$"
+              },
+              {
+                "type": "number",
+                "minimum": 0
+              }
+            ],
+            "description": "Billed price per base unit"
+          }
+        }
+      },
+      "SupplierInvoice": {
+        "type": "object",
+        "required": [
+          "supplierReference",
+          "invoiceDate",
+          "lines"
+        ],
+        "properties": {
+          "supplierReference": {
+            "type": "string",
+            "maxLength": 80,
+            "minLength": 1,
+            "description": "Supplier's invoice number (unique per supplier, case-insensitive)"
+          },
+          "invoiceDate": {
+            "type": "string",
+            "format": "date"
+          },
+          "notes": {
+            "type": "string",
+            "maxLength": 2000,
+            "nullable": true
+          },
+          "lines": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 100,
+            "items": {
+              "$ref": "#/components/schemas/SupplierInvoiceLine"
+            }
+          }
+        }
+      },
+      "SupplierReturn": {
+        "type": "object",
+        "required": [
+          "quantity",
+          "reason",
+          "debitNote"
+        ],
+        "properties": {
+          "quantity": {
+            "oneOf": [
+              {
+                "type": "string",
+                "pattern": "^\\d+(\\.\\d{1,6})?$"
+              },
+              {
+                "type": "number",
+                "exclusiveMinimum": true,
+                "minimum": 0
+              }
+            ],
+            "description": "Base quantity; ≤ received − returned and ≤ the lot’s unreserved stock"
+          },
+          "reason": {
+            "type": "string",
+            "maxLength": 400,
+            "minLength": 1
+          },
+          "debitNote": {
+            "type": "string",
+            "maxLength": 80,
+            "minLength": 1
+          }
+        }
+      },
+      "Recommendation": {
+        "type": "object",
+        "required": [
+          "itemId",
+          "quantity"
+        ],
+        "properties": {
+          "itemId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "quantity": {
+            "oneOf": [
+              {
+                "type": "string",
+                "pattern": "^\\d+(\\.\\d{1,6})?$"
+              },
+              {
+                "type": "number",
+                "exclusiveMinimum": true,
+                "minimum": 0
+              }
+            ],
+            "description": "Base quantity, rounded up to the base unit precision"
+          },
+          "supplierId": {
+            "type": "string",
+            "maxLength": 64,
+            "nullable": true,
+            "description": "Overrides the item's preferred supplier"
+          }
+        }
+      },
+      "Recommendations": {
+        "type": "object",
+        "required": [
+          "lines"
+        ],
+        "properties": {
+          "lines": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 100,
+            "items": {
+              "$ref": "#/components/schemas/Recommendation"
+            }
+          },
+          "dueDate": {
+            "type": "string",
+            "format": "date",
+            "nullable": true,
+            "description": "Default: the latest line expected date (today + lead time)"
           }
         }
       }

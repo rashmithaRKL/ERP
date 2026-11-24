@@ -1,6 +1,8 @@
 /* Generic multi-line document editor (components/LineItemsEditor.tsx). */
 .line-editor{--line-cols:26px minmax(170px,1fr) 118px 118px 92px 118px 30px;display:flex;flex-direction:column}
 .line-editor.no-discount{--line-cols:26px minmax(170px,1fr) 118px 118px 118px 30px}
+.line-editor.with-units{--line-cols:26px minmax(170px,1fr) 178px 118px 92px 118px 30px}
+.line-editor.with-units.no-discount{--line-cols:26px minmax(170px,1fr) 178px 118px 118px 30px}
 .line-editor-head,.line-editor-row{display:grid;grid-template-columns:var(--line-cols);gap:10px;align-items:center}
 .line-editor-head{font-size:10px;font-weight:500;color:#8a95a6;background:var(--soft);border:1px solid var(--border);border-radius:5px 5px 0 0;padding:9px 10px;letter-spacing:.1px}
 .line-editor-row{padding:9px 10px;border:1px solid var(--border);border-top:0}
@@ -13,6 +15,7 @@
 .line-editor-row select{height:36px;text-overflow:ellipsis}
 .line-editor-input-unit{display:flex;align-items:center;gap:6px}
 .line-editor-input-unit small{font-size:11px;color:var(--muted)}
+.line-editor-row .line-editor-input-unit select{width:72px;flex:none;padding:8px 4px}
 .line-editor-amount{text-align:right;align-items:flex-end}
 .line-editor-amount strong{font-size:13px;font-weight:550;color:var(--heading);font-variant-numeric:tabular-nums;white-space:nowrap}
 .line-editor-empty{font-size:12px;color:var(--muted);padding:16px 10px;border:1px dashed var(--border);border-top:0;text-align:center}

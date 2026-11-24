@@ -134,6 +134,8 @@ const [lines, setLines] = useState<LineItem[]>([newLine()]);
 
 Send `lines.map(({ id, itemId, quantity, unitPrice, discountPct }) => …)` to the API; the server recomputes totals.
 
+Optional `units={(line) => UnitChoice[] | undefined}` adds a unit picker to the quantity cell (bound to `line.unit`; the quantity step follows the chosen unit's `decimals`). The purchase-order editor (`features/purchasing/PurchaseOrderEditor.tsx`) feeds it the purchase units of `GET /items/{id}/units` and rescales the unit price when the unit changes.
+
 ## Tables: `Table`
 
 ```tsx

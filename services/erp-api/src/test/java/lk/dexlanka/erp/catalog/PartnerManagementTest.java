@@ -207,7 +207,7 @@ class PartnerManagementTest extends IntegrationTestBase {
                                 bd("10"),
                                 LocalDate.now().toString()),
                         id()))
-                .isInstanceOf(DataIntegrityViolationException.class);
+                .hasMessageContaining("inactive suppliers cannot be used on new purchase orders");
         command(
                         planner,
                         "/api/purchases",

@@ -14,9 +14,11 @@ export type State = {
   sales: Row[];
   /** Open lines of confirmed sales orders, for planning manufacturing against a customer line. */
   salesLines?: Row[];
+  /** One summary row per purchase order (lines aggregated); documents come from `GET /purchases/orders`. */
   purchases: Row[];
   lots: Row[];
   inspections: Row[];
+  /** One row per received purchase-order line and lot (V6). */
   receipts: Row[];
   ledger: Row[];
   mrp: Row[];

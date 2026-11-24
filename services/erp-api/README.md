@@ -28,7 +28,7 @@ run by `target/surefire-reports/*.xml`.
 | `lk.dexlanka.erp` | `ErpApplication` only (component scan root) |
 | `platform` | `Store` (posting primitives), `Actor` (identity + role checks), `ErpUser`, `SecurityConfig`, `LoginRateLimit`, `AuthController` (`/api/health`, `/api/auth/*`), `ApiErrors` (the single `@RestControllerAdvice`) |
 | `catalog` | Organization, user accounts, partners (maintenance and directory in `Partner*` files), items, work centers (machines), BOM revisions; item master (V4: `ItemService`, `UnitService` conversion service, `CategoryService`, `VariantService`, `ItemQuery`) |
-| `procurement` | Purchase orders, approval, goods receipt, supplier invoice matching |
+| `procurement` | Multi-line purchase orders in purchase units (`PurchaseOrderService`: draft/submit/independent approval/cancel/close short, drafts from MRP shortages), goods receipts per line (`ReceivingService`), supplier invoices with quantity/price variances (`SupplierInvoiceService`), supplier returns (`SupplierReturnService`), the read model (`ProcurementQuery`), open MRP supply (`ProcurementSupply`), shared rules (`PurchaseRules`) and the original single-item contract (`ProcurementService`) |
 | `quality` | Incoming and final inspections (including the supplier return of a failed incoming lot and MO completion after the last final release) |
 | `sales` | Multi-line sales orders (draft/confirm/cancel/close short), per-line dispatch (revenue/receivables and COGS per delivery), customer returns (`ReturnsService`), the sales read model (`SalesQuery`) |
 | `manufacturing` | Manufacturing-order lifecycle: snapshot, approval, reservation, issue, start/pause/resume, output, close/cancel |
@@ -59,7 +59,7 @@ Route ownership:
 | `catalog.CatalogController` | `POST /users`, `/organization`, `/partners`, `/machines`, `/items`, `/boms`, `/boms/{id}/approve` |
 | `catalog.PartnerController` | `GET /partners`, `GET /partners/{id}`, `POST /partners/{id}` |
 | `catalog.ItemMasterController` | `GET /items`, `/items/{id}`, `/items/{id}/movements`, `/items/{id}/units`, `/items/{id}/convert`, `/items/by-barcode`, `/units`, `/item-categories`, `/item-templates`, `/item-templates/{id}`; `POST /items/{id}`, `/items/{id}/deactivate`, `/items/{id}/activate`, `/items/{id}/conversions`, `/items/{id}/conversions/{unit}/remove`, `/items/{id}/barcodes`, `/items/{id}/barcodes/{barcodeId}/remove`, `/units`, `/units/{code}`, `/item-categories`, `/item-categories/{id}`, `/item-templates`, `/item-templates/{id}`, `/item-templates/{id}/variants` |
-| `procurement.ProcurementController` | `POST /purchases`, `/purchases/{id}/approve`, `/purchases/{id}/receive`, `/receipts/{id}/invoice` |
+| `procurement.ProcurementController` | `GET /purchases/orders`, `/purchases/orders/{id}`, `/purchases/receipts`, `/purchases/invoices`, `/purchases/returns`, `/purchases/sources`; `POST /purchases/orders`, `/purchases/orders/{id}`, `/purchases/orders/{id}/submit`, `/approve`, `/cancel`, `/close`, `/receipts`, `/invoices`, `/purchases/receipts/{id}/returns`, `/purchases/recommendations`; original contract `POST /purchases`, `/purchases/{id}/approve`, `/purchases/{id}/receive`, `/receipts/{id}/invoice` |
 | `quality.QualityController` | `POST /quality/{id}/inspect` |
 | `sales.SalesController` | `GET /sales/orders`, `GET /sales/orders/{id}`; `POST /sales/orders`, `/sales/orders/{id}`, `/sales/orders/{id}/confirm`, `/cancel`, `/close`, `/sales/orders/{id}/lines/{lineId}/dispatch`, `/sales/deliveries/{id}/returns`; original contract `POST /sales`, `/sales/{id}/dispatch` |
 | `manufacturing.ManufacturingController` | `POST /manufacturing`, `/manufacturing/{id}/actions/{action}`, `/manufacturing/{id}/complete` |
@@ -68,7 +68,7 @@ Route ownership:
 ## How to add a feature module
 
 The examples use a hypothetical inventory-adjustment feature (`InventoryCommands.Adjust`, a `stock_adjustments`
-table); the existing services follow exactly the same shapes, so `procurement.ProcurementService` is a good real
+table); the existing services follow exactly the same shapes, so `procurement.SupplierReturnService` is a good real
 reference.
 
 ### 0. Reserve your numbers first
@@ -251,10 +251,10 @@ annotate contributors with `@Transactional`. Existing keys, in order:
 | 170 | `orders` | manufacturing |
 | 180–190 | `boms`, `bomLines` | catalog |
 | 200 | `sales` (one summary row per order) | sales |
-| 210 | `purchases` | procurement |
+| 210 | `purchases` (one summary row per order, V6) | procurement |
 | 220 | `lots` | reporting (inventory) |
 | 230 | `inspections` | quality |
-| 240 | `receipts` | procurement |
+| 240 | `receipts` (one row per received line and lot, V6) | procurement |
 | 250 | `ledger` | reporting (inventory) |
 | 260 | `mrp` | reporting (planning) |
 | 270–280 | `trend`, `metrics` | reporting (dashboard) |
@@ -289,6 +289,8 @@ The database, not the Java code, is the last line of defence:
 | `approved_bom_immutable`, `approved_bom_line_immutable` (V2) | An `APPROVED` BOM and its lines cannot be changed or deleted; create a new revision. |
 | `customer_returns_immutable` (V3) | Posted customer returns cannot be changed or deleted. |
 | `sales_partner_active`, `purchase_partner_active` (V3) | `partner_must_be_active()`: a new sales/purchase order (or a sales order's changed customer) must reference an active partner; raises SQLSTATE 23514 → 409. |
+| `purchase_partner_active`, `purchase_partner_changed` (V6) | Replace V3's purchase trigger: `partner_must_be_active()` runs on insert when a supplier is set and when a draft's supplier changes (drafts may have no supplier yet). |
+| `supplier_invoices_immutable`, `supplier_invoice_lines_immutable`, `supplier_returns_immutable` (V6) | Posted supplier invoices, their lines and supplier returns cannot be changed or deleted. |
 | `tenant_default_units` (V4) | `AFTER INSERT ON tenants`: seeds the standard units of measure for every new tenant (`seed_default_units`). Items reference `units(tenant_id, code)`. |
 | `item_identity_guard` (V4) | `BEFORE UPDATE ON items`: the base unit cannot change once stock-ledger rows exist, and SKU/base unit/type cannot change once `item_is_referenced()` finds any row of any table with a foreign key to `items` (new document tables are covered automatically). |
 
@@ -300,8 +302,10 @@ Trigger exceptions and constraint violations surface as `DataIntegrityViolationE
 ### 9. Demo data
 
 `demo.DemoSeed` seeds the base demo tenant once, when `app.demo=true`; never edit it for a feature (V3 only moved its
-sales orders to the draft → confirm → per-line dispatch commands). `demo.SalesDemoSeed` (`ORDER + 30`) adds the V3
-sales documents. A feature that needs
+sales orders to the draft → confirm → per-line dispatch commands, V6 its two purchase orders to the draft → submit →
+approve → receive-lines commands). `demo.SalesDemoSeed` (`ORDER + 30`) adds the V3 sales documents and
+`demo.ProcurementDemoSeed` (`ORDER + 60`) the V6 purchase orders (one per state), an invoice with a price variance and a
+supplier return. A feature that needs
 demo data adds its own runner, ordered after the base seed and idempotent (it also runs against an existing
 `.local/postgres` demo database on the next start):
 

@@ -5,10 +5,10 @@ import { Plus, Trash2 } from 'lucide-react';
 import { fmt } from '../lib/format';
 import { easeOut, useMotionPreferences } from '../motion/motion';
 import { lineGross, lineNet, newLine } from './lineItems';
-import type { LineItem, LineItemOption } from './lineItems';
+import type { LineItem, LineItemOption, UnitChoice } from './lineItems';
 import './LineItemsEditor.css';
 
-export type { LineItem, LineItemOption } from './lineItems';
+export type { LineItem, LineItemOption, UnitChoice } from './lineItems';
 
 type FieldName = 'itemId' | 'quantity' | 'unitPrice' | 'discountPct';
 
@@ -32,6 +32,7 @@ export function LineItemsEditor({
   maxLines = 100,
   addLabel = 'Add line',
   emptyOption = 'Select an item',
+  units,
 }: {
   lines: LineItem[];
   onChange: (lines: LineItem[]) => void;
@@ -46,6 +47,11 @@ export function LineItemsEditor({
   maxLines?: number;
   addLabel?: string;
   emptyOption?: string;
+  /**
+   * Optional unit choices per line (e.g. purchase units of the line's item). When it returns choices, the quantity
+   * cell shows a unit picker bound to `line.unit` and the quantity step follows the chosen unit's decimals.
+   */
+  units?: (line: LineItem) => UnitChoice[] | undefined;
 }) {
   const { reduced } = useMotionPreferences();
   const root = useRef<HTMLDivElement>(null);
@@ -86,7 +92,7 @@ export function LineItemsEditor({
   const gross = lines.reduce((sum, l) => sum + lineGross(l), 0);
   const net = lines.reduce((sum, l) => sum + lineNet(l), 0);
   return (
-    <div className={`line-editor ${discount ? '' : 'no-discount'}`} ref={root}>
+    <div className={`line-editor ${discount ? '' : 'no-discount'} ${units ? 'with-units' : ''}`} ref={root}>
       <div className="line-editor-head" aria-hidden="true">
         <span>#</span>
         <span>{itemLabel}</span>
@@ -104,6 +110,8 @@ export function LineItemsEditor({
             index={index}
             option={byValue.get(line.itemId)}
             options={options}
+            unitChoices={units?.(line)}
+            resetUnit={!!units}
             discount={discount}
             disabled={disabled}
             reduced={reduced}
@@ -175,7 +183,11 @@ function Row({
   onUpdate,
   onRemove,
   onKey,
+  unitChoices,
+  resetUnit,
 }: {
+  unitChoices?: UnitChoice[];
+  resetUnit: boolean;
   line: LineItem;
   index: number;
   option?: LineItemOption;
@@ -194,7 +206,10 @@ function Row({
 }) {
   const present = useIsPresent();
   const off = disabled || !present;
-  const whole = option?.unit === 'pcs';
+  const unit = unitChoices?.length ? line.unit || unitChoices[0].code : undefined;
+  const decimals = unitChoices?.find((u) => u.code === unit)?.decimals;
+  const whole = decimals !== undefined ? decimals <= 0 : option?.unit === 'pcs';
+  const step = whole ? '1' : decimals !== undefined ? `0.${'0'.repeat(decimals - 1)}1` : '0.000001';
   const n = index + 1;
   return (
     <motion.div
@@ -225,6 +240,7 @@ function Row({
             onUpdate({
               itemId: e.target.value,
               unitPrice: line.unitPrice || picked?.price || '',
+              ...(resetUnit && e.target.value !== line.itemId ? { unit: '' } : {}),
             });
           }}
         >
@@ -247,8 +263,8 @@ function Row({
             disabled={off}
             type="number"
             inputMode="decimal"
-            min={whole ? '1' : '0.000001'}
-            step={whole ? '1' : '0.000001'}
+            min={step}
+            step={step}
             aria-label={`${quantityLabel} on line ${n}`}
             data-line={index}
             data-field="quantity"
@@ -256,7 +272,22 @@ function Row({
             onKeyDown={(e) => onKey(e, 'quantity')}
             onChange={(e) => onUpdate({ quantity: e.target.value })}
           />
-          {option?.unit && <small>{option.unit}</small>}
+          {unitChoices?.length ? (
+            <select
+              disabled={off}
+              aria-label={`Unit on line ${n}`}
+              value={unit}
+              onChange={(e) => onUpdate({ unit: e.target.value })}
+            >
+              {unitChoices.map((u) => (
+                <option key={u.code} value={u.code}>
+                  {u.label || u.code}
+                </option>
+              ))}
+            </select>
+          ) : (
+            option?.unit && <small>{option.unit}</small>
+          )}
         </span>
       </label>
       <label className="line-editor-cell price">

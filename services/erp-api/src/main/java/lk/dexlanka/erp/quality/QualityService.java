@@ -61,9 +61,15 @@ public class QualityService {
                         "GRNI",
                         "RAW_INVENTORY",
                         cost);
+                // The receipt's order line (V6) takes the rejected quantity back and the order reopens.
                 s.db().update(
-                                "UPDATE purchase_orders SET received=received-?,status='PARTIAL' WHERE tenant_id=? AND id=?",
+                                "UPDATE purchase_order_lines SET received=received-? WHERE tenant_id=? AND id=(SELECT purchase_order_line_id FROM receipts WHERE tenant_id=? AND lot_id=?)",
                                 b.get("quantity"),
+                                a.tenant(),
+                                a.tenant(),
+                                q.get("lot_id"));
+                s.db().update(
+                                "UPDATE purchase_orders po SET status=CASE WHEN EXISTS(SELECT 1 FROM purchase_order_lines l WHERE l.tenant_id=po.tenant_id AND l.purchase_order_id=po.id AND l.received>0) THEN 'PARTIAL' ELSE 'APPROVED' END,updated_at=now() WHERE po.tenant_id=? AND po.id=? AND po.status IN ('APPROVED','PARTIAL','RECEIVED')",
                                 a.tenant(),
                                 q.get("source_id"));
             }

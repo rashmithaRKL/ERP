@@ -274,8 +274,10 @@ class ManufacturingIntegrationTest extends IntegrationTestBase {
         assertThat(dec(row("SELECT quantity FROM stock_balances WHERE tenant_id=? AND lot_id=?", t, r.get("lot_id"))
                         .get("quantity")))
                 .isZero();
-        assertThat(dec(row("SELECT received FROM purchase_orders WHERE tenant_id=? AND id=?", t, p.get("id"))
-                        .get("received")))
+        assertThat(decimal(
+                        "SELECT SUM(received) FROM purchase_order_lines WHERE tenant_id=? AND purchase_order_id=?",
+                        t,
+                        p.get("id")))
                 .isZero();
     }
 

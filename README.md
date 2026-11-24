@@ -35,8 +35,10 @@ npm run dev
 - Tenant units of measure (kg, g, t, pcs, box, bag, roll, pallet, drum, l, ml, m, cm, mm, m²) plus custom units, item-specific conversions (1 bag = 25 kg, 1 box = 50 pcs) and one backend conversion service (`UnitService.toBase`, `GET /api/items/{id}/convert`) with half-up rounding at the base unit's precision; stock stays in base units.
 - Item categories (hierarchy), multiple barcodes per item (unique per organization, optionally scanning as an alternate unit), variant families that generate real stockable variant items, and `SEMI_FINISHED` intermediates that are produced into the raw (production input) store and consumed like materials.
 - Single-level BOM authoring, draft/approval, immutable approved revisions and order-specific material snapshots.
-- Single-item purchase orders, independent purchase approval, partial receipt, quarantined lots, incoming quality decision, rejected receipt reversal and receipt/PO invoice matching.
-- Basic material planning against unreserved demand, available stock, approved incoming supply and safety stock.
+- Multi-line purchase orders in purchase units (bags, rolls, grams… converted exactly to the base unit): draft (editable, supplier optional) → submit → independent approval by a different planner/administrator → partial/full receipt; cancel while nothing is received and close short with a reason. Inactive suppliers and items are refused with a clear message and hidden from pickers.
+- Goods receipts of one or more lines under a delivery note into an active raw-material warehouse; each line becomes a quarantined lot with an incoming inspection; a failed inspection returns the lot and reopens the order line.
+- Supplier invoices matched line by line to released receipts with quantity and price variances (price variance posted to `PURCHASE_PRICE_VARIANCE`, payables equal the supplier's bill), and supplier returns of released stock with a debit-note reference and compensating clearing/payables journals. Server-paged order list, receipt/invoice/return registers and a purchase-order drawer with lifecycle, receipts, QC status, invoices, returns and activity.
+- Basic material planning against unreserved demand, available stock, approved incoming supply (open purchase-order lines) and safety stock; draft purchase orders for several shortages at once, one per preferred supplier.
 - Manufacturing approval → reservation → issue to WIP → release → start/pause/resume → partial/final output → final quality release → completion → close.
 - Lot-specific finished-goods dispatch per sales-order line (one or more released lots per dispatch) with quality gates and partial delivery support. Each delivery posts sales revenue, receivables and cost of goods sold.
 - FIFO material allocation, atomic reservations, immutable quantity/value ledger, nonnegative balance constraints, idempotent mutations and transactional audit/outbox records.
@@ -50,7 +52,7 @@ npm run dev
 1. Create a customer and a multi-line sales order under **Sales orders**, then confirm it.
 2. In the order drawer, **Plan** a line: the manufacturing order takes the line's product (approved BOM) and unplanned quantity. Assign a work center.
 3. Approve as a **different** administrator/planner. In the demo, switch users from the avatar menu. Self-approval is blocked.
-4. In the order drawer, reserve materials, issue and release, then start production. Resolve shortages through **Material planning → Purchasing → Incoming QC**.
+4. In the order drawer, reserve materials, issue and release, then start production. Resolve shortages through **Purchasing → From shortages** (or **Material planning → Create purchase**), approve the order as a different user, **Receive goods**, then pass the lot in **Quality control**.
 5. Record output on **Shop floor**; partial output retains unfinished WIP cost. Output lots remain quarantined.
 6. Pass each final inspection in **Quality control**.
 7. Dispatch released goods per line from the sales order drawer; record a customer return against a delivery if needed (it waits in **Quality control**). Review **Costs & reports**, **Inventory → Ledger** and **Administration → Audit trail**.

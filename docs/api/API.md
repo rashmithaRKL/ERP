@@ -13,10 +13,10 @@ All business mutations require a unique `Idempotency-Key` header; keep it across
 | POST | `/manufacturing` | Create snapshotted order; PLANNER |
 | POST | `/manufacturing/{id}/actions/{action}` | Validated lifecycle transition; roles depend on action |
 | POST | `/manufacturing/{id}/complete` | Partial/final output, scrap and actual conversion cost; OPERATOR |
-| POST | `/purchases` | Draft purchase; PLANNER/WAREHOUSE |
-| POST | `/purchases/{id}/approve` | Independent approval; PLANNER |
-| POST | `/purchases/{id}/receive` | Partial goods receipt and incoming QC; WAREHOUSE |
-| POST | `/receipts/{id}/invoice` | Match approved PO price/accepted receipt to supplier reference; ADMIN |
+| POST | `/purchases` | Original single-item contract: creates a purchase order with one base-unit line and submits it for approval; PLANNER/WAREHOUSE |
+| POST | `/purchases/{id}/approve` | Independent approval (same command as `/purchases/orders/{id}/approve`); PLANNER |
+| POST | `/purchases/{id}/receive` | Original single-lot receipt `{quantity, warehouseId, supplierLot}` of the order's only open line; WAREHOUSE |
+| POST | `/receipts/{id}/invoice` | Original whole-receipt match `{reference}` at the order price (creates a matched supplier invoice); ADMIN |
 | POST | `/quality/{id}/inspect` | Finalize pending inspection; QUALITY |
 | GET | `/sales/orders?status=&q=&limit=&before=` | Sales orders, newest first, keyset-paged (`limit` 1–200, default 25; `before` = previous page's `next`). `status`: `all` (default), `open` (CONFIRMED+PARTIAL) or a status code; `q` matches number, customer, customer reference, line product name/SKU. Returns `{items, next, total, counts}` (`counts` per status for the same search) |
 | GET | `/sales/orders/{id}` | `{order, lines, deliveries, returns, manufacturing, lots, activity, credit}`; `lots` are released, unreserved lots of the open lines' products (FIFO); `credit` = `{limit, receivables, exceeded}` |
@@ -54,6 +54,47 @@ All business mutations require a unique `Idempotency-Key` header; keep it across
 | POST | `/machines` | Register idle work center; PLANNER |
 | POST | `/organization` | Update current organization/plant; ADMIN |
 | POST | `/users` | Create bcrypt-backed tenant account; ADMIN |
+
+### Procurement documents (`/purchases/*`, V6)
+
+| Method | Path | Purpose / allowed roles (ADMIN also allowed) |
+|---|---|---|
+| GET | `/purchases/orders?status=&q=&limit=&before=` | Purchase orders, newest first, keyset-paged. `status`: `all` (default), `open` (APPROVED+PARTIAL), `action` (DRAFT+SUBMITTED) or a status code; `q` matches number, supplier, supplier reference, line item name/SKU. Returns `{items, next, total, counts}`; rows carry `line_count`, `lines_received`, `progress` (average line %), summed `quantity`/`received`/`returned` with `uom` when all lines share one, `awaiting_qc` receipts and `variances` (invoices with variance) |
+| GET | `/purchases/orders/{id}` | `{order, lines, receipts, invoices, invoiceLines, returns, activity, warehouses}`; lines add `outstanding`, `received_in_unit`, `awaiting_qc`, `invoiced`, `expected`; receipts add the QC decision, `invoiceable` and `returnable`; `warehouses` = active RAW warehouses for receiving |
+| POST | `/purchases/orders` | Create a draft `{supplierId?, supplierReference?, dueDate, notes?, lines:[{id?, itemId, quantity, unit?, unitCost, expectedDate?}]}`; PLANNER/WAREHOUSE |
+| POST | `/purchases/orders/{id}` | Replace a draft (lines that keep their `id` keep their identity); PLANNER/WAREHOUSE |
+| POST | `/purchases/orders/{id}/submit` | DRAFT → SUBMITTED; needs an active supplier, at least one line and active items; PLANNER/WAREHOUSE |
+| POST | `/purchases/orders/{id}/approve` | SUBMITTED → APPROVED by a PLANNER/ADMIN who neither created nor submitted it; supplier and items must still be active |
+| POST | `/purchases/orders/{id}/cancel` | `{reason}`; DRAFT/SUBMITTED/APPROVED (or PARTIAL whose receipts were all rejected) with nothing received; PLANNER, WAREHOUSE for drafts |
+| POST | `/purchases/orders/{id}/close` | `{reason}`; PARTIAL → CLOSED (close short); the remainder leaves MRP supply; PLANNER |
+| POST | `/purchases/orders/{id}/receipts` | `{warehouseId, deliveryNote, lines:[{lineId, quantity, unit?, supplierLot?}]}`: one goods receipt (shared `GRN-…` number) into an **active RAW** warehouse; per line a quarantined lot at the line's base unit cost, a `GOODS_RECEIPT` ledger entry, Dr RAW_INVENTORY / Cr GRNI and an INCOMING inspection; WAREHOUSE |
+| POST | `/purchases/orders/{id}/invoices` | `{supplierReference, invoiceDate, notes?, lines:[{receiptId, quantity, unitPrice}]}` (base unit); ADMIN |
+| POST | `/purchases/receipts/{id}/returns` | `{quantity, reason, debitNote}`: released stock back to the supplier; WAREHOUSE |
+| POST | `/purchases/recommendations` | `{lines:[{itemId, quantity, supplierId?}], dueDate?}`: draft orders from planning shortages, one per supplier; returns `{purchases:[{id, number, supplierId, supplier, lines, total}], count}`; PLANNER/WAREHOUSE |
+| GET | `/purchases/receipts?status=&q=&limit=&before=` | Goods receipts; `status` `all`, `QUARANTINE`, `RELEASED`, `REJECTED` or `uninvoiced`; `{items, next}` |
+| GET | `/purchases/invoices?status=&q=&limit=&before=` | Supplier invoices; `status` `all`, `MATCHED`, `VARIANCE`; `{items, next}` |
+| GET | `/purchases/returns?q=&limit=&before=` | Supplier returns; `{items, next}` |
+| GET | `/purchases/sources?items=a,b` | Per item: preferred supplier (the active supplier it was last ordered from; drafts and cancelled orders ignored), that line's base unit cost, standard cost and lead time |
+
+Lifecycle: `DRAFT` (editable; the supplier may be empty, e.g. a planning draft) → `SUBMITTED` (awaiting independent approval) → `APPROVED` → `PARTIAL` → `RECEIVED`; `CANCELLED` while nothing is received; `CLOSED` short from `PARTIAL`. An incoming QC failure returns the lot to the supplier (reversing stock and GRNI exactly as before V6), takes the quantity back from the order line and reopens the order (`PARTIAL`, or `APPROVED` when nothing is left received; closed orders stay closed). Units: a line is entered in the item's base unit, an item conversion flagged for purchasing or a same-kind standard unit (`g` for a `kg` item); `UnitService.toBaseExact` converts it (a quantity that is not exact in the base unit is refused) and `base_unit_cost = unitCost / factor` (6 dp) becomes the lot cost. Inactive suppliers and items are refused on new orders, submission and approval with a 409 naming them.
+
+Invoice matching (three-way: order price, released receipt, invoice): each line bills ≤ the receipt's open quantity (received − invoiced − returned before invoicing). Goods-received clearing is released at the receipt's posted cost (Dr GRNI / Cr ACCOUNTS_PAYABLE — the original posting); the line that invoices the rest of a receipt releases exactly the clearing left. The difference between the billed amount and that cost posts to `PURCHASE_PRICE_VARIANCE` (Dr when billed above the order price, Cr when below) against ACCOUNTS_PAYABLE, so payables equal the supplier's bill; lots and inventory are not revalued. An invoice whose unit price differs from the order or that bills less than the open quantity has status `VARIANCE` (lines show `price_variance` and `quantity_variance`). A supplier reference can be used once per supplier.
+
+Supplier returns: only quality-released receipt lots; quantity ≤ received − returned and ≤ the lot's unreserved stock. The stock leaves at the lot's balance value (`SUPPLIER_RETURN`, a full depletion removes the exact remaining value). The part not yet invoiced reverses clearing like a QC rejection (Dr GRNI / Cr RAW_INVENTORY); the part already invoiced is settled by the debit note (Dr ACCOUNTS_PAYABLE / Cr RAW_INVENTORY). The order line's `returned` grows; received (and MRP supply) is unchanged.
+
+```json
+{"supplierId":"opaque-supplier","supplierReference":"Q-2611-04","dueDate":"2026-12-05","notes":"",
+ "lines":[{"id":null,"itemId":"opaque-resin","quantity":"4","unit":"bag","unitCost":"12000","expectedDate":null},
+          {"id":null,"itemId":"opaque-carton","quantity":"300","unit":null,"unitCost":"30","expectedDate":"2026-12-01"}]}
+```
+
+```json
+{"warehouseId":"opaque-raw-warehouse","deliveryNote":"DN-7781","lines":[{"lineId":"opaque-line-1","quantity":"2","unit":"bag","supplierLot":"SUP-LOT-1"}]}
+```
+
+```json
+{"supplierReference":"INV-88213","invoiceDate":"2026-11-23","notes":null,"lines":[{"receiptId":"opaque-receipt","quantity":"100","unitPrice":"10.5"}]}
+```
 
 ### Inventory operations (`/inventory/*`)
 
@@ -119,9 +160,11 @@ Per delivery, revenue/receivable = quantity × unit price × (1 − discount); t
 {"unit":"bag","factor":"25","purchase":true,"sales":false}
 ```
 
-Units: stock, BOM quantities and documents are stored in the item's base unit. `GET /items/{id}/convert?quantity=3&unit=bag` returns `{"baseQuantity":75,"baseUnit":"kg","exact":true,...}`. Other features convert with `catalog.UnitService.toBase(actor, itemId, quantity, unit)` (or `toBaseExact`, which refuses rounding) inside their own transaction; document integration is part of the V9 integration pass.
+Units: stock, BOM quantities and documents are stored in the item's base unit. `GET /items/{id}/convert?quantity=3&unit=bag` returns `{"baseQuantity":75,"baseUnit":"kg","exact":true,...}`. Other features convert with `catalog.UnitService.toBase(actor, itemId, quantity, unit)` (or `toBaseExact`, which refuses rounding) inside their own transaction; purchase-order lines and goods receipts use it since V6, sales documents follow in the V9 integration pass.
 
 Errors use HTTP 400 (invalid input), 401 (unauthenticated), 403 (role/CSRF), 404 (missing/unowned record), 409 (business state/quantity/reference conflict), 429 (login limit), and sanitized server errors. Business/validation errors return `{message}`. A lost response is resolved by retrying with the same key, not creating another logical transaction.
+
+`/state` key `purchases` is one summary row per purchase order (supplier, status, total, `line_count`, aggregated item names as `item`, summed base `quantity`/`received`/`returned` with `uom` when all lines share one) and `receipts` one row per received line and lot (GRN `number`, `delivery_note`, lot and its quality `status`, `invoiced`, `returned`); both replace the former single-item rows. MRP `incoming` = open base quantity on lines of APPROVED/PARTIAL orders.
 
 `/state` keys `sales` (one summary row per order: totals, line count, aggregated product names, summed quantity/delivered/returned with `uom` when all lines share one) and `salesLines` (open lines of confirmed orders with `planned` quantity, for the manufacturing-order dialog) replace the former single-item `sales` rows.
 

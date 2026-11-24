@@ -39,10 +39,11 @@ class PlanningStateSections implements StateContributor {
                     WHERE l.tenant_id=? AND l.status='RELEASED'
                     GROUP BY l.item_id),
                 incoming AS(
-                    SELECT item_id,SUM(quantity-received) AS incoming
-                    FROM purchase_orders
-                    WHERE tenant_id=? AND status IN ('APPROVED','PARTIAL')
-                    GROUP BY item_id)
+                    SELECT l.item_id,SUM(l.base_quantity-l.received) AS incoming
+                    FROM purchase_order_lines l
+                    JOIN purchase_orders po ON po.tenant_id=l.tenant_id AND po.id=l.purchase_order_id
+                    WHERE l.tenant_id=? AND po.status IN ('APPROVED','PARTIAL')
+                    GROUP BY l.item_id)
                 SELECT i.id,i.sku,i.name,i.uom,i.reorder_level,i.type,i.active,i.reorder_qty,i.lead_time_days,
                        COALESCE(d.gross,0) AS gross,
                        COALESCE(st.available,0) AS available,
