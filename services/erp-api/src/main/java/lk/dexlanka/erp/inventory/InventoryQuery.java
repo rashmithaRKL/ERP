@@ -431,6 +431,7 @@ public class InventoryQuery {
     private static final String COUNT_COLUMNS = """
             SELECT c.id,c.number,c.status,c.blind,c.notes,c.item_type,c.created_at,c.submitted_at,c.posted_at,c.cancelled_at,
                    c.warehouse_id,w.name AS warehouse,w.code AS warehouse_code,c.item_id,i.name AS item,
+                   c.category_id,cat.name AS category,
                    c.created_by,cu.name AS created_by_name,su.name AS submitted_by_name,pu.name AS posted_by_name,
                    c.adjustment_id,d.number AS adjustment_number,d.status AS adjustment_status,
                    (SELECT COUNT(*) FROM stock_count_lines x WHERE x.tenant_id=c.tenant_id AND x.count_id=c.id) AS line_count,
@@ -442,6 +443,7 @@ public class InventoryQuery {
             LEFT JOIN users su ON su.id=c.submitted_by
             LEFT JOIN users pu ON pu.id=c.posted_by
             LEFT JOIN items i ON i.tenant_id=c.tenant_id AND i.id=c.item_id
+            LEFT JOIN item_categories cat ON cat.tenant_id=c.tenant_id AND cat.id=c.category_id
             LEFT JOIN stock_adjustments d ON d.tenant_id=c.tenant_id AND d.id=c.adjustment_id
             """;
 

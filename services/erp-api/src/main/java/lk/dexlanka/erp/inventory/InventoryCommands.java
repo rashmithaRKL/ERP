@@ -82,13 +82,22 @@ public final class InventoryCommands {
             @Size(max = 1000) String notes,
             @NotEmpty @Size(max = 200) List<@Valid @NotNull TransferLine> lines) {}
 
-    /** Starts a cycle count of a warehouse, optionally narrowed to one item or one item type. */
+    /**
+     * Starts a cycle count of a warehouse, optionally narrowed to one item, one item type and/or one item category
+     * including its sub-categories (V9).
+     */
     public record Count(
             @NotBlank @Size(max = 64) String warehouseId,
             @Size(max = 64) String itemId,
             @Pattern(regexp = "[A-Z_]{0,40}") String itemType,
             boolean blind,
-            @Size(max = 1000) String notes) {}
+            @Size(max = 1000) String notes,
+            @Size(max = 64) String categoryId) {
+        /** The V5 shape (no category). */
+        public Count(String warehouseId, String itemId, String itemType, boolean blind, String notes) {
+            this(warehouseId, itemId, itemType, blind, notes, null);
+        }
+    }
 
     public record CountEntry(
             @NotBlank @Size(max = 64) String lineId,

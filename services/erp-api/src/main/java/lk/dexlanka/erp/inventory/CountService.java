@@ -24,7 +24,8 @@ import org.springframework.transaction.annotation.Transactional;
  * value variances visible) → POSTED, or CANCELLED. Posting compares the counted quantity with the system quantity
  * <em>at posting time</em>, flags lots that moved after the snapshot, and turns the variances into a {@code
  * COUNT_VARIANCE} adjustment submitted through the same posting path and approval threshold as manual adjustments. A
- * lot can be in at most one open count (unique partial index {@code stock_count_lines_one_open_count}).
+ * lot can be in at most one open count (unique partial index {@code stock_count_lines_one_open_count}). A count can be
+ * limited to one item, one item type and/or one item category with all of its sub-categories (V9).
  */
 @Service
 public class CountService {
@@ -45,7 +46,14 @@ public class CountService {
             WHERE l.tenant_id=? AND l.warehouse_id=? AND b.quantity>0
               AND NOT (l.status='QUARANTINE' AND l.source_type='PURCHASE')
               AND (?::text IS NULL OR l.item_id=?)
-              AND (?::text IS NULL OR i.type=?)""";
+              AND (?::text IS NULL OR i.type=?)
+              AND (?::text IS NULL OR i.category_id IN (
+                    WITH RECURSIVE sub AS (
+                        SELECT c.id,ARRAY[c.id] AS trail FROM item_categories c WHERE c.tenant_id=? AND c.id=?
+                        UNION ALL
+                        SELECT c.id,sub.trail || c.id FROM item_categories c JOIN sub ON c.parent_id=sub.id
+                        WHERE c.tenant_id=? AND NOT c.id = ANY(sub.trail))
+                    SELECT id FROM sub))""";
 
     @Transactional
     public Map<String, Object> start(Actor a, InventoryCommands.Count c, String key) {
@@ -57,8 +65,16 @@ public class CountService {
                     "Warehouse " + warehouse.get("name") + " is inactive");
             String item = blankToNull(c.itemId());
             String type = blankToNull(c.itemType());
+            String category = blankToNull(c.categoryId());
             if (item != null) s.one("SELECT id FROM items WHERE tenant_id=? AND id=?", a.tenant(), item);
-            Object[] filter = {a.tenant(), c.warehouseId(), item, item, type, type};
+            String categoryName = category == null
+                    ? null
+                    : str(
+                            s.one("SELECT name FROM item_categories WHERE tenant_id=? AND id=?", a.tenant(), category),
+                            "name");
+            Object[] filter = {
+                a.tenant(), c.warehouseId(), item, item, type, type, category, a.tenant(), category, a.tenant()
+            };
             var busy = s.list("""
                     SELECT lot.number,c.number AS count_number
                     FROM stock_count_lines cl
@@ -80,13 +96,14 @@ public class CountService {
             String id = id();
             String number = rules.documentNumber(a, "stock_counts", "CNT");
             s.db().update(
-                            "INSERT INTO stock_counts(id,tenant_id,number,warehouse_id,item_id,item_type,blind,notes,created_by) VALUES(?,?,?,?,?,?,?,?,?)",
+                            "INSERT INTO stock_counts(id,tenant_id,number,warehouse_id,item_id,item_type,category_id,blind,notes,created_by) VALUES(?,?,?,?,?,?,?,?,?,?)",
                             id,
                             a.tenant(),
                             number,
                             c.warehouseId(),
                             item,
                             type,
+                            category,
                             c.blind(),
                             c.notes() == null ? "" : c.notes().trim(),
                             a.id());
@@ -107,6 +124,7 @@ public class CountService {
                     "COUNT_STARTED",
                     number,
                     warehouse.get("name") + " · " + lots.size() + (lots.size() == 1 ? " lot" : " lots")
+                            + (categoryName == null ? "" : " · category " + categoryName + " incl. sub-categories")
                             + (c.blind() ? " · blind count" : ""));
             return result(a, id);
         });

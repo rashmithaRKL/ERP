@@ -45,6 +45,13 @@ END $$;
 ALTER TABLE sales_order_lines
     ADD CONSTRAINT sales_order_lines_delivered_check CHECK (delivered >= 0 AND delivered <= base_quantity);
 
+-- ------------------------------------------------------------------ cycle counts by item category
+-- A count may be limited to one item category including all of its sub-categories (inventory.CountService).
+ALTER TABLE stock_counts
+    ADD COLUMN category_id text,
+    ADD CONSTRAINT stock_counts_category_fkey
+        FOREIGN KEY (tenant_id, category_id) REFERENCES item_categories(tenant_id, id);
+
 -- ------------------------------------------------------------------ keyset-paged lists (created_at DESC, id DESC)
 -- GET /api/manufacturing/orders and /api/reports/costs, /api/quality/inspections, /api/reports/journal.
 CREATE INDEX mo_tenant_created_id ON manufacturing_orders(tenant_id, created_at DESC, id DESC);
