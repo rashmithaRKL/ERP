@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 import { LoaderCircle, RefreshCw, Search } from 'lucide-react';
 import type { UseInfiniteQueryResult } from '@tanstack/react-query';
 import type { Row } from '../../lib/api';
-import { date, fmt, labelState, num, text } from '../../lib/format';
+import { date, fmt, humanizeText, labelState, num, text } from '../../lib/format';
 import { auditLabel } from '../audit/auditLabel';
 
 const TONES: Record<string, string> = {
@@ -144,7 +144,7 @@ export function ActivityFeed({ events }: { events: Row[] }) {
           <span className="activity-dot" />
           <div>
             <strong>{auditLabel(e.action)}</strong>
-            <p>{text(e.detail)}</p>
+            <p>{humanizeText(e.detail)}</p>
             <small>
               {text(e.actor)} · {dateTime(e.created_at)}
             </small>

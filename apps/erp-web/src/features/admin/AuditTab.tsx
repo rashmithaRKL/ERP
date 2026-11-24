@@ -4,7 +4,7 @@ import { ArrowDownToLine, LoaderCircle, X } from 'lucide-react';
 import { useWorkspace } from '../../app/workspace';
 import { Panel, Table } from '../../components';
 import { request } from '../../lib/api';
-import { text } from '../../lib/format';
+import { humanizeText } from '../../lib/format';
 import { auditLabel } from '../audit/auditLabel';
 import { ADMIN, dateTime, download, params, useAdminPaged, useDebounced } from './api';
 import { LoadMore, QueryState, SearchBox } from './shared';
@@ -116,8 +116,8 @@ export function AuditTab() {
             {
               label: 'Detail',
               render: (r) => (
-                <span className="notes-cell" title={text(r.detail)}>
-                  {text(r.detail)}
+                <span className="notes-cell" title={humanizeText(r.detail)}>
+                  {humanizeText(r.detail)}
                 </span>
               ),
             },

@@ -114,7 +114,8 @@
 
 /* Warehouse valuation footer */
 .inv-valuation { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 32px; padding: 16px 18px; border-top: 1px solid var(--border); }
-.inv-valuation > div > span { display: block; font-size: 11px; color: var(--muted); text-transform: capitalize; }
+.inv-valuation > div > span { display: block; font-size: 11px; color: var(--muted); }
+.inv-valuation > div > span::first-letter { text-transform: uppercase; }
 .inv-valuation > div > strong { font-size: 17px; font-family: 'Manrope Variable', sans-serif; color: var(--heading); }
 .inv-valuation > p { flex-basis: 100%; }
 

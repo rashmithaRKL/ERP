@@ -9,7 +9,8 @@
 .line-editor-row:focus-within{background:var(--soft)}
 .line-editor-no{font-size:11px;color:var(--muted);text-align:center;font-variant-numeric:tabular-nums}
 .line-editor-cell{display:flex;flex-direction:column;gap:5px;min-width:0}
-.line-editor-label{display:none;font-size:11px;color:var(--muted)}
+/* Column labels are screen-reader text on desktop (the header row is aria-hidden) and visible on phones. */
+.line-editor-label{position:absolute;width:1px;height:1px;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;font-size:11px;color:var(--muted)}
 .line-editor-row input,.line-editor-row select{border:1px solid #dce1e8;background:var(--surface);border-radius:5px;padding:8px;font-size:13px;width:100%;min-width:0}
 [data-theme=dark] .line-editor-row input,[data-theme=dark] .line-editor-row select{border-color:var(--border)}
 .line-editor-row select{height:36px;text-overflow:ellipsis}
@@ -39,7 +40,7 @@
   .line-editor-row>.disc{grid-area:disc}
   .line-editor-row>.line-editor-amount{grid-area:total}
   .line-editor-row>.line-editor-remove{grid-area:remove;justify-self:end}
-  .line-editor-label{display:block}
+  .line-editor-label{position:static;width:auto;height:auto;margin:0;overflow:visible;clip:auto;white-space:normal}
   .line-editor-empty{border-top:1px dashed var(--border);border-radius:6px}
   .line-editor-hint{display:none}
   .line-editor-totals{width:100%}

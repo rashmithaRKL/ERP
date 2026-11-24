@@ -2,7 +2,7 @@ import { useNavigate } from 'react-router-dom';
 import { ArrowUpRight, Factory, Package, Search } from 'lucide-react';
 import { Badge, Overlay } from '../components';
 import { text } from '../lib/format';
-import { navItems } from './routes';
+import { navItems, preloadRoute } from './routes';
 import { useWorkspace } from './workspace';
 
 /** Ctrl/⌘+K workspace search: pages from the route registry, manufacturing orders and items. */
@@ -39,6 +39,8 @@ export function CommandPalette({
           .map((n) => (
             <button
               key={n.path}
+              onPointerEnter={() => preloadRoute(n.path)}
+              onFocus={() => preloadRoute(n.path)}
               onClick={() => {
                 navigate(n.path);
                 onClose();

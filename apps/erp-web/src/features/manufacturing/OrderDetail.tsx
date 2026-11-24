@@ -2,7 +2,7 @@ import { ArrowRight, Check, LoaderCircle, Plus } from 'lucide-react';
 import { useWorkspace } from '../../app/workspace';
 import { Badge, Table } from '../../components';
 import type { Row } from '../../lib/api';
-import { date, fmt, labelState, money, num, text } from '../../lib/format';
+import { codeLabel, date, fmt, humanizeText, labelState, money, num, text } from '../../lib/format';
 import { approversText, useApprovalPolicy } from '../approvals/policies';
 import { auditLabel } from '../audit/auditLabel';
 import { ProductMark } from '../products/ProductMark';
@@ -120,7 +120,7 @@ export function OrderDetail({
             'scrap_cost',
           ].map((k) => (
             <div key={k}>
-              <span>{labelState(k)}</span>
+              <span>{codeLabel(k)}</span>
               <strong>{money(o[k])}</strong>
             </div>
           ))}
@@ -132,7 +132,7 @@ export function OrderDetail({
               <span className="activity-dot" />
               <div>
                 <strong>{auditLabel(e.action)}</strong>
-                <p>{text(e.detail)}</p>
+                <p>{humanizeText(e.detail)}</p>
                 <small>
                   {text(e.actor)} · {date(e.created_at)}
                 </small>

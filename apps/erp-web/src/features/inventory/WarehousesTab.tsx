@@ -5,7 +5,7 @@ import { selectField, Table } from '../../components';
 import type { Field } from '../../components';
 import { request } from '../../lib/api';
 import type { Row } from '../../lib/api';
-import { fmt, labelState, money, text } from '../../lib/format';
+import { codeLabel, fmt, labelState, money, text } from '../../lib/format';
 import {
   INVENTORY,
   OPERATORS,
@@ -157,7 +157,7 @@ export function WarehousesTab() {
           </div>
           {valuation.data.accounts.map((a) => (
             <div key={text(a.account)}>
-              <span>{labelState(a.account)}</span>
+              <span>{codeLabel(a.account)}</span>
               <strong>{money(a.value)}</strong>
             </div>
           ))}

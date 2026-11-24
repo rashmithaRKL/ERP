@@ -158,13 +158,17 @@ export function CompareDialog({
                   <table className="diff-table">
                     <thead>
                       <tr>
-                        <th>Component</th>
-                        <th>Change</th>
-                        <th className="num">
+                        <th scope="col">Component</th>
+                        <th scope="col">Change</th>
+                        <th scope="col" className="num">
                           {text(c.from.revision)} → {text(c.to.revision)}
                         </th>
-                        <th className="num">Per unit Δ</th>
-                        <th className="num">Cost / unit Δ</th>
+                        <th scope="col" className="num">
+                          Per unit Δ
+                        </th>
+                        <th scope="col" className="num">
+                          Cost / unit Δ
+                        </th>
                       </tr>
                     </thead>
                     <tbody>

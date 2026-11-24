@@ -77,6 +77,8 @@ export function LineItemsEditor({
   function remove(index: number) {
     onChange(lines.filter((_, i) => i !== index));
     if (lines.length > 1) focus(Math.max(0, index - 1), 'itemId');
+    // Removing the only line would drop focus to the page: keep it on the editor's add button.
+    else requestAnimationFrame(() => root.current?.querySelector<HTMLElement>('.line-editor-add')?.focus());
   }
   function onKey(e: KeyboardEvent<HTMLElement>, index: number, field: FieldName) {
     if (e.key === 'Enter' && !e.shiftKey && !e.altKey) {
@@ -133,7 +135,7 @@ export function LineItemsEditor({
         <div className="line-editor-actions">
           <button
             type="button"
-            className="button secondary small"
+            className="button secondary small line-editor-add"
             disabled={disabled || lines.length >= maxLines}
             onClick={() => add()}
           >
@@ -327,7 +329,7 @@ function Row({
           />
         </label>
       )}
-      <span className="line-editor-cell line-editor-amount" aria-label={`Line ${n} total`}>
+      <span className="line-editor-cell line-editor-amount">
         <span className="line-editor-label">Line total</span>
         <strong>
           {currency} {fmt(lineNet(line), 2)}

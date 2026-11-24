@@ -75,11 +75,12 @@ export function Overlay({
         if (present && e.target === e.currentTarget) onClose();
       }}
       aria-labelledby={titleId}
+      aria-describedby={subtitle ? `${titleId}-subtitle` : undefined}
     >
       <div className="dialog-heading">
         <div>
           <h2 id={titleId}>{title}</h2>
-          {subtitle && <p>{subtitle}</p>}
+          {subtitle && <p id={`${titleId}-subtitle`}>{subtitle}</p>}
         </div>
         <button className="icon-button" aria-label="Close dialog" disabled={!present} onClick={onClose}>
           <X size={20} />

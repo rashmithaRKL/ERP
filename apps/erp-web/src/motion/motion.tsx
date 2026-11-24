@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useId, useMemo, useState } from 'react';
-import type { ReactNode } from 'react';
+import type { KeyboardEvent, ReactNode } from 'react';
 import { LayoutGroup, MotionConfig, motion, useIsPresent, useReducedMotion } from 'motion/react';
 import { Accessibility, Monitor, Play, Sparkles } from 'lucide-react';
 
@@ -75,6 +75,11 @@ export function PageTransition({ children }: { children: ReactNode }) {
 }
 
 type Tab = { value: string; label: string; count?: number };
+
+/**
+ * Tab strip (filter views and drawer sections) following the WAI-ARIA tabs pattern: one tab stop, Arrow Left/Right
+ * (wrapping), Home and End move focus and select immediately.
+ */
 export function Tabs({
   items,
   value,
@@ -91,15 +96,34 @@ export function Tabs({
   children?: ReactNode;
 }) {
   const id = useId();
+  const selected = Math.max(
+    0,
+    items.findIndex((item) => item.value === value),
+  );
+  function onKeyDown(e: KeyboardEvent<HTMLDivElement>) {
+    const moves: Record<string, number> = {
+      ArrowRight: selected + 1,
+      ArrowLeft: selected - 1,
+      Home: 0,
+      End: items.length - 1,
+    };
+    if (!(e.key in moves) || !items.length) return;
+    e.preventDefault();
+    const index = (moves[e.key] + items.length) % items.length;
+    onChange(items[index].value);
+    e.currentTarget.querySelectorAll<HTMLButtonElement>('[role="tab"]')[index]?.focus();
+  }
   return (
     <LayoutGroup id={id}>
       <div className={`${compact ? 'mini-tabs' : 'list-tabs'} motion-tabs`}>
-        <div className="tab-list" role="group" aria-label={label}>
-          {items.map((item) => (
+        <div className="tab-list" role="tablist" aria-label={label} onKeyDown={onKeyDown}>
+          {items.map((item, index) => (
             <button
               type="button"
+              role="tab"
               key={item.value}
-              aria-pressed={value === item.value}
+              aria-selected={value === item.value}
+              tabIndex={index === selected ? 0 : -1}
               className={value === item.value ? 'active' : ''}
               onClick={() => onChange(item.value)}
             >

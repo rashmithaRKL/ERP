@@ -14,7 +14,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useWorkspace } from '../../app/workspace';
 import { Badge, Empty, Overlay, Progress, Table } from '../../components';
 import type { Row } from '../../lib/api';
-import { date, fmt, labelState, money, num, text } from '../../lib/format';
+import { date, fmt, humanizeText, labelState, money, num, text } from '../../lib/format';
 import { auditLabel } from '../audit/auditLabel';
 import { createOrder } from '../manufacturing/forms';
 import { invalidateSales, useSalesCommand, useSalesOrder } from './api';
@@ -420,7 +420,7 @@ function Detail({
                 <span className="activity-dot" />
                 <div>
                   <strong>{auditLabel(e.action)}</strong>
-                  <p>{text(e.detail)}</p>
+                  <p>{humanizeText(e.detail)}</p>
                   <small>
                     {text(e.actor)} · {date(e.created_at)}
                   </small>

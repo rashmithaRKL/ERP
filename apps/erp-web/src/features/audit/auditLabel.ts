@@ -1,7 +1,4 @@
-import { text } from '../../lib/format';
-
-/** Abbreviations that stay upper-case wherever they appear in an action code. */
-const ACRONYMS = new Set(['MO', 'PO', 'SO', 'QC', 'BOM', 'GRN', 'FIFO', 'WIP']);
+import { ACRONYMS, text } from '../../lib/format';
 
 /**
  * Readable, past-tense labels for the action codes the API writes to `audit_events`

@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
+import type { SyntheticEvent } from 'react';
 import { NavLink, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import { AnimatePresence, LayoutGroup, motion } from 'motion/react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -39,10 +40,18 @@ import NotFoundPage from '../pages/NotFoundPage';
 import { AttentionCenter } from './AttentionCenter';
 import { CommandPalette } from './CommandPalette';
 import { HelpDialog } from './HelpDialog';
+import { preloadWhenIdle } from './lazyPage';
 import { Login } from './Login';
+import { PageErrorBoundary, PageSkeleton } from './PageLoader';
 import { ProfileDialog } from './ProfileDialog';
-import { findRoute, navGroups, navItems, routes } from './routes';
+import { findRoute, navGroups, navItems, preloadRoute, routes } from './routes';
 import { useWorkspaceState, WorkspaceProvider } from './workspace';
+
+/** Delegated hover/focus handler: starts loading the page behind a navigation link before it is clicked. */
+const preloadLink = (event: SyntheticEvent) => {
+  const link = event.target instanceof Element ? event.target.closest('a[href]') : null;
+  if (link instanceof HTMLAnchorElement) preloadRoute(link.pathname);
+};
 
 /**
  * App shell: session gate, sidebar, header, page heading/context bar, routed page, toast and the shared
@@ -70,6 +79,18 @@ export default function App() {
   const path = location.pathname;
   const current = findRoute(path);
   const title = current?.label ?? 'Overview';
+  const ready = !!user && !!data;
+  useEffect(() => {
+    // The first page's chunk downloads while the session and /api/state requests are in flight.
+    preloadRoute(window.location.pathname);
+  }, []);
+  useEffect(() => {
+    // Then the other pages this role can open, one at a time while the browser is idle.
+    if (!ready || !user) return;
+    return preloadWhenIdle(
+      routes.filter((route) => !route.roles || route.roles.includes(user.role)).map((route) => route.page),
+    );
+  }, [ready, user]);
   useEffect(() => {
     const media = window.matchMedia('(max-width:800px)');
     const update = () => {
@@ -170,6 +191,8 @@ export default function App() {
             id="primary-navigation"
             inert={narrow && !mobile}
             className={`sidebar ${mobile ? 'mobile-open' : ''}`}
+            onPointerOver={preloadLink}
+            onFocus={preloadLink}
           >
             <NavLink to="/" className="brand-wrap">
               <img src="/favicon.svg" alt="" />
@@ -230,7 +253,9 @@ export default function App() {
                             {n.path === '/manufacturing' && !!active.length && (
                               <span className="nav-count">{active.length}</span>
                             )}
-                            {n.path === '/planning' && !!shortages.length && <span className="nav-alert" />}
+                            {n.path === '/planning' && !!shortages.length && (
+                              <span className="nav-alert" role="img" aria-label="Material shortages" />
+                            )}
                           </>
                         )}
                       </NavLink>
@@ -313,7 +338,11 @@ export default function App() {
               </button>
               <button
                 className={`icon-button notification-button ${pendingQc.length || shortages.length ? 'has-notification' : ''}`}
-                aria-label="Open notifications"
+                aria-label={
+                  pendingQc.length || shortages.length
+                    ? 'Open notifications (items need attention)'
+                    : 'Open notifications'
+                }
                 onClick={() => setNotifications(true)}
               >
                 <Bell size={19} />
@@ -422,14 +451,7 @@ export default function App() {
                     </div>
                   </div>
                 </div>
-                {stateQuery.isPending && (
-                  <div className="skeleton-grid">
-                    {[1, 2, 3, 4].map((x) => (
-                      <div key={x} className="skeleton" />
-                    ))}
-                    <div className="skeleton large" />
-                  </div>
-                )}
+                {stateQuery.isPending && <PageSkeleton />}
                 {stateQuery.isError && (
                   <div className="error-panel">
                     <TriangleAlert />
@@ -443,14 +465,19 @@ export default function App() {
                   </div>
                 )}
                 {data && (
-                  // `location` is passed explicitly so the outgoing page keeps rendering its own route
-                  // while AnimatePresence plays the exit transition.
-                  <Routes location={location}>
-                    {routes.map((route) => (
-                      <Route key={route.path} path={route.path} caseSensitive element={route.element} />
-                    ))}
-                    <Route path="*" element={<NotFoundPage />} />
-                  </Routes>
+                  // Pages are code-split: the boundary shows the skeleton while a page chunk downloads and a
+                  // recoverable error if it cannot. `location` is passed explicitly so the outgoing page keeps
+                  // rendering its own route while AnimatePresence plays the exit transition.
+                  <PageErrorBoundary>
+                    <Suspense fallback={<PageSkeleton />}>
+                      <Routes location={location}>
+                        {routes.map((route) => (
+                          <Route key={route.path} path={route.path} caseSensitive element={<route.page />} />
+                        ))}
+                        <Route path="*" element={<NotFoundPage />} />
+                      </Routes>
+                    </Suspense>
+                  </PageErrorBoundary>
                 )}
               </PageTransition>
             </AnimatePresence>

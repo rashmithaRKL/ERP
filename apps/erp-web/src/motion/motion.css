@@ -67,6 +67,8 @@
 .mini-tabs.motion-tabs { gap: 10px; }
 .mini-tabs.motion-tabs .tab-list { gap: 18px; overflow: visible; }
 .mini-tabs.motion-tabs .tab-list > button { font-size: 11px; padding: 0; }
+/* Tabs sit in a scrolling strip, so the focus ring is drawn inside the tab. */
+.motion-tabs .tab-list > button:focus-visible { outline-offset: -3px; border-radius: 4px; }
 
 .dialog, .dialog.drawer { animation: none; transform-origin: center; }
 .dialog.drawer { transform-origin: right center; }
@@ -136,7 +138,8 @@
 }
 @media (max-width: 650px) {
   .toast { translate: 0; }
-  .mini-tabs.motion-tabs .tab-list { gap: 13px; }
+  /* Many tabs (Inventory, drawers) scroll sideways instead of widening the page. */
+  .mini-tabs.motion-tabs .tab-list { gap: 13px; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; }
   .mini-tabs.motion-tabs .tab-list > button { font-size: 10px; }
   .mini-tabs.motion-tabs .tab-count { font-size: 9px; }
   .motion-settings-body { grid-template-columns: 1fr; gap: 18px; padding: 20px; }

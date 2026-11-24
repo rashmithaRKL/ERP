@@ -17,7 +17,7 @@ import { Badge, Empty, Overlay, Table } from '../../components';
 import { UnitQuantityInput } from '../../components/UnitQuantityInput';
 import type { UnitQuantity } from '../../components/UnitQuantityInput';
 import type { Row } from '../../lib/api';
-import { date, fmt, labelState, money, num, text } from '../../lib/format';
+import { date, fmt, humanizeText, labelState, money, num, text } from '../../lib/format';
 import { Tabs } from '../../motion/motion';
 import { auditLabel } from '../audit/auditLabel';
 import { addBarcode, editConversion, editItem } from './forms';
@@ -294,7 +294,7 @@ function Overview({ data }: { data: ItemDetail }) {
                 <span className="activity-dot" />
                 <div>
                   <strong>{auditLabel(e.action)}</strong>
-                  <p>{text(e.detail)}</p>
+                  <p>{humanizeText(e.detail)}</p>
                   <small>
                     {text(e.actor)} · {date(e.created_at)}
                   </small>

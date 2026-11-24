@@ -9,8 +9,9 @@ Implemented 30 October 2026. This is a code-native Figma-style interaction syste
 | Interaction | Behavior |
 |---|---|
 | Page change | 90 ms outgoing fade, 220 ms incoming fade with 8 px vertical travel; outgoing content is inert |
+| Page loading | Pages are lazy chunks. A preloaded page renders inside the incoming fade with no extra step; otherwise the routed area (inside the same page transition, below the heading and context bar) shows the shared skeleton, which fades in over 220 ms after a 140 ms delay so quick loads never flash it. The `/api/state` load uses the same skeleton |
 | Active navigation | Shared selection background and edge marker move with a nearly critically damped spring |
-| Filter views | Shared underline moves between selected buttons; data filtering happens immediately |
+| Filter views | Shared underline moves between selected tabs; data filtering happens immediately. Tabs follow the WAI-ARIA tabs pattern (Arrow Left/Right, Home, End); on phones a long tab strip scrolls sideways |
 | KPI cards | 300 ms reveals staggered by 45 ms; the actual numeric value is never interpolated |
 | Operational cards | Small, pointer-only lift/shadow feedback; informational panels reveal once when entering view |
 | Modal dialogs | Short spring entrance and 160 ms exit; native dialog focus trapping remains active |
@@ -23,7 +24,7 @@ Implemented 30 October 2026. This is a code-native Figma-style interaction syste
 
 ## Accessibility and transaction boundaries
 
-Administration → Interface motion offers **Follow device preference** and **Reduce motion**, persisted under the local presentation-only `dex-motion` key. A device request for reduced motion always wins. Reduced mode disables spatial/layout animations and CSS transitions, shortens opacity feedback, and removes preview staggering.
+Administration → Interface motion offers **Follow device preference** and **Reduce motion**, persisted under the local presentation-only `dex-motion` key. A device request for reduced motion always wins. Reduced mode disables spatial/layout animations and CSS transitions, shortens opacity feedback, and removes preview staggering. With reduced motion the loading skeleton appears immediately, without the delayed fade.
 
 Dialog closing prevents the browser's default immediate dismissal so the exit can finish. Cleanup closes the native dialog before removing it, then restores focus to its initiating control when that control still exists and another modal has not taken focus. Each dialog has its own accessible heading ID. Exiting dialogs/pages are inert; animations never postpone API requests or simulate successful transactions. All quantities, costs and statuses remain server-controlled values.
 

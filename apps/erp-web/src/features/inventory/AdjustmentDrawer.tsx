@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { ArrowRight, Check, LoaderCircle, ShieldCheck } from 'lucide-react';
 import { useWorkspace } from '../../app/workspace';
 import { Overlay, Table } from '../../components';
-import { labelState, money, num, text } from '../../lib/format';
+import { codeLabel, labelState, money, num, text } from '../../lib/format';
 import { approversText, useApprovalPolicy } from '../approvals/policies';
 import { OPERATORS, useDetail, useInventoryCommand } from './api';
 import type { AdjustmentDetail } from './api';
@@ -151,7 +151,7 @@ export function AdjustmentDrawer({ id, onClose }: { id: string; onClose: () => v
                     pageSize={detail.data.journal.length}
                     rows={detail.data.journal}
                     columns={[
-                      { label: 'Account', render: (r) => labelState(r.account) },
+                      { label: 'Account', render: (r) => codeLabel(r.account) },
                       { label: 'Debit', render: (r) => (num(r.debit) ? money(r.debit) : '') },
                       { label: 'Credit', render: (r) => (num(r.credit) ? money(r.credit) : '') },
                       { label: 'Entry', key: 'description' },

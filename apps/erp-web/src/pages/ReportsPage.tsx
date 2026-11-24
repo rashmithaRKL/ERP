@@ -16,7 +16,7 @@ import { PageFooter, PageState, useCursorPage } from '../features/lists/cursorPa
 import type { CursorPage } from '../features/lists/cursorPage';
 import { request } from '../lib/api';
 import type { Row } from '../lib/api';
-import { csv, date, fmt, labelState, money, num, text } from '../lib/format';
+import { codeLabel, csv, date, fmt, money, num, text } from '../lib/format';
 import { stagger } from '../motion/motion';
 
 const PAGE = 25;
@@ -170,7 +170,7 @@ export default function ReportsPage() {
           <div className="reconciliation">
             {['material_cost', 'conversion_cost', 'wip_cost', 'finished_cost', 'scrap_cost'].map((k) => (
               <div key={k}>
-                <span>{labelState(k)}</span>
+                <span>{codeLabel(k)}</span>
                 <strong>{money(totals[k])}</strong>
               </div>
             ))}
@@ -236,7 +236,7 @@ export default function ReportsPage() {
             <option value="">All accounts</option>
             {accounts.map((a) => (
               <option key={a} value={a}>
-                {labelState(a)}
+                {codeLabel(a)}
               </option>
             ))}
           </select>
@@ -274,7 +274,7 @@ export default function ReportsPage() {
                 ),
               },
               { label: 'Description', key: 'description' },
-              { label: 'Account', render: (r) => labelState(r.account) },
+              { label: 'Account', render: (r) => codeLabel(r.account) },
               { label: 'Debit', render: (r) => (num(r.debit) ? money(r.debit) : '—') },
               { label: 'Credit', render: (r) => (num(r.credit) ? money(r.credit) : '—') },
             ]}
