@@ -20,6 +20,7 @@ import {
 import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { useStateData, useWorkspace } from '../app/workspace';
 import { Badge, Panel, Stat, Table } from '../components';
+import { useApprovalPolicy } from '../features/approvals/policies';
 import { useOrderColumns } from '../features/manufacturing/orderColumns';
 import { fmt, num, text, today } from '../lib/format';
 import { stagger, Tabs } from '../motion/motion';
@@ -27,13 +28,19 @@ import { stagger, Tabs } from '../motion/motion';
 /** Route `/`: factory overview dashboard. */
 export default function OverviewPage() {
   const navigate = useNavigate();
-  const { can, days, openOrder, summary } = useWorkspace();
+  const { can, days, openOrder, summary, user } = useWorkspace();
+  const { approverRoles: purchaseApprovers } = useApprovalPolicy('PURCHASE_ORDER');
   const { active, shortages, pendingQc, output, scrap, yieldPct } = summary;
   const data = useStateData();
   const orderColumns = useOrderColumns();
   const [tab, setTab] = useState('all');
-  // Purchasing: orders waiting for an approver other than their creator, and approved deliveries that are late.
-  const awaitingApproval = can('PLANNER') ? data.purchases.filter((p) => p.status === 'SUBMITTED') : [];
+  // Purchasing: orders this approver (per the purchase-order approval policy) may approve, i.e. created and submitted
+  // by someone else, and approved deliveries that are late.
+  const awaitingApproval = can(...purchaseApprovers)
+    ? data.purchases.filter(
+        (p) => p.status === 'SUBMITTED' && p.created_by !== user.id && p.submitted_by !== user.id,
+      )
+    : [];
   const lateDeliveries = data.purchases.filter(
     (p) => ['APPROVED', 'PARTIAL'].includes(text(p.status)) && text(p.due_date).substring(0, 10) < today(),
   );
@@ -326,7 +333,7 @@ export default function OverviewPage() {
                     {awaitingApproval.length && lateDeliveries.length
                       ? `${lateDeliveries.length} approved ${lateDeliveries.length === 1 ? 'order is' : 'orders are'} also past the expected date.`
                       : awaitingApproval.length
-                        ? 'Another planner must approve before goods can be received.'
+                        ? 'Approve them in Purchasing before goods can be received.'
                         : 'Approved purchase orders are past their expected delivery date.'}
                   </p>
                   <span>
