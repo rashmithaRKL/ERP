@@ -15,7 +15,7 @@ Status language: **verified** means executed evidence exists; **implemented** me
 ## Production release blockers
 
 - [ ] Production PostgreSQL version and Docker images validated on the target OS; full dependency vulnerability review and update policy.
-- [ ] MFA for privileged users, password recovery/rotation, account/session revocation and centralized rate limiting.
+- [ ] MFA for privileged users, email-based self-service password recovery and centralized rate limiting. (Done in V8: administrator password reset with forced change, self-service change, account deactivation and session revocation.)
 - [ ] Configurable company/plant/warehouse permissions with denial tests at every read/write boundary; database RLS or documented equivalent defense.
 - [ ] Full role/field access policy; current operational read model includes costs for tenant members.
 - [ ] Server cursor pagination, background reports/exports, query plans and load evidence on realistic ledger volume.

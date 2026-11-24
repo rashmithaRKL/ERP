@@ -13,6 +13,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import lk.dexlanka.erp.admin.ApprovalPolicyService;
 import lk.dexlanka.erp.platform.Actor;
 import lk.dexlanka.erp.platform.Store;
 import org.springframework.http.HttpStatus;
@@ -34,10 +35,12 @@ public class InventoryQuery {
 
     private final Store s;
     private final InventoryRules rules;
+    private final ApprovalPolicyService policies;
 
-    InventoryQuery(Store s, InventoryRules rules) {
+    InventoryQuery(Store s, InventoryRules rules, ApprovalPolicyService policies) {
         this.s = s;
         this.rules = rules;
+        this.policies = policies;
     }
 
     // ------------------------------------------------------------------ warehouses and settings
@@ -66,19 +69,19 @@ public class InventoryQuery {
         return Map.of("items", items);
     }
 
+    /**
+     * The adjustment approval rule, read from the tenant's {@code STOCK_ADJUSTMENT} approval policy. {@code
+     * approvalThreshold} is 0 when the policy has no threshold (every adjustment with a value needs approval); {@code
+     * approvalRequired} and {@code approverRoles} (V8) describe the rest of the policy.
+     */
     public Map<String, Object> settings(Actor a) {
-        var rows = s.list("""
-                SELECT st.approval_threshold,st.updated_at,u.name AS updated_by
-                FROM inventory_settings st LEFT JOIN users u ON u.id=st.updated_by
-                WHERE st.tenant_id=?""", a.tenant());
+        var policy = policies.policy(a.tenant(), ApprovalPolicyService.STOCK_ADJUSTMENT);
         var result = new LinkedHashMap<String, Object>();
-        result.put(
-                "approvalThreshold",
-                rows.isEmpty()
-                        ? InventoryRules.DEFAULT_THRESHOLD
-                        : rows.getFirst().get("approval_threshold"));
-        result.put("updatedAt", rows.isEmpty() ? null : rows.getFirst().get("updated_at"));
-        result.put("updatedBy", rows.isEmpty() ? null : rows.getFirst().get("updated_by"));
+        result.put("approvalThreshold", policy.amountThreshold() == null ? BigDecimal.ZERO : policy.amountThreshold());
+        result.put("updatedAt", policy.updatedAt());
+        result.put("updatedBy", policy.updatedBy());
+        result.put("approvalRequired", policy.approvalRequired());
+        result.put("approverRoles", policy.approverRoles());
         return result;
     }
 

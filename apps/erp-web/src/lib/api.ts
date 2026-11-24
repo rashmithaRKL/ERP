@@ -24,7 +24,6 @@ export type State = {
   mrp: Row[];
   trend: { day: string; completed: number; scrap: number }[];
   metrics: Row;
-  audit: Row[];
   sync: Row;
   financial?: Row;
   journal?: Row[];
@@ -48,7 +47,19 @@ export type BomCost = {
   source_revision: string | null;
   semi_finished: number;
 };
-export type User = { id: string; name: string; email: string; role: string; tenant: Row };
+export type User = {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+  tenant: Row;
+  /** Set after an administrator password reset (and for new accounts): the app shows the forced change screen. */
+  mustChangePassword?: boolean;
+  lastLoginAt?: string | null;
+  passwordChangedAt?: string | null;
+};
+/** Window event fired by `request` when the server signed this session out or requires a password change. */
+export const SESSION_CHANGED = 'dex:session-changed';
 let csrf: { token: string; headerName: string } | undefined;
 export async function token() {
   const res = await fetch('/api/auth/csrf', { credentials: 'same-origin' });
@@ -72,6 +83,10 @@ export async function request<T>(url: string, body?: unknown, key?: string): Pro
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
+    // The server ended this session (deactivated account, password changed or reset elsewhere) or wants a new
+    // password first: let the app shell re-check the session instead of showing errors on every request.
+    if ((res.status === 401 && !url.startsWith('/auth/')) || err.code === 'PASSWORD_CHANGE_REQUIRED')
+      window.dispatchEvent(new Event(SESSION_CHANGED));
     throw new Error(err.message || err.detail || `Request failed (${res.status})`);
   }
   return res.status === 204 ? (undefined as T) : res.json();

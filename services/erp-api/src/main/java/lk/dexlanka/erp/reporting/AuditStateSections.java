@@ -5,7 +5,10 @@ import java.util.Map;
 import lk.dexlanka.erp.platform.Store;
 import org.springframework.stereotype.Component;
 
-/** Latest audit events and the (always local-only) outbox synchronization status. */
+/**
+ * The (always local-only) outbox synchronization status. The audit trail itself is no longer part of the snapshot
+ * (V8): administrators read it server-paged from {@code GET /api/admin/audit}.
+ */
 @Component
 class AuditStateSections implements StateContributor {
     private final Store s;
@@ -16,11 +19,7 @@ class AuditStateSections implements StateContributor {
 
     @Override
     public List<StateSection> sections() {
-        return List.of(StateSection.of("audit", 290, this::audit), StateSection.of("sync", 300, this::sync));
-    }
-
-    private List<Map<String, Object>> audit(StateRequest r) {
-        return s.list("SELECT * FROM audit_events WHERE tenant_id=? ORDER BY created_at DESC,id LIMIT 100", r.tenant());
+        return List.of(StateSection.of("sync", 300, this::sync));
     }
 
     private Map<String, Object> sync(StateRequest r) {

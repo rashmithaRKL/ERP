@@ -1,23 +1,28 @@
 package lk.dexlanka.erp.inventory;
 
 import java.util.Map;
+import lk.dexlanka.erp.admin.ApprovalPolicyService;
 import lk.dexlanka.erp.platform.Actor;
 import lk.dexlanka.erp.platform.Store;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Stock adjustments (DRAFT → POSTED, or → APPROVAL_REQUIRED → POSTED when above the tenant threshold; CANCELLED) and
- * the approval threshold setting. Posting rules live in {@link AdjustmentPosting}, shared with cycle counts.
+ * Stock adjustments (DRAFT → POSTED, or → APPROVAL_REQUIRED → POSTED when the approval policy asks for a second person;
+ * CANCELLED) and the approval threshold setting. Posting rules live in {@link AdjustmentPosting}, shared with cycle
+ * counts. Who may approve, and above which value, is the tenant's {@code STOCK_ADJUSTMENT} policy in {@link
+ * ApprovalPolicyService} (V8; it replaced V5's {@code inventory_settings}).
  */
 @Service
 public class AdjustmentService {
     private final Store s;
     private final AdjustmentPosting posting;
+    private final ApprovalPolicyService policies;
 
-    AdjustmentService(Store s, AdjustmentPosting posting) {
+    AdjustmentService(Store s, AdjustmentPosting posting, ApprovalPolicyService policies) {
         this.s = s;
         this.posting = posting;
+        this.policies = policies;
     }
 
     @Transactional
@@ -29,16 +34,17 @@ public class AdjustmentService {
         });
     }
 
-    /** Posts a draft, or moves it to APPROVAL_REQUIRED when its gross value exceeds the threshold. */
+    /** Posts a draft, or moves it to APPROVAL_REQUIRED when the approval policy requires a second person. */
     @Transactional
     public Map<String, Object> post(Actor a, String id, String key) {
         a.allow("WAREHOUSE", "PLANNER");
         return s.once(a, key, "post-adjustment:" + id, Map.of(), () -> posting.submit(a, id));
     }
 
+    /** The approver needs one of the policy's approver roles (default WAREHOUSE, PLANNER; ADMIN always). */
     @Transactional
     public Map<String, Object> approve(Actor a, String id, String key) {
-        a.allow("WAREHOUSE", "PLANNER");
+        policies.requireApproverRole(a, ApprovalPolicyService.STOCK_ADJUSTMENT);
         return s.once(a, key, "approve-adjustment:" + id, Map.of(), () -> posting.approve(a, id));
     }
 
@@ -48,15 +54,15 @@ public class AdjustmentService {
         return s.once(a, key, "cancel-adjustment:" + id, Map.of(), () -> posting.cancel(a, id));
     }
 
-    /** ADMIN only: the gross adjustment value above which a second person must approve. */
+    /**
+     * ADMIN only: the gross adjustment value above which a second person must approve. Writes the threshold of the
+     * {@code STOCK_ADJUSTMENT} approval policy (its other settings are kept).
+     */
     @Transactional
     public Map<String, Object> settings(Actor a, InventoryCommands.Settings c, String key) {
         a.allow();
         return s.once(a, key, "inventory-settings", c, () -> {
-            s.db().update("""
-                            INSERT INTO inventory_settings(tenant_id,approval_threshold,updated_by,updated_at) VALUES(?,?,?,now())
-                            ON CONFLICT (tenant_id) DO UPDATE
-                            SET approval_threshold=EXCLUDED.approval_threshold,updated_by=EXCLUDED.updated_by,updated_at=now()""", a.tenant(), c.approvalThreshold(), a.id());
+            policies.setThreshold(a, ApprovalPolicyService.STOCK_ADJUSTMENT, c.approvalThreshold());
             s.audit(
                     a,
                     "INVENTORY_SETTINGS_UPDATED",

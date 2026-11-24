@@ -26,8 +26,12 @@ npm run dev
 
 - Shared Figma-style motion: spring navigation, page/card reveals, filter indicators, dialog/drawer exits, progress and BOM row transitions, plus saved reduced-motion preferences. See [the motion guide](docs/architecture/MOTION.md).
 - Responsive dashboard, light/dark themes, keyboard search (`⌘/Ctrl+K`), favorites, attention center, table search, sorting and pagination, CSV export.
-- Session authentication, bcrypt passwords, CSRF protection, rate-limited login, backend action permissions, tenant-scoped lookups and composite foreign keys.
+- Session authentication, bcrypt passwords, CSRF protection, rate-limited login, backend action permissions, tenant-scoped lookups and composite foreign keys. Sessions are revalidated on every request: deactivating a user or resetting/changing a password signs out existing sessions, and a role change applies on the user's next request.
 - Organization configuration, team account creation, product master, explicit base units, work-center registration.
+- User administration (**Administration → Users**): server-paged directory with search/role/status filters and last sign-in, name/role edits, deactivate/reactivate, one-time temporary passwords with a forced change screen, and protection of the last active administrator. Everyone can change their own password from the profile menu; new accounts choose their own password at first sign-in.
+- Approval policies per document type (required, amount threshold, approver roles; nobody approves their own document): in effect for stock adjustments and count variances (defaults identical to before; the existing threshold was migrated), stored for manufacturing and purchase orders and applied from the integration release.
+- CSV imports of items, customers/suppliers and opening stock with downloadable templates, a dry run that reports row-level errors and previews what will be created, and a one-transaction commit; re-uploading the same file creates nothing. Opening stock posts lots, ledger receipts and balanced journals against opening equity.
+- Server-paged audit trail with actor/action/text/date filters and an audited CSV export; accounting-period close and reopen (with an audited reason) on top of the existing posting guard.
 - Customer and supplier management: contacts, billing/shipping addresses, tax ID, payment terms, customer credit limits, audited edits and deactivation (inactive partners cannot be used on new sales or purchase orders). Server-paged directories with search.
 - Multi-line sales orders: draft (editable header and lines with discounts and totals) → confirmation (credit-limit warning) → per-line partial/full dispatch → delivered; cancellation before delivery and close-short with a reason. Server-paged order list and a detail drawer with deliveries, returns, linked production and activity.
 - Customer returns against a delivery: quarantine lot at the delivered cost, compensating revenue/receivable and COGS journals, and a `RETURN` inspection that Quality control passes (restock) or fails (held).
@@ -43,7 +47,7 @@ npm run dev
 - Manufacturing approval → reservation → issue to WIP → release → start/pause/resume → partial/final output → final quality release → completion → close.
 - Lot-specific finished-goods dispatch per sales-order line (one or more released lots per dispatch) with quality gates and partial delivery support. Each delivery posts sales revenue, receivables and cost of goods sold.
 - FIFO material allocation, atomic reservations, immutable quantity/value ledger, nonnegative balance constraints, idempotent mutations and transactional audit/outbox records.
-- Inventory operations: warehouse management (code, kind, active flag; stocked warehouses cannot be deactivated), multi-line stock adjustments with reason codes and found-stock lots, a tenant approval threshold above which a different person must approve, and balanced inventory/adjustment journals.
+- Inventory operations: warehouse management (code, kind, active flag; stocked warehouses cannot be deactivated), multi-line stock adjustments with reason codes and found-stock lots, an approval policy (default: above Rs. 50,000) under which a different person must approve, and balanced inventory/adjustment journals.
 - Warehouse transfers that preserve item, quality status, unit cost and FIFO age (a quarantined lot stays quarantined and follows its original inspection), with source-lot traceability and no reserved stock moved.
 - Cycle counts: per-lot snapshot, blind counting on a touch-friendly sheet, variance review against the quantity at posting time (with moved-stock warnings) and posting through the same adjustment approval rule; one open count per lot.
 - Decimal-safe costing. Raw material + conversion cost reconciles to remaining WIP + finished output + scrap expense. Partial lot depletion preserves monetary rounding residuals.
@@ -73,7 +77,7 @@ Database tests launch an isolated real PostgreSQL process; Docker is not require
 
 A Docker Compose configuration includes PostgreSQL, the API, a built web app and Caddy HTTPS. It intentionally publishes **only** HTTP/HTTPS ports. Supply unique credentials and a valid DNS hostname in your secret manager or an ignored `.env`; see `.env.example` and [deployment instructions](docs/deployment/OPERATIONS.md). This Docker configuration requires validation on the target host before use; Docker was unavailable in the build environment.
 
-Production uses an external database and disables the demo login. First startup requires `BOOTSTRAP_EMAIL` and a unique `BOOTSTRAP_PASSWORD` of at least 16 characters. Create a second authorized user for independent approvals. Production is initially empty: configure the organization, create items, customers/suppliers, work centers and BOMs, then procure and quality-release starting materials.
+Production uses an external database and disables the demo login. First startup requires `BOOTSTRAP_EMAIL` and a unique `BOOTSTRAP_PASSWORD` of at least 16 characters. Create a second authorized user for independent approvals. Production is initially empty: configure the organization, then create items, customers/suppliers and opening stock by hand or with **Administration → Imports**, register work centers and BOMs, and procure and quality-release further materials.
 
 ## Project map
 

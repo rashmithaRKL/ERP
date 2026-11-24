@@ -19,6 +19,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
+import lk.dexlanka.erp.admin.ApprovalPolicyService;
 import lk.dexlanka.erp.platform.Actor;
 import lk.dexlanka.erp.platform.Store;
 import org.springframework.stereotype.Component;
@@ -27,9 +28,9 @@ import org.springframework.stereotype.Component;
  * The single posting path for stock adjustments, used by manual adjustments and by cycle-count variances. Not
  * {@code @Transactional}: callers are {@code @Transactional} commands that already hold the tenant lock.
  *
- * <p>Lifecycle: {@code DRAFT} → {@link #submit} → {@code POSTED}, or {@code APPROVAL_REQUIRED} when the gross absolute
- * value (increases + decreases) exceeds the tenant threshold → {@link #approve} by a different person → {@code
- * POSTED}. Each line posts one ledger entry valued like {@code Store.ledger} (decreases at the balance's average value,
+ * <p>Lifecycle: {@code DRAFT} → {@link #submit} → {@code POSTED}, or {@code APPROVAL_REQUIRED} when the tenant's
+ * {@code STOCK_ADJUSTMENT} approval policy ({@link ApprovalPolicyService}; default: gross absolute value, increases +
+ * decreases, above Rs. 50,000) asks for a second person → {@link #approve} by a different person → {@code POSTED}. Each line posts one ledger entry valued like {@code Store.ledger} (decreases at the balance's average value,
  * a full depletion at the exact remaining value), and the document posts one balanced journal entry per inventory
  * account and direction against {@value InventoryRules#ADJUSTMENT_ACCOUNT}.
  */
@@ -45,10 +46,12 @@ class AdjustmentPosting {
 
     private final Store s;
     private final InventoryRules rules;
+    private final ApprovalPolicyService policies;
 
-    AdjustmentPosting(Store s, InventoryRules rules) {
+    AdjustmentPosting(Store s, InventoryRules rules, ApprovalPolicyService policies) {
         this.s = s;
         this.rules = rules;
+        this.policies = policies;
     }
 
     /** Validates and stores a {@code DRAFT} adjustment; returns its id. */
@@ -145,9 +148,11 @@ class AdjustmentPosting {
         var adjustment = header(a, id);
         require(adjustment.get("status").equals("DRAFT"), "Only draft adjustments can be posted");
         var value = valuate(a, id);
-        BigDecimal threshold = rules.threshold(a);
+        var decision = policies.evaluate(
+                a.tenant(), ApprovalPolicyService.STOCK_ADJUSTMENT, value.gross(), str(adjustment, "created_by"));
+        BigDecimal threshold = decision.threshold();
         String number = str(adjustment, "number");
-        if (value.gross().compareTo(threshold) > 0) {
+        if (decision.approvalRequired()) {
             s.db().update(
                             "UPDATE stock_adjustments SET status='APPROVAL_REQUIRED',submitted_by=?,submitted_at=now(),approval_threshold=?,value_increase=?,value_decrease=? WHERE tenant_id=? AND id=?",
                             a.id(),
@@ -160,8 +165,11 @@ class AdjustmentPosting {
                     a,
                     "ADJUSTMENT_APPROVAL_REQUESTED",
                     number,
-                    "Gross value Rs. " + money(value.gross()).toPlainString() + " exceeds the Rs. "
-                            + money(threshold).toPlainString() + " approval threshold");
+                    threshold == null
+                            ? "Gross value Rs. " + money(value.gross()).toPlainString()
+                                    + "; the approval policy requires a second person for every adjustment"
+                            : "Gross value Rs. " + money(value.gross()).toPlainString() + " exceeds the Rs. "
+                                    + money(threshold).toPlainString() + " approval threshold");
             return result(a, id);
         }
         s.db().update(

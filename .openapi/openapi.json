@@ -722,7 +722,7 @@
     },
     "/users": {
       "post": {
-        "summary": "Create authorized user",
+        "summary": "Create a tenant account (ADMIN); it must choose its own password at the first sign-in",
         "parameters": [
           {
             "$ref": "#/components/parameters/IdempotencyKey"
@@ -964,7 +964,7 @@
         "summary": "Authenticated user and organization",
         "responses": {
           "200": {
-            "description": "Current principal"
+            "description": "Current principal and organization, with mustChangePassword, lastLoginAt and passwordChangedAt"
           },
           "401": {
             "description": "No session"
@@ -2492,7 +2492,7 @@
     },
     "/inventory/settings": {
       "get": {
-        "summary": "Adjustment approval threshold",
+        "summary": "Adjustment approval threshold (the STOCK_ADJUSTMENT approval policy; also approvalRequired, approverRoles)",
         "parameters": [],
         "responses": {
           "200": {
@@ -4612,6 +4612,749 @@
           }
         }
       }
+    },
+    "/auth/password": {
+      "post": {
+        "summary": "Change the signed-in user's password (any role); signs out the user's other sessions",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChangePassword"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "`{status: CHANGED}`; this session continues under a new session id"
+          },
+          "400": {
+            "description": "Invalid input (new password 16-128 characters)"
+          },
+          "401": {
+            "description": "No session"
+          },
+          "409": {
+            "description": "Current password incorrect, password equals the email or the current password"
+          }
+        }
+      }
+    },
+    "/admin/users": {
+      "get": {
+        "summary": "Users of the tenant, server-paged by name (ADMIN)",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "description": "Name or email contains",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "role",
+            "in": "query",
+            "required": false,
+            "description": "Exact role",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "description": "ACTIVE or INACTIVE",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Page size 1-200 (default 50)",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200,
+              "default": 50
+            }
+          },
+          {
+            "name": "before",
+            "in": "query",
+            "required": false,
+            "description": "Cursor: the `next` value of the previous page",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "`{items, next, summary}`"
+          },
+          "403": {
+            "description": "ADMIN only"
+          }
+        }
+      }
+    },
+    "/admin/users/{id}": {
+      "post": {
+        "summary": "Edit a user's name and role (ADMIN); applies to the user's next request",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "User id",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UserUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Committed result; retry with same key returns prior result"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Role/CSRF denied, or password change required"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "Business rule, last-administrator or idempotency conflict"
+          }
+        }
+      }
+    },
+    "/admin/users/{id}/deactivate": {
+      "post": {
+        "summary": "Deactivate a user: sign-in blocked, open sessions end (ADMIN)",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "User id",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Committed result; retry with same key returns prior result"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Role/CSRF denied, or password change required"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "Business rule, last-administrator or idempotency conflict"
+          }
+        }
+      }
+    },
+    "/admin/users/{id}/reactivate": {
+      "post": {
+        "summary": "Reactivate a user (ADMIN)",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "User id",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Committed result; retry with same key returns prior result"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Role/CSRF denied, or password change required"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "Business rule, last-administrator or idempotency conflict"
+          }
+        }
+      }
+    },
+    "/admin/users/{id}/reset-password": {
+      "post": {
+        "summary": "Issue a one-time temporary password (ADMIN); the user must change it at the next sign-in",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "User id",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The user row plus `temporaryPassword`, shown once (null on an idempotent replay; never stored in clear text)"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Role/CSRF denied, or password change required"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "Business rule, last-administrator or idempotency conflict"
+          }
+        }
+      }
+    },
+    "/admin/approval-policies": {
+      "get": {
+        "summary": "Approval policy per document type (ADMIN)",
+        "responses": {
+          "200": {
+            "description": "`{items}`, one `ApprovalPolicyView` per document type"
+          },
+          "403": {
+            "description": "ADMIN only"
+          }
+        }
+      }
+    },
+    "/admin/approval-policies/{documentType}": {
+      "post": {
+        "summary": "Replace a document type's approval policy (ADMIN)",
+        "parameters": [
+          {
+            "name": "documentType",
+            "in": "path",
+            "required": true,
+            "description": "MANUFACTURING_ORDER, PURCHASE_ORDER or STOCK_ADJUSTMENT",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApprovalPolicy"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Committed result; retry with same key returns prior result"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Role/CSRF denied, or password change required"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "Business rule, last-administrator or idempotency conflict"
+          }
+        }
+      }
+    },
+    "/admin/imports": {
+      "get": {
+        "summary": "Committed CSV import batches, newest first (ADMIN)",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Page size 1-200 (default 50)",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200,
+              "default": 50
+            }
+          },
+          {
+            "name": "before",
+            "in": "query",
+            "required": false,
+            "description": "Cursor: the `next` value of the previous page",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "JSON object; lists are `{items, next}` (keyset pagination)"
+          },
+          "403": {
+            "description": "ADMIN only"
+          }
+        }
+      }
+    },
+    "/admin/imports/{kind}/validate": {
+      "post": {
+        "summary": "Dry run of a CSV import: row-level errors and a preview, nothing is kept (ADMIN)",
+        "parameters": [
+          {
+            "name": "kind",
+            "in": "path",
+            "required": true,
+            "description": "items, partners or opening-stock",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImportFile"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "`{rows, validRows, valid, errors:[{row, column, message}], preview, summary, alreadyImported}`; file-level problems are reported as errors without a row"
+          },
+          "400": {
+            "description": "Invalid input (empty, more than 2,000,000 characters)"
+          },
+          "403": {
+            "description": "ADMIN only"
+          },
+          "404": {
+            "description": "Unknown import type"
+          }
+        }
+      }
+    },
+    "/admin/imports/{kind}/commit": {
+      "post": {
+        "summary": "Import a CSV file in one transaction (ADMIN); idempotent per file content",
+        "parameters": [
+          {
+            "name": "kind",
+            "in": "path",
+            "required": true,
+            "description": "items, partners or opening-stock",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImportFile"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The import batch; `duplicate: true` when this content was imported before"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Role/CSRF denied, or password change required"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "A row is invalid (first error in detail), closed period or idempotency conflict"
+          }
+        }
+      }
+    },
+    "/admin/imports/{kind}/template": {
+      "get": {
+        "summary": "CSV template with example rows (ADMIN)",
+        "parameters": [
+          {
+            "name": "kind",
+            "in": "path",
+            "required": true,
+            "description": "items, partners or opening-stock",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "text/csv attachment",
+            "content": {
+              "text/csv": {}
+            }
+          },
+          "403": {
+            "description": "ADMIN only"
+          }
+        }
+      }
+    },
+    "/admin/audit": {
+      "get": {
+        "summary": "Audit trail, newest first, server-paged (ADMIN)",
+        "parameters": [
+          {
+            "name": "actor",
+            "in": "query",
+            "required": false,
+            "description": "Exact actor name (see /admin/audit/facets)",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "action",
+            "in": "query",
+            "required": false,
+            "description": "Exact action code, e.g. PO_APPROVED",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "description": "Text in the reference (document number, email...) or detail; case-insensitive",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "description": "First Asia/Colombo calendar day, yyyy-MM-dd",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "description": "Last Asia/Colombo calendar day, yyyy-MM-dd (inclusive)",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Page size 1-200 (default 50)",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200,
+              "default": 50
+            }
+          },
+          {
+            "name": "before",
+            "in": "query",
+            "required": false,
+            "description": "Cursor: the `next` value of the previous page",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "JSON object; lists are `{items, next}` (keyset pagination)"
+          },
+          "400": {
+            "description": "Invalid date"
+          },
+          "403": {
+            "description": "ADMIN only"
+          },
+          "409": {
+            "description": "to before from"
+          }
+        }
+      }
+    },
+    "/admin/audit/facets": {
+      "get": {
+        "summary": "Distinct actors and action codes of the audit trail (ADMIN)",
+        "responses": {
+          "200": {
+            "description": "`{actors, actions}`"
+          },
+          "403": {
+            "description": "ADMIN only"
+          }
+        }
+      }
+    },
+    "/admin/audit/export": {
+      "get": {
+        "summary": "Streamed CSV export of the filtered audit trail, at most 50,000 rows (ADMIN; audited)",
+        "parameters": [
+          {
+            "name": "actor",
+            "in": "query",
+            "required": false,
+            "description": "Exact actor name (see /admin/audit/facets)",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "action",
+            "in": "query",
+            "required": false,
+            "description": "Exact action code, e.g. PO_APPROVED",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "description": "Text in the reference (document number, email...) or detail; case-insensitive",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "description": "First Asia/Colombo calendar day, yyyy-MM-dd",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "description": "Last Asia/Colombo calendar day, yyyy-MM-dd (inclusive)",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "text/csv attachment; header `X-Export-Truncated` is true when the filter matched more rows",
+            "content": {
+              "text/csv": {}
+            }
+          },
+          "403": {
+            "description": "ADMIN only"
+          }
+        }
+      }
+    },
+    "/admin/periods": {
+      "get": {
+        "summary": "Accounting periods with posting status (ADMIN)",
+        "responses": {
+          "200": {
+            "description": "`{items, today, latestClosed, postingBlocked}`"
+          },
+          "403": {
+            "description": "ADMIN only"
+          }
+        }
+      }
+    },
+    "/admin/periods/close": {
+      "post": {
+        "summary": "Close the period ending on endDate (ADMIN); in date order, never after today",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ClosePeriod"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Committed result; retry with same key returns prior result"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Role/CSRF denied, or password change required"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "Business rule, last-administrator or idempotency conflict"
+          }
+        }
+      }
+    },
+    "/admin/periods/reopen": {
+      "post": {
+        "summary": "Reopen the most recently closed period with a reason (ADMIN; audited)",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReopenPeriod"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Committed result; retry with same key returns prior result"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Role/CSRF denied, or password change required"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "Business rule, last-administrator or idempotency conflict"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -6645,6 +7388,181 @@
               "type": "string"
             },
             "description": "Limit to these semi-finished materials"
+          }
+        }
+      },
+      "ChangePassword": {
+        "type": "object",
+        "required": [
+          "currentPassword",
+          "newPassword"
+        ],
+        "properties": {
+          "currentPassword": {
+            "type": "string",
+            "format": "password",
+            "maxLength": 128,
+            "writeOnly": true
+          },
+          "newPassword": {
+            "type": "string",
+            "format": "password",
+            "minLength": 16,
+            "maxLength": 128,
+            "writeOnly": true
+          }
+        }
+      },
+      "UserUpdate": {
+        "type": "object",
+        "required": [
+          "name",
+          "role"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 160
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "ADMIN",
+              "PLANNER",
+              "WAREHOUSE",
+              "OPERATOR",
+              "QUALITY",
+              "SALES",
+              "VIEWER"
+            ]
+          }
+        }
+      },
+      "ApprovalPolicy": {
+        "type": "object",
+        "required": [
+          "approvalRequired",
+          "approverRoles"
+        ],
+        "properties": {
+          "approvalRequired": {
+            "type": "boolean"
+          },
+          "amountThreshold": {
+            "type": "string",
+            "nullable": true,
+            "description": "Decimal >= 0 (2 decimals); null = every document needs approval"
+          },
+          "approverRoles": {
+            "type": "array",
+            "maxItems": 5,
+            "items": {
+              "type": "string",
+              "enum": [
+                "PLANNER",
+                "WAREHOUSE",
+                "QUALITY",
+                "SALES",
+                "OPERATOR"
+              ]
+            },
+            "description": "Roles besides ADMIN (always allowed) that may approve; the creator never may"
+          }
+        }
+      },
+      "ApprovalPolicyView": {
+        "type": "object",
+        "properties": {
+          "documentType": {
+            "type": "string",
+            "enum": [
+              "MANUFACTURING_ORDER",
+              "PURCHASE_ORDER",
+              "STOCK_ADJUSTMENT"
+            ]
+          },
+          "approvalRequired": {
+            "type": "boolean"
+          },
+          "amountThreshold": {
+            "type": "number",
+            "nullable": true
+          },
+          "approverRoles": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "PLANNER",
+                "WAREHOUSE",
+                "QUALITY",
+                "SALES",
+                "OPERATOR"
+              ]
+            }
+          },
+          "customized": {
+            "type": "boolean",
+            "description": "false while the built-in default applies"
+          },
+          "wired": {
+            "type": "boolean",
+            "description": "true when the policy is enforced in this release"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "updatedBy": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "ImportFile": {
+        "type": "object",
+        "required": [
+          "fileName",
+          "content"
+        ],
+        "properties": {
+          "fileName": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "content": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000000,
+            "description": "CSV text (UTF-8, optional BOM), header row first, at most 2,000 data rows"
+          }
+        }
+      },
+      "ClosePeriod": {
+        "type": "object",
+        "required": [
+          "endDate"
+        ],
+        "properties": {
+          "endDate": {
+            "type": "string",
+            "format": "date"
+          }
+        }
+      },
+      "ReopenPeriod": {
+        "type": "object",
+        "required": [
+          "reason"
+        ],
+        "properties": {
+          "reason": {
+            "type": "string",
+            "minLength": 10,
+            "maxLength": 400
           }
         }
       }

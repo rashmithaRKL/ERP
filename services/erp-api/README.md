@@ -26,7 +26,7 @@ run by `target/surefire-reports/*.xml`.
 | Package | Owns |
 |---|---|
 | `lk.dexlanka.erp` | `ErpApplication` only (component scan root) |
-| `platform` | `Store` (posting primitives), `Actor` (identity + role checks), `ErpUser`, `SecurityConfig`, `LoginRateLimit`, `AuthController` (`/api/health`, `/api/auth/*`), `ApiErrors` (the single `@RestControllerAdvice`) |
+| `platform` | `Store` (posting primitives), `Actor` (identity + role checks), `ErpUser` (principal with its session version), `SecurityConfig`, `LoginRateLimit`, `SessionGuard` (per-request revocation, role refresh, forced password change), `Passwords` (the password rule, temporary passwords), `PasswordService` + `AccountCommands` (self-service change), `AuthController` (`/api/health`, `/api/auth/*`), `ApiErrors` (the single `@RestControllerAdvice`) |
 | `catalog` | Organization, user accounts, partners (maintenance and directory in `Partner*` files), items, work centers (machines), BOM revisions; item master (V4: `ItemService`, `UnitService` conversion service, `CategoryService`, `VariantService`, `ItemQuery`); multi-level BOMs (V7: `BomGraph` structure + roll-up, `BomService` copy/edit-draft + approval rules called from `CatalogService.approveBom`, `BomQuery` explosion/where-used/compare/cost, `BomStateSections`) |
 | `procurement` | Multi-line purchase orders in purchase units (`PurchaseOrderService`: draft/submit/independent approval/cancel/close short, drafts from MRP shortages), goods receipts per line (`ReceivingService`), supplier invoices with quantity/price variances (`SupplierInvoiceService`), supplier returns (`SupplierReturnService`), the read model (`ProcurementQuery`), open MRP supply (`ProcurementSupply`), shared rules (`PurchaseRules`) and the original single-item contract (`ProcurementService`) |
 | `quality` | Incoming and final inspections (including the supplier return of a failed incoming lot and MO completion after the last final release) |
@@ -34,6 +34,7 @@ run by `target/surefire-reports/*.xml`.
 | `manufacturing` | Manufacturing-order lifecycle: snapshot, approval, reservation, issue, start/pause/resume, output, close/cancel; parent/child orders (V7: `ChildPlanning` shortages, `OrderTreeService` child orders, `OrderTreeQuery` order tree) |
 | `reporting` | `GET /api/state` (`StateQuery` + the `StateContributor` contract), `GET /api/manufacturing/{id}` (`OrderDetailsQuery`), cross-domain sections: inventory (lots, ledger), MRP, dashboard, audit/sync, finance; multi-level MRP (V7: `MrpPlanner` engine, `PlanningStateSections` with the isolated `incomingPurchaseSupply(tenant)` query, `PlanningQuery`) |
 | `demo` | `DemoDatabase` (embedded PostgreSQL for the `demo`/`test` profiles), `DemoSeed` (demo tenant, or first-start bootstrap tenant outside demo), `DemoPersonas` |
+| `admin` | V8 administration (ADMIN only): `UserAdminService` + `UserQuery` (edit, deactivate/reactivate, temporary passwords, directory), `ApprovalPolicyService` (public `evaluate(tenant, documentType, amount, creatorId)` → `Decision`, used by `inventory` for stock adjustments), `ImportService` with `ImportKind`s `ItemImport`, `PartnerImport`, `OpeningStockImport` and the `CsvFile` reader, `AuditQuery` (paged trail, facets, streamed CSV export), `PeriodService` (close/reopen accounting periods), `AdminController` |
 
 A domain package contains, by convention:
 
@@ -49,13 +50,17 @@ A domain package contains, by convention:
 Dependency direction: domain packages → `platform` and `reporting` (contract only); `reporting` → `platform`;
 `demo` → domain services. Domains never call each other's services; cross-domain effects are SQL on the shared,
 tenant-scoped schema inside the same transaction (for example, `quality` completes a manufacturing order).
+Two deliberate exceptions: `admin` imports call the public `catalog.ItemService` / `catalog.CatalogService#partner`
+commands (joining the import's transaction), and domains that require approvals ask `admin.ApprovalPolicyService`
+(non-transactional reads inside the caller's transaction; today `inventory` for stock adjustments).
 Make a class or method `public` only when another package (or a test in another package) needs it.
 
 Route ownership:
 
 | Controller | Routes under `/api` |
 |---|---|
-| `platform.AuthController` | `GET /health`, `GET /auth/config`, `GET /auth/csrf`, `GET /auth/me`, `POST /auth/demo` (`/auth/login`, `/auth/logout` are Spring Security filters) |
+| `platform.AuthController` | `GET /health`, `GET /auth/config`, `GET /auth/csrf`, `GET /auth/me`, `POST /auth/password`, `POST /auth/demo` (`/auth/login`, `/auth/logout` are Spring Security filters) |
+| `admin.AdminController` | `GET /admin/users`, `/admin/approval-policies`, `/admin/imports`, `/admin/imports/{kind}/template`, `/admin/audit`, `/admin/audit/facets`, `/admin/audit/export`, `/admin/periods`; `POST /admin/users/{id}`, `/admin/users/{id}/deactivate`, `/reactivate`, `/reset-password`, `/admin/approval-policies/{documentType}`, `/admin/imports/{kind}/validate`, `/admin/imports/{kind}/commit`, `/admin/periods/close`, `/admin/periods/reopen` |
 | `catalog.CatalogController` | `POST /users`, `/organization`, `/partners`, `/machines`, `/items`, `/boms`, `/boms/{id}/approve` |
 | `catalog.PartnerController` | `GET /partners`, `GET /partners/{id}`, `POST /partners/{id}` |
 | `catalog.ItemMasterController` | `GET /items`, `/items/{id}`, `/items/{id}/movements`, `/items/{id}/units`, `/items/{id}/convert`, `/items/by-barcode`, `/units`, `/item-categories`, `/item-templates`, `/item-templates/{id}`; `POST /items/{id}`, `/items/{id}/deactivate`, `/items/{id}/activate`, `/items/{id}/conversions`, `/items/{id}/conversions/{unit}/remove`, `/items/{id}/barcodes`, `/items/{id}/barcodes/{barcodeId}/remove`, `/units`, `/units/{code}`, `/item-categories`, `/item-categories/{id}`, `/item-templates`, `/item-templates/{id}`, `/item-templates/{id}/variants` |
@@ -261,7 +266,7 @@ annotate contributors with `@Transactional`. Existing keys, in order:
 | 250 | `ledger` | reporting (inventory) |
 | 260 | `mrp` | reporting (planning) |
 | 270–280 | `trend`, `metrics` | reporting (dashboard) |
-| 290–300 | `audit`, `sync` | reporting (audit) |
+| 300 | `sync` (the `audit` key at 290 was removed in V8; use `GET /api/admin/audit`) | reporting (audit) |
 | 310–320 | `financial`, `journal` (ADMIN, PLANNER) | reporting (finance) |
 | 1300 | `salesLines` (open lines of confirmed orders, for planning) | sales |
 | 1700 | `bomCosts` (multi-level standard-cost roll-up per revision; V7) | catalog |
@@ -302,11 +307,16 @@ The database, not the Java code, is the last line of defence:
 | `tenant_default_units` (V4) | `AFTER INSERT ON tenants`: seeds the standard units of measure for every new tenant (`seed_default_units`). Items reference `units(tenant_id, code)`. |
 | `item_identity_guard` (V4) | `BEFORE UPDATE ON items`: the base unit cannot change once stock-ledger rows exist, and SKU/base unit/type cannot change once `item_is_referenced()` finds any row of any table with a foreign key to `items` (new document tables are covered automatically). |
 | `mo_parent_immutable` (V7) | `BEFORE UPDATE OF parent_order_id ON manufacturing_orders`: a child order's parent link never changes (SQLSTATE 23514 → 409), so links always point at older orders and cannot form cycles. BOM cycles and missing sub-BOMs are approval rules in `BomService.checkApprovable`, not triggers. |
+| `users_keep_an_active_admin` (V8) | `BEFORE UPDATE OF role, active ON users`: the last active ADMIN of a tenant cannot be demoted or deactivated (*"A workspace needs at least one active administrator"*). |
+| `import_batches_immutable` (V8) | Committed CSV import batches cannot be changed or deleted (`reject_history_mutation()`). |
 
 A new table of posted history gets the same protection by reusing the function:
 `CREATE TRIGGER <table>_immutable BEFORE UPDATE OR DELETE ON <table> FOR EACH ROW EXECUTE FUNCTION reject_history_mutation();`.
-Trigger exceptions and constraint violations surface as `DataIntegrityViolationException` → HTTP 409
-*"This transaction violates a record, quantity or accounting constraint…"*, and roll back the whole command.
+Every trigger error rolls back the whole command. A plain `RAISE EXCEPTION '…'` (SQLSTATE P0001) becomes HTTP 409
+`application/problem+json` with the trigger's message in `detail` (`ApiErrors`, V8); a trigger raised with
+`ERRCODE = 'check_violation'` (23514) or a constraint violation is a `DataIntegrityViolationException` → HTTP 409
+*"This transaction violates a record, quantity or accounting constraint…"*. Prefer a plain `RAISE EXCEPTION` with a
+readable sentence for business rules.
 
 ### 9. Demo data
 
@@ -404,8 +414,11 @@ partial work on failure.
 | Bean Validation failure / malformed JSON / missing header | 400 | `application/problem+json` (`detail` is generic) |
 | `Actor.allow(...)` denied | 403 | `{"message":"Your role cannot perform this action"}` |
 | Missing/expired CSRF token | 403 | `{"message":"Access denied or session token expired. Refresh and try again."}` |
-| Not signed in | 401 | `{"message":"Please sign in"}` |
-| Constraint/trigger violation | 409 | `{"message":"This transaction violates a record, quantity or accounting constraint. …"}` |
+| Temporary password not yet replaced (`SessionGuard`) | 403 | `{"message":"Change your temporary password to continue","code":"PASSWORD_CHANGE_REQUIRED"}` |
+| Not signed in, account deactivated or session revoked | 401 | `{"message":"Please sign in"}` |
+| Database trigger `RAISE EXCEPTION` (SQLSTATE P0001) | 409 | `application/problem+json`, the trigger's message in `detail` |
+| Constraint violation or `check_violation` trigger | 409 | `{"message":"This transaction violates a record, quantity or accounting constraint. …"}` |
+| Other database failure | 500 | `application/problem+json`, generic `detail` (no SQL) |
 
 Spring Boot's problem-details handler (`spring.mvc.problemdetails.enabled=true`) answers `ResponseStatusException` and
 validation errors before `platform.ApiErrors`; the web client shows `message`, falling back to `detail`. Keep a single

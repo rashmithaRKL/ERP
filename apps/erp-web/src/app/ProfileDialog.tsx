@@ -1,15 +1,18 @@
 import { useQueryClient } from '@tanstack/react-query';
-import { Check, LogOut, Users } from 'lucide-react';
+import { Check, KeyRound, LogOut, Users } from 'lucide-react';
 import { Badge, Overlay } from '../components';
+import '../features/admin/admin.css';
 import { request, token } from '../lib/api';
 import { useWorkspace } from './workspace';
 
-/** Avatar menu: the signed-in user, the demo persona switcher and sign-out. */
+/** Avatar menu: the signed-in user, the demo persona switcher, password change and sign-out. */
 export function ProfileDialog({
   onChangeRole,
+  onChangePassword,
   onClose,
 }: {
   onChangeRole: (role: string) => void;
+  onChangePassword: () => void;
   onClose: () => void;
 }) {
   const qc = useQueryClient();
@@ -57,19 +60,25 @@ export function ProfileDialog({
             </div>
           </>
         )}
-        <button
-          className="button secondary"
-          onClick={async () => {
-            await request('/auth/logout', {});
-            await token();
-            qc.clear();
-            onClose();
-            window.location.reload();
-          }}
-        >
-          <LogOut size={15} />
-          {user.tenant.demo ? 'Restart demo session' : 'Sign out'}
-        </button>
+        <div className="profile-actions">
+          <button className="button secondary" onClick={onChangePassword}>
+            <KeyRound size={15} />
+            Change password
+          </button>
+          <button
+            className="button secondary"
+            onClick={async () => {
+              await request('/auth/logout', {});
+              await token();
+              qc.clear();
+              onClose();
+              window.location.reload();
+            }}
+          >
+            <LogOut size={15} />
+            {user.tenant.demo ? 'Restart demo session' : 'Sign out'}
+          </button>
+        </div>
       </div>
     </Overlay>
   );

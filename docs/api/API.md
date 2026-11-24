@@ -2,7 +2,13 @@
 
 Base: `/api`, same origin. Machine-readable OpenAPI: `.openapi/openapi.json` in the repository root.
 
-Authentication uses an HTTP-only session cookie. Fetch `GET /auth/csrf` to receive `{token,headerName}` and attach that header on every unsafe request, including login/logout. Form login is `POST /auth/login` with URL-encoded `email` and `password`. Refresh the CSRF token after login/logout. `GET /auth/me` returns the authenticated identity and organization. The explicit demo profile additionally supports `POST /auth/demo?role=admin|planner|warehouse|operator|quality`; this returns 404 outside demo.
+Authentication uses an HTTP-only session cookie. Fetch `GET /auth/csrf` to receive `{token,headerName}` and attach that header on every unsafe request, including login/logout. Form login is `POST /auth/login` with URL-encoded `email` and `password`; it answers `{authenticated:true, mustChangePassword}` and records the account's last sign-in. Only active accounts can sign in. Refresh the CSRF token after login/logout. `GET /auth/me` returns the authenticated identity and organization plus `mustChangePassword`, `lastLoginAt` and `passwordChangedAt`. The explicit demo profile additionally supports `POST /auth/demo?role=admin|planner|warehouse|operator|quality`; this returns 404 outside demo (409 when an administrator deactivated that persona).
+
+Every authenticated request is revalidated against the account (`platform.SessionGuard`): a deactivated account, or a session older than the account's last password reset/change, is signed out (401 on that request); a role or name change made by an administrator applies to the user's next request. While `mustChangePassword` is true (after an administrator reset, and for accounts created through `POST /users`), every route except `/auth/me`, `/auth/csrf`, `/auth/config`, `/auth/logout`, `/auth/password` and `/health` answers 403 `{"message":"Change your temporary password to continue","code":"PASSWORD_CHANGE_REQUIRED"}`.
+
+| Method | Path | Purpose |
+|---|---|---|
+| POST | `/auth/password` | `{currentPassword, newPassword}` (16–128 characters, not the email address, not the current password); any signed-in role; clears `mustChangePassword`, signs out the user's other sessions and keeps this one (new session id); audited `PASSWORD_CHANGED`. Wrong current password → 409 |
 
 All business mutations require a unique `Idempotency-Key` header; keep it across retries of the **same** request. Different payload/action with the same key returns 409. Body decimal values may be JSON strings to avoid browser floating-point conversions. Responses use six-decimal PostgreSQL numeric values; UI quantities are display-only. Record IDs are opaque strings. Tenant IDs in request JSON are not accepted or used for authorization.
 
@@ -63,7 +69,7 @@ All business mutations require a unique `Idempotency-Key` header; keep it across
 | POST | `/partners` | Customer/supplier; optional `phone`, `billingAddress`, `shippingAddress`, `taxId`, `creditLimit` (customers); SALES(customer), WAREHOUSE(supplier), PLANNER |
 | POST | `/machines` | Register idle work center; PLANNER |
 | POST | `/organization` | Update current organization/plant; ADMIN |
-| POST | `/users` | Create bcrypt-backed tenant account; ADMIN |
+| POST | `/users` | Create a bcrypt-backed tenant account `{email, name, password (16–128), role}`; the account must choose its own password at first sign-in; an email already in use → 409; ADMIN |
 
 ### Procurement documents (`/purchases/*`, V6)
 
@@ -113,15 +119,15 @@ Supplier returns: only quality-released receipt lots; quantity ≤ received − 
 | GET | `/inventory/warehouses` | Warehouses with lots in stock, quarantined lots, open counts and `production_output` flag; all roles |
 | POST | `/inventory/warehouses` | Create `{name, code, kind}` (kind `RAW`, `FINISHED`, `WIP`, `QUARANTINE`, `OTHER`); PLANNER/WAREHOUSE |
 | POST | `/inventory/warehouses/{id}` | Edit `{name, code, kind, active}`; PLANNER/WAREHOUSE |
-| GET / POST | `/inventory/settings` | Read / set `{approvalThreshold}` (default 50,000); set is ADMIN only |
+| GET / POST | `/inventory/settings` | Read / set `{approvalThreshold}` (default 50,000) — the threshold of the `STOCK_ADJUSTMENT` approval policy (V8; `0` when the policy has no threshold). The read also returns `approvalRequired` and `approverRoles`; set is ADMIN only and keeps the policy's other fields |
 | GET | `/inventory/valuation` | Value per warehouse and quality status, and per inventory account; ADMIN/PLANNER/WAREHOUSE |
 | GET | `/inventory/lots?warehouseId&itemId&status&q&includeEmpty&movable&limit&before` | Lots with balances (available = on hand − reserved) |
 | GET | `/inventory/lots/{id}` | Lot, movements, lots transferred from it, inspections |
 | GET | `/inventory/ledger?warehouseId&itemId&lotId&reference&q&from&to&limit&before` | Stock ledger; dates are Asia/Colombo calendar days |
 | GET | `/inventory/adjustments?status&reason&q&limit&before`, `/inventory/adjustments/{id}` | Adjustments; detail adds lines, ledger, journal (ADMIN/PLANNER only) and audit events |
 | POST | `/inventory/adjustments` | Draft `{reason, notes, lines[]}`; WAREHOUSE/PLANNER |
-| POST | `/inventory/adjustments/{id}/post` | Post, or `APPROVAL_REQUIRED` above the threshold; WAREHOUSE/PLANNER |
-| POST | `/inventory/adjustments/{id}/approve` | Post an adjustment awaiting approval; a person other than its creator and submitter; WAREHOUSE/PLANNER |
+| POST | `/inventory/adjustments/{id}/post` | Post, or `APPROVAL_REQUIRED` when the `STOCK_ADJUSTMENT` approval policy asks for a second person (default: gross value above the threshold); WAREHOUSE/PLANNER |
+| POST | `/inventory/adjustments/{id}/approve` | Post an adjustment awaiting approval; a person other than its creator and submitter with one of the policy's approver roles (default WAREHOUSE/PLANNER) |
 | POST | `/inventory/adjustments/{id}/cancel` | Cancel a draft or an adjustment awaiting approval; WAREHOUSE/PLANNER |
 | GET | `/inventory/transfers?status&warehouseId&q&limit&before`, `/inventory/transfers/{id}` | Transfers; detail adds lines, ledger pair, audit events |
 | POST | `/inventory/transfers`, `/inventory/transfers/{id}/post`, `/inventory/transfers/{id}/cancel` | Draft `{fromWarehouseId, toWarehouseId, notes, lines[{lotId, quantity}]}`, post, cancel; WAREHOUSE/PLANNER |
@@ -149,6 +155,34 @@ MRP (`GET /planning/mrp`, and the `mrp` rows of `/state`): gross demand = unrese
 ```json
 {"machineId":null,"priority":"HIGH","itemIds":["opaque-semi-finished-item"]}
 ```
+### Administration (`/admin/*`, ADMIN only)
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/admin/users?q&role&status&limit&before` | Users by name (keyset on `lower(name), id`); `q` matches name/email, `status` `ACTIVE`/`INACTIVE`. Rows: `id, email, name, role, active, created_at, last_login_at, password_changed_at, deactivated_at, must_change_password`; `summary` = `{total, active, inactive, admins, pending_password}` |
+| POST | `/admin/users/{id}` | `{name, role}`; a role change applies to the user's next request; the last active ADMIN cannot be demoted (409); audited `USER_UPDATED` |
+| POST | `/admin/users/{id}/deactivate`, `/reactivate` | Deactivation blocks sign-in and signs out open sessions; not yourself, not the last active ADMIN (409); audited |
+| POST | `/admin/users/{id}/reset-password` | Issues a one-time temporary password, returned once as `temporaryPassword` (an idempotent replay returns `null`; the password is never stored in clear text); the user must change it at the next sign-in and open sessions end; not for yourself; audited `USER_PASSWORD_RESET` |
+| GET | `/admin/approval-policies` | `{items}`: one policy per `MANUFACTURING_ORDER`, `PURCHASE_ORDER`, `STOCK_ADJUSTMENT` with `approvalRequired, amountThreshold, approverRoles, customized, wired, updatedAt, updatedBy` |
+| POST | `/admin/approval-policies/{documentType}` | `{approvalRequired, amountThreshold (null = every document), approverRoles ⊆ PLANNER, WAREHOUSE, QUALITY, SALES, OPERATOR}`; ADMIN always approves, a creator never approves their own document; audited `APPROVAL_POLICY_UPDATED`. In effect for stock adjustments (and count variances); manufacturing and purchase orders keep their fixed rule until the integration release (`wired: false`) |
+| POST | `/admin/imports/{kind}/validate` | `kind` = `items`, `partners` or `opening-stock`. Dry run of `{fileName, content}` (CSV text): runs the whole import in a rolled-back transaction and returns `{rows, validRows, valid, errors:[{row, column, message}], preview, summary, alreadyImported}`; no Idempotency-Key needed, nothing is kept |
+| POST | `/admin/imports/{kind}/commit` | Imports the same file in one transaction, only when every row is valid (409 with the first error otherwise). Idempotent per file content: an already imported file returns its batch with `duplicate: true`. Audited `IMPORT_COMMITTED` plus the per-record audit of each created record |
+| GET | `/admin/imports?limit&before` | Committed batches, newest first |
+| GET | `/admin/imports/{kind}/template` | CSV template (`text/csv` attachment) |
+| GET | `/admin/audit?actor&action&q&from&to&limit&before` | Audit trail, newest first (keyset on `created_at, id`); `actor` and `action` exact, `q` matches reference or detail, `from`/`to` inclusive Asia/Colombo dates |
+| GET | `/admin/audit/facets` | `{actors, actions}` for the filter pickers |
+| GET | `/admin/audit/export?actor&action&q&from&to` | The same filter as a streamed CSV (UTF-8 with BOM, at most 50,000 rows; header `X-Export-Truncated`); formula-like cells are prefixed with `'`; the export is audited `AUDIT_EXPORTED` |
+| GET | `/admin/periods` | `{items, today, latestClosed, postingBlocked}`; items: `end_date, start_date, closed, closed_by, closed_at, reopened_by, reopened_at, reopen_reason, journal_entries, journal_total` |
+| POST | `/admin/periods/close` | `{endDate}`: closes the period ending then; periods close in date order, never after today, a reopened earlier period first; audited `PERIOD_CLOSED` |
+| POST | `/admin/periods/reopen` | `{reason}` (10–400 characters): reopens the most recently closed period; audited `PERIOD_REOPENED` |
+
+Import columns (header names are matched case-insensitively; spaces and hyphens read as underscores; comma or semicolon separated; at most 2,000 data rows and 2,000,000 characters):
+
+- `items`: `sku, name, type, uom, standard_cost` required; `reorder_level, reorder_quantity, lead_time_days, category` (active category name), `description` optional. Rows go through `ItemService.create`.
+- `partners`: `type` (CUSTOMER/SUPPLIER), `name` required; `email, phone, payment_days` (default 30), `credit_limit` (customers), `tax_id, billing_address, shipping_address` optional. A name that already exists for the same type is a row error.
+- `opening-stock`: `item_sku, warehouse_code, quantity` (base unit, unit precision), `unit_cost` required; `lot_number` (generated `OPN-…` when blank, unique), `quality_status` (`RELEASED` default or `QUARANTINE`, which adds a pending `OPENING` inspection) optional. Each row creates a lot (`source_type OPENING`, source = batch number) and one `OPENING_STOCK_IMPORT` ledger receipt; the batch posts one balanced journal per inventory account (`RAW_INVENTORY`, `FG_INVENTORY` for finished goods) against `OPENING_EQUITY`. A closed period rejects the file.
+
+Accounting periods: a period ends on `end_date` and starts the day after the previous period's end. Posting semantics are unchanged: every posting is dated now, and `Store.openPeriod` rejects postings while a closed period covers the current date, so closing a past period locks it and closing a period that ends today stops all postings for the rest of the day.
 
 Lifecycle actions: `approve` (PLANNER, distinct from creator); `reserve` (PLANNER/WAREHOUSE); `issue` (WAREHOUSE); `start`, `pause`, `resume` (OPERATOR/PLANNER); `close`, `cancel` (PLANNER). Cancellation is available only before material issue, with reservations safely released. Issued order cancellation is blocked until a controlled return/variance procedure exists.
 
@@ -186,11 +220,25 @@ Per delivery, revenue/receivable = quantity × unit price × (1 − discount); t
 
 Units: stock, BOM quantities and documents are stored in the item's base unit. `GET /items/{id}/convert?quantity=3&unit=bag` returns `{"baseQuantity":75,"baseUnit":"kg","exact":true,...}`. Other features convert with `catalog.UnitService.toBase(actor, itemId, quantity, unit)` (or `toBaseExact`, which refuses rounding) inside their own transaction; purchase-order lines and goods receipts use it since V6, sales documents follow in the V9 integration pass.
 
-Errors use HTTP 400 (invalid input), 401 (unauthenticated), 403 (role/CSRF), 404 (missing/unowned record), 409 (business state/quantity/reference conflict), 429 (login limit), and sanitized server errors. Business/validation errors return `{message}`. A lost response is resolved by retrying with the same key, not creating another logical transaction.
+Errors use HTTP 400 (invalid input), 401 (unauthenticated), 403 (role/CSRF/password change required), 404 (missing/unowned record), 409 (business state/quantity/reference conflict), 429 (login limit), and sanitized 500s. The body depends on where the error is raised:
+
+| Cause | Status | Body |
+|---|---|---|
+| Business rule (`Store.require`), unknown or foreign record (`Store.one`), bad date | 409 / 404 / 400 | `application/problem+json`: `{type, title, status, detail, instance}`; the message is in `detail` |
+| Bean Validation failure, malformed JSON, missing `Idempotency-Key` | 400 | `application/problem+json`; `detail` is generic |
+| Business rule raised by a database trigger (SQLSTATE P0001, e.g. immutable history, approved BOMs, item identity, last administrator) | 409 | `application/problem+json`; `detail` is the trigger's message |
+| Other database constraint violation | 409 | `{"message":"This transaction violates a record, quantity or accounting constraint…"}` |
+| Role not allowed | 403 | `{"message":"Your role cannot perform this action"}` |
+| Missing/expired CSRF token | 403 | `{"message":"Access denied or session token expired. Refresh and try again."}` |
+| Temporary password not yet replaced | 403 | `{"message":"Change your temporary password to continue","code":"PASSWORD_CHANGE_REQUIRED"}` |
+| Not signed in, or session revoked | 401 | `{"message":"Please sign in"}` |
+| Login rate limit | 429 | `{"message":"Too many sign-in attempts. Try again in one minute."}` |
+
+Clients should show `message`, falling back to `detail`. A lost response is resolved by retrying with the same key, not creating another logical transaction.
 
 `/state` key `purchases` is one summary row per purchase order (supplier, status, total, `line_count`, aggregated item names as `item`, summed base `quantity`/`received`/`returned` with `uom` when all lines share one) and `receipts` one row per received line and lot (GRN `number`, `delivery_note`, lot and its quality `status`, `invoiced`, `returned`); both replace the former single-item rows. MRP `incoming` = open base quantity on lines of APPROVED/PARTIAL orders.
 `/state` key `bomCosts` (V7) carries the roll-up of every revision (`bom_id, unitCost, singleLevelCost, levels, depth, missingBoms, cycle, active, source_bom_id, source_revision, semi_finished`); `orders` rows carry `parent_order_id`; `mrp` rows keep their original columns and add the multi-level ones listed above (without `pegging`).
 
 `/state` keys `sales` (one summary row per order: totals, line count, aggregated product names, summed quantity/delivered/returned with `uom` when all lines share one) and `salesLines` (open lines of confirmed orders with `planned` quantity, for the manufacturing-order dialog) replace the former single-item `sales` rows.
 
-The workspace snapshot caps each operational list at 250, BOM lines at 1,000 and audit at 100. UI pagination applies inside those bounds; exports contain the loaded records. Replace this contract with cursor-based list/report endpoints before large-customer deployment.
+The workspace snapshot caps each operational list at 250 and BOM lines at 1,000. UI pagination applies inside those bounds; exports contain the loaded records. Replace this contract with cursor-based list/report endpoints before large-customer deployment. Since V8 the snapshot no longer contains the `audit` key: administrators read the audit trail from `GET /admin/audit`.

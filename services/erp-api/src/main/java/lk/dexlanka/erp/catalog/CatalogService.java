@@ -8,6 +8,7 @@ import java.util.HashSet;
 import java.util.Locale;
 import java.util.Map;
 import lk.dexlanka.erp.platform.Actor;
+import lk.dexlanka.erp.platform.Passwords;
 import lk.dexlanka.erp.platform.Store;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -28,45 +29,39 @@ public class CatalogService {
         this.bomRules = bomRules;
     }
 
+    /**
+     * Idempotency payload of {@code POST /users}: a record serializes in declaration order, so the stored hash is
+     * deterministic (a {@code Map.of} iterates in a per-JVM order). The password is replaced by a salted fingerprint.
+     */
+    record UserPayload(String email, String name, String role, String passwordFingerprint) {}
+
+    /**
+     * ADMIN only. The new account must choose its own password at first sign-in ({@code must_change_password}), so the
+     * initial password only travels through the administrator's channel once.
+     */
     @Transactional
     public Map<String, Object> user(Actor a, CatalogCommands.User c, String key) {
         a.allow();
-        return s.once(
-                a,
-                key,
-                "user",
-                Map.of(
-                        "email",
-                        c.email(),
-                        "name",
-                        c.name(),
-                        "role",
-                        c.role(),
-                        "passwordFingerprint",
-                        fingerprint(c.password())),
-                () -> {
-                    String id = id();
-                    s.db().update(
-                                    "INSERT INTO users(id,tenant_id,email,name,password_hash,role) VALUES(?,?,?,?,?,?)",
-                                    id,
-                                    a.tenant(),
-                                    c.email().toLowerCase(Locale.ROOT),
-                                    c.name(),
-                                    passwords.encode(c.password()),
-                                    c.role());
-                    s.audit(a, "USER_CREATED", c.email(), "Role " + c.role());
-                    return Map.of("id", id);
-                });
-    }
-
-    String fingerprint(String value) {
-        try {
-            return java.util.HexFormat.of()
-                    .formatHex(java.security.MessageDigest.getInstance("SHA-256")
-                            .digest(value.getBytes(java.nio.charset.StandardCharsets.UTF_8)));
-        } catch (Exception e) {
-            throw new IllegalStateException(e);
-        }
+        var payload = new UserPayload(
+                c.email(), c.name(), c.role(), Passwords.fingerprint(a.tenant() + ":" + key, c.password()));
+        return s.once(a, key, "user", payload, () -> {
+            String email = c.email().strip().toLowerCase(Locale.ROOT);
+            require(
+                    s.list("SELECT 1 FROM users WHERE lower(email)=?", email).isEmpty(),
+                    "A user with this email address already exists");
+            Passwords.requireAcceptable(c.password(), email);
+            String id = id();
+            s.db().update(
+                            "INSERT INTO users(id,tenant_id,email,name,password_hash,role,must_change_password) VALUES(?,?,?,?,?,?,true)",
+                            id,
+                            a.tenant(),
+                            email,
+                            c.name().strip(),
+                            passwords.encode(c.password()),
+                            c.role());
+            s.audit(a, "USER_CREATED", email, "Role " + c.role());
+            return Map.of("id", id);
+        });
     }
 
     @Transactional

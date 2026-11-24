@@ -28,9 +28,11 @@ import {
   X,
 } from 'lucide-react';
 import { FormDialog } from '../components';
+import { ChangePasswordDialog } from '../features/admin/ChangePasswordDialog';
+import { ForcePasswordChange } from '../features/admin/ForcePasswordChange';
 import BomDialog from '../features/boms/BomDialog';
 import { OrderDrawer } from '../features/manufacturing/OrderDrawer';
-import { request, session, token } from '../lib/api';
+import { request, session, SESSION_CHANGED, token } from '../lib/api';
 import { csv, text } from '../lib/format';
 import { PageTransition, spring, useMotionPreferences } from '../motion/motion';
 import NotFoundPage from '../pages/NotFoundPage';
@@ -57,6 +59,7 @@ export default function App() {
   const [commandSearch, setCommandSearch] = useState('');
   const [notifications, setNotifications] = useState(false);
   const [profile, setProfile] = useState(false);
+  const [password, setPassword] = useState(false);
   const [help, setHelp] = useState(false);
   const [mobile, setMobile] = useState(false);
   const [dark, setDark] = useState(() => localStorage.getItem('dex-theme') === 'dark');
@@ -93,6 +96,12 @@ export default function App() {
   useEffect(() => {
     setMobile(false);
   }, [path]);
+  useEffect(() => {
+    // A revoked session or a required password change: re-read /auth/me (login, forced change or demo re-entry).
+    const recheck = () => void qc.invalidateQueries({ queryKey: ['user'] });
+    window.addEventListener(SESSION_CHANGED, recheck);
+    return () => window.removeEventListener(SESSION_CHANGED, recheck);
+  }, [qc]);
   async function changeRole(role: string) {
     try {
       await request(`/auth/demo?role=${role}`, {});
@@ -129,6 +138,8 @@ export default function App() {
       </div>
     );
   if (!user) return <Login onSuccess={() => qc.invalidateQueries({ queryKey: ['user'] })} />;
+  if (user.mustChangePassword)
+    return <ForcePasswordChange user={user} onDone={() => qc.invalidateQueries({ queryKey: ['user'] })} />;
   const ws = { ...workspace, user };
   const { active, shortages, pendingQc } = summary;
   const pageRows = data && (current?.exportRows ? current.exportRows(data) : data.orders);
@@ -529,7 +540,26 @@ export default function App() {
           )}
           {notifications && <AttentionCenter key="notifications" onClose={() => setNotifications(false)} />}
           {profile && (
-            <ProfileDialog key="profile" onChangeRole={changeRole} onClose={() => setProfile(false)} />
+            <ProfileDialog
+              key="profile"
+              onChangeRole={changeRole}
+              onChangePassword={() => {
+                setProfile(false);
+                setPassword(true);
+              }}
+              onClose={() => setProfile(false)}
+            />
+          )}
+          {password && (
+            <ChangePasswordDialog
+              key="password"
+              email={user.email}
+              onClose={() => setPassword(false)}
+              onChanged={() => {
+                setPassword(false);
+                notify('Password changed successfully. Your other sessions were signed out.');
+              }}
+            />
           )}
           {help && <HelpDialog key="help" onClose={() => setHelp(false)} />}
         </AnimatePresence>

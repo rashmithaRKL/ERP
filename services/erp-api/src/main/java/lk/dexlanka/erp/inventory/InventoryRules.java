@@ -25,7 +25,6 @@ import org.springframework.stereotype.Component;
 @Component
 class InventoryRules {
     static final String ADJUSTMENT_ACCOUNT = "INVENTORY_ADJUSTMENT";
-    static final BigDecimal DEFAULT_THRESHOLD = new BigDecimal("50000");
 
     private final Store s;
 
@@ -81,11 +80,6 @@ class InventoryRules {
 
     static String inventoryAccount(Object itemType) {
         return "FINISHED_GOOD".equals(itemType) ? "FG_INVENTORY" : "RAW_INVENTORY";
-    }
-
-    BigDecimal threshold(Actor a) {
-        var rows = s.list("SELECT approval_threshold FROM inventory_settings WHERE tenant_id=?", a.tenant());
-        return rows.isEmpty() ? DEFAULT_THRESHOLD : dec(rows.getFirst().get("approval_threshold"));
     }
 
     /**

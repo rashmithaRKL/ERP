@@ -49,6 +49,18 @@ const LABELS: Record<string, string> = {
   ORGANIZATION_UPDATED: 'Organization updated',
   USER_CREATED: 'User created',
   DEMO_INITIALIZED: 'Demo data initialized',
+  // Administration (V8).
+  USER_UPDATED: 'User updated',
+  USER_DEACTIVATED: 'User deactivated',
+  USER_REACTIVATED: 'User reactivated',
+  USER_PASSWORD_RESET: 'Temporary password issued',
+  PASSWORD_CHANGED: 'Password changed',
+  APPROVAL_POLICY_UPDATED: 'Approval policy updated',
+  INVENTORY_SETTINGS_UPDATED: 'Adjustment threshold updated',
+  IMPORT_COMMITTED: 'CSV import committed',
+  AUDIT_EXPORTED: 'Audit trail exported',
+  PERIOD_CLOSED: 'Accounting period closed',
+  PERIOD_REOPENED: 'Accounting period reopened',
 };
 
 /** Fallback: a trailing bare verb (e.g. the `CANCEL` in `PO_CANCEL`) is shown in the past tense. */

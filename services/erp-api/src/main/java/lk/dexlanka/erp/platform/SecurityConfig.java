@@ -8,13 +8,16 @@ import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.access.intercept.AuthorizationFilter;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.security.web.csrf.HttpSessionCsrfTokenRepository;
 
 /**
- * Session authentication (form login at {@code /api/auth/login}), CSRF on every unsafe method, JSON error bodies and
- * the login rate limit. Every route except the few {@code permitAll} ones requires a signed-in user; role checks happen
- * in the domain services via {@link Actor#allow}.
+ * Session authentication (form login at {@code /api/auth/login}), CSRF on every unsafe method, JSON error bodies, the
+ * login rate limit and per-request session revalidation ({@link SessionGuard}). Only active accounts can sign in; a
+ * successful sign-in records {@code users.last_login_at} and reports {@code mustChangePassword}. Every route except the
+ * few {@code permitAll} ones requires a signed-in user; role checks happen in the domain services via
+ * {@link Actor#allow}.
  */
 @Configuration
 class SecurityConfig {
@@ -36,12 +39,13 @@ class SecurityConfig {
                             u.get("email").toString(),
                             u.get("name").toString(),
                             u.get("role").toString()),
-                    u.get("password_hash").toString());
+                    u.get("password_hash").toString(),
+                    ((Number) u.get("session_version")).intValue());
         };
     }
 
     @Bean
-    SecurityFilterChain chain(HttpSecurity http) throws Exception {
+    SecurityFilterChain chain(HttpSecurity http, Store store) throws Exception {
         http.authorizeHttpRequests(
                         a -> a.requestMatchers("/api/auth/csrf", "/api/auth/config", "/api/auth/demo", "/api/health")
                                 .permitAll()
@@ -52,8 +56,13 @@ class SecurityConfig {
                 .formLogin(f -> f.loginProcessingUrl("/api/auth/login")
                         .usernameParameter("email")
                         .successHandler((req, res, auth) -> {
+                            String id = ((ErpUser) auth.getPrincipal()).actor().id();
+                            store.db().update("UPDATE users SET last_login_at=now() WHERE id=?", id);
+                            boolean change = Boolean.TRUE.equals(store.db()
+                                    .queryForObject(
+                                            "SELECT must_change_password FROM users WHERE id=?", Boolean.class, id));
                             res.setContentType("application/json");
-                            res.getWriter().write("{\"authenticated\":true}");
+                            res.getWriter().write("{\"authenticated\":true,\"mustChangePassword\":" + change + "}");
                         })
                         .failureHandler((req, res, e) -> {
                             res.setStatus(401);
@@ -78,6 +87,7 @@ class SecurityConfig {
                 .headers(h ->
                         h.contentSecurityPolicy(c -> c.policyDirectives("default-src 'none'; frame-ancestors 'none'")));
         http.addFilterBefore(new LoginRateLimit(), UsernamePasswordAuthenticationFilter.class);
+        http.addFilterBefore(new SessionGuard(store.db()), AuthorizationFilter.class);
         return http.build();
     }
 }
