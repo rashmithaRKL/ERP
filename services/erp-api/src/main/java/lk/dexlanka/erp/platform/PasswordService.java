@@ -7,15 +7,20 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-/** The signed-in user's own password: verify the current one, store the new one, revoke the user's other sessions. */
+/**
+ * The signed-in user's own password: verify the current one, store the new one, revoke the user's other sessions. Wrong
+ * current passwords are attempt-limited per account ({@link PasswordAttemptLimit}, V9).
+ */
 @Service
 class PasswordService {
     private final Store s;
     private final PasswordEncoder passwords;
+    private final PasswordAttemptLimit attempts;
 
-    PasswordService(Store s, PasswordEncoder passwords) {
+    PasswordService(Store s, PasswordEncoder passwords, PasswordAttemptLimit attempts) {
         this.s = s;
         this.passwords = passwords;
+        this.attempts = attempts;
     }
 
     /** Idempotency payload: the actor plus salted password fingerprints, never the passwords themselves. */
@@ -27,16 +32,17 @@ class PasswordService {
      */
     @Transactional
     public Map<String, Object> change(Actor a, AccountCommands.ChangePassword c, String key) {
+        attempts.check(a.id()); // 429 after too many wrong current passwords
         String salt = a.id() + ":" + key;
         var body = new Fingerprint(
                 a.id(), Passwords.fingerprint(salt, c.currentPassword()), Passwords.fingerprint(salt, c.newPassword()));
         return s.once(a, key, "change-password", body, () -> {
             var u = s.one("SELECT * FROM users WHERE tenant_id=? AND id=? FOR UPDATE", a.tenant(), a.id());
             require(Boolean.TRUE.equals(u.get("active")), "This account is inactive");
-            require(
-                    passwords.matches(
-                            c.currentPassword(), u.get("password_hash").toString()),
-                    "Your current password is incorrect");
+            if (!passwords.matches(c.currentPassword(), u.get("password_hash").toString())) {
+                attempts.failed(a.id()); // kept in memory: the 409 rolls the transaction back
+                require(false, "Your current password is incorrect");
+            }
             Passwords.requireAcceptable(c.newPassword(), u.get("email").toString());
             require(
                     !passwords.matches(c.newPassword(), u.get("password_hash").toString()),
@@ -54,6 +60,7 @@ class PasswordService {
                     forced
                             ? "Temporary password replaced by the account holder; other sessions signed out"
                             : "Changed by the account holder; other sessions signed out");
+            attempts.succeeded(a.id());
             return Map.of("status", "CHANGED");
         });
     }
