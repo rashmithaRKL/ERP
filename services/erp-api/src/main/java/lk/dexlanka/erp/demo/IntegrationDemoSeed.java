@@ -47,8 +47,11 @@ class IntegrationDemoSeed implements ApplicationRunner {
 
     @Override
     public void run(ApplicationArguments args) {
-        if (!demo || s.list("SELECT 1 FROM tenants WHERE id=?", DemoPersonas.TENANT).isEmpty()) return;
-        // An existing demo database may have drifted (a conversion removed, a product deactivated): never block startup.
+        if (!demo
+                || s.list("SELECT 1 FROM tenants WHERE id=?", DemoPersonas.TENANT)
+                        .isEmpty()) return;
+        // An existing demo database may have drifted (a conversion removed, a product deactivated): never block
+        // startup.
         try {
             tx.executeWithoutResult(status -> seed());
         } catch (RuntimeException e) {

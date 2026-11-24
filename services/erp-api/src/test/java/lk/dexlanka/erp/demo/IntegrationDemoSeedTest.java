@@ -46,7 +46,9 @@ class IntegrationDemoSeedTest extends IntegrationTestBase {
                     .isEqualTo(keys);
             status.setRollbackOnly();
         });
-        assertThat(count("SELECT COUNT(*) FROM sales_orders WHERE tenant_id='demo' AND customer_reference='PO-ICP-7790'"))
+        assertThat(
+                        count(
+                                "SELECT COUNT(*) FROM sales_orders WHERE tenant_id='demo' AND customer_reference='PO-ICP-7790'"))
                 .isZero();
     }
 }
