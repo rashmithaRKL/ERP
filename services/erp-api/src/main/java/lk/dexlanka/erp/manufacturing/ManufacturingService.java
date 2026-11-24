@@ -35,7 +35,15 @@ public class ManufacturingService {
     public Map<String, Object> create(Actor a, ManufacturingCommands.Manufacture c, String key) {
         a.allow("PLANNER");
         s.validDate(c.dueDate());
-        return s.once(a, key, "manufacture", c, () -> {
+        return s.once(a, key, "manufacture", c, () -> insert(a, c));
+    }
+
+    /**
+     * Snapshots the BOM into a new draft order. Runs inside the caller's command ({@link #create}, or a child-order run
+     * in {@link OrderTreeService}): tenant locked, idempotency handled by the caller.
+     */
+    Map<String, Object> insert(Actor a, ManufacturingCommands.Manufacture c) {
+        {
             var b = s.one(
                     "SELECT b.*,i.type,i.active FROM boms b JOIN items i ON i.id=b.product_id AND i.tenant_id=b.tenant_id WHERE b.tenant_id=? AND b.id=?",
                     a.tenant(),
@@ -49,6 +57,7 @@ public class ManufacturingService {
                     c.quantity());
             var m = s.one("SELECT * FROM machines WHERE tenant_id=? AND id=?", a.tenant(), c.machineId());
             var demand = salesLine(a, c, str(b, "product_id"));
+            var parent = parentOrder(a, c, str(b, "product_id"), demand != null);
             if (demand != null) {
                 var planned = s.db().queryForObject(
                                 "SELECT COALESCE(SUM(quantity-scrap_qty),0) FROM manufacturing_orders WHERE tenant_id=? AND sales_order_line_id=? AND status<>'CANCELLED'",
@@ -79,7 +88,7 @@ public class ManufacturingService {
                     .map(l -> requirement(l, c.quantity(), outputBase).multiply(dec(l.get("standard_cost"))))
                     .reduce(BigDecimal.ZERO, BigDecimal::add);
             s.db().update(
-                            "INSERT INTO manufacturing_orders(id,tenant_id,number,product_id,bom_id,bom_revision,sales_order_id,sales_order_line_id,machine_id,factory_id,quantity,priority,due_date,estimated_cost,created_by) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?::date,?,?)",
+                            "INSERT INTO manufacturing_orders(id,tenant_id,number,product_id,bom_id,bom_revision,sales_order_id,sales_order_line_id,machine_id,factory_id,quantity,priority,due_date,estimated_cost,created_by,parent_order_id) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?::date,?,?,?)",
                             id,
                             a.tenant(),
                             num,
@@ -94,7 +103,8 @@ public class ManufacturingService {
                             c.priority(),
                             c.dueDate(),
                             money(estimate),
-                            a.id());
+                            a.id(),
+                            parent == null ? null : parent.get("id"));
             for (var l : lines)
                 s.db().update(
                                 "INSERT INTO order_materials(id,tenant_id,order_id,item_id,required_qty) VALUES(?,?,?,?,?)",
@@ -103,9 +113,42 @@ public class ManufacturingService {
                                 id,
                                 l.get("item_id"),
                                 requirement(l, c.quantity(), outputBase));
-            s.audit(a, "MO_CREATED", num, "BOM " + b.get("revision") + " snapshotted; " + c.quantity() + " units");
+            s.audit(
+                    a,
+                    "MO_CREATED",
+                    num,
+                    "BOM " + b.get("revision") + " snapshotted; " + c.quantity() + " units"
+                            + (parent == null ? "" : "; child of " + parent.get("number")));
             return order(a, id);
-        });
+        }
+    }
+
+    /**
+     * V7: the parent order a child order supplies, or null. The parent must be a draft or approved order of the tenant
+     * that consumes the child's product, due no earlier than the child; a child is never also a sales-order run.
+     */
+    private Map<String, Object> parentOrder(
+            Actor a, ManufacturingCommands.Manufacture c, String product, boolean forSalesLine) {
+        if (c.parentOrderId() == null || c.parentOrderId().isBlank()) return null;
+        var parent =
+                s.one("SELECT * FROM manufacturing_orders WHERE tenant_id=? AND id=?", a.tenant(), c.parentOrderId());
+        require(
+                Set.of("DRAFT", "APPROVED").contains(str(parent, "status")),
+                "Child orders can be added only to a draft or approved parent order");
+        require(!forSalesLine, "A child order supplies its parent order; do not link it to a sales order line");
+        require(
+                !s.list(
+                                "SELECT 1 FROM order_materials WHERE tenant_id=? AND order_id=? AND item_id=?",
+                                a.tenant(),
+                                c.parentOrderId(),
+                                product)
+                        .isEmpty(),
+                "Parent order " + str(parent, "number") + " does not consume this product");
+        require(
+                java.time.LocalDate.parse(c.dueDate()).compareTo(java.time.LocalDate.parse(str(parent, "due_date")))
+                        <= 0,
+                "A child order must be due on or before its parent order (" + str(parent, "due_date") + ")");
+        return parent;
     }
 
     @Transactional

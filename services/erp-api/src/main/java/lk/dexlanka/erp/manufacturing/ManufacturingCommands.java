@@ -7,6 +7,7 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import java.math.BigDecimal;
+import java.util.List;
 
 /**
  * Request bodies for manufacturing-order commands.
@@ -32,7 +33,10 @@ public final class ManufacturingCommands {
             String dueDate,
 
             /* The customer order line this run fulfils (V3); takes precedence over salesOrderId. */
-            @Size(max = 64) String salesOrderLineId) {
+            @Size(max = 64) String salesOrderLineId,
+
+            /* V7: the draft/approved order that consumes this order's semi-finished output (a child order). */
+            @Size(max = 64) String parentOrderId) {
         public Manufacture(
                 String bomId,
                 String machineId,
@@ -40,9 +44,31 @@ public final class ManufacturingCommands {
                 BigDecimal quantity,
                 String priority,
                 String dueDate) {
-            this(bomId, machineId, salesOrderId, quantity, priority, dueDate, null);
+            this(bomId, machineId, salesOrderId, quantity, priority, dueDate, null, null);
+        }
+
+        /** The V3 shape (customer order line, no parent order). */
+        public Manufacture(
+                String bomId,
+                String machineId,
+                String salesOrderId,
+                BigDecimal quantity,
+                String priority,
+                String dueDate,
+                String salesOrderLineId) {
+            this(bomId, machineId, salesOrderId, quantity, priority, dueDate, salesOrderLineId, null);
         }
     }
+
+    /**
+     * {@code POST /api/manufacturing/{id}/children} (V7): one child order per short semi-finished component of the parent.
+     * All fields are optional: the work center defaults to the parent's, the priority to the parent's, and
+     * {@code itemIds} limits the run to some components.
+     */
+    public record ChildOrders(
+            @Size(max = 64) String machineId,
+            @Pattern(regexp = "NORMAL|HIGH|URGENT") String priority,
+            @Size(max = 50) List<@NotBlank @Size(max = 64) String> itemIds) {}
 
     public record Complete(
             @NotNull @DecimalMin("0") @Digits(integer = 12, fraction = 6)

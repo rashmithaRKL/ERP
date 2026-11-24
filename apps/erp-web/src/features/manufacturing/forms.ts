@@ -3,6 +3,7 @@ import { dateField, option, qtyField, selectField } from '../../components';
 import { request } from '../../lib/api';
 import type { Row } from '../../lib/api';
 import { fmt, labelState, num, text } from '../../lib/format';
+import type { PlannedProduction } from '../planning/api';
 
 /** Quantity of a sales order line not yet covered by (non-cancelled) manufacturing orders. */
 const unplanned = (line: Row) => Math.max(0, num(line.quantity) - num(line.planned));
@@ -92,6 +93,126 @@ export function createOrder({ data, openForm }: Workspace, line?: Row, onDone?: 
           priority: values.priority,
           dueDate: values.dueDate,
           salesOrderLineId: picked ? picked.id : null,
+        },
+        key,
+      );
+      await onDone?.();
+      return result;
+    },
+  });
+}
+
+/**
+ * "Create child orders for shortages" (order drawer, V7): one child order per short semi-finished material of a draft
+ * or approved order, on the parent's work center unless another is chosen.
+ */
+export function createChildOrders({ data, openForm }: Workspace, order: Row, shortages: Row[]) {
+  if (!data) return;
+  const plannable = shortages.filter((s) => s.plannable);
+  openForm({
+    title: 'Create child orders for shortages',
+    description: `${text(order.number)} · ${plannable
+      .map((s) => `${text(s.sku)} × ${fmt(s.shortage, 6)} due ${text(s.suggested_due_date)}`)
+      .join('; ')}. Each child order is a draft that needs an independent approval.`,
+    fields: [
+      {
+        ...selectField(
+          'machineId',
+          'Work center',
+          option(
+            data.machines.filter((m) => m.status !== 'MAINTENANCE' || m.id === order.machine_id),
+            'name',
+          ),
+          text(order.machine_id),
+        ),
+        hint: 'Defaults to the parent order’s work center.',
+      },
+      selectField(
+        'priority',
+        'Priority',
+        ['NORMAL', 'HIGH', 'URGENT'].map((x) => ({ value: x, label: labelState(x) })),
+        text(order.priority) || 'NORMAL',
+      ),
+    ],
+    submit: `Create ${plannable.length} child ${plannable.length === 1 ? 'order' : 'orders'}`,
+    run: (values, key) =>
+      request(
+        `/manufacturing/${order.id}/children`,
+        { machineId: values.machineId, priority: values.priority, itemIds: plannable.map((s) => s.item_id) },
+        key,
+      ),
+  });
+}
+
+/**
+ * "Create MO" for an MRP planned-production line (Material planning, V7): the item's approved BOM, the planned
+ * quantity, due on the suggested start date, optionally linked to the parent order that drives the requirement.
+ */
+export function createPlannedOrder(
+  { data, openForm }: Workspace,
+  planned: PlannedProduction,
+  onDone?: () => unknown,
+) {
+  if (!data) return;
+  const boms = data.boms.filter((b) => b.status === 'APPROVED' && b.product_id === planned.item_id);
+  const parents = planned.parent_orders || [];
+  openForm({
+    title: `Create MO · ${text(planned.name)}`,
+    description: `Planned production of ${fmt(planned.quantity, 6)} ${text(planned.uom)} needed by ${text(planned.need_date)}. Material requirements are snapshotted from the BOM; an independent approval is required.`,
+    fields: [
+      selectField(
+        'bomId',
+        'Approved BOM revision',
+        boms.map((b) => ({ value: b.id, label: `${text(b.product)} · ${text(b.revision)}` })),
+        text(planned.bom_id),
+      ),
+      qtyField('quantity', `Planned quantity (${text(planned.uom)})`, text(planned.quantity)),
+      selectField(
+        'machineId',
+        'Work center',
+        option(
+          data.machines.filter((m) => m.status !== 'MAINTENANCE'),
+          'name',
+        ),
+      ),
+      selectField(
+        'priority',
+        'Priority',
+        ['NORMAL', 'HIGH', 'URGENT'].map((x) => ({ value: x, label: labelState(x) })),
+        planned.late ? 'HIGH' : 'NORMAL',
+      ),
+      {
+        ...dateField,
+        defaultValue: text(planned.start_date) || dateField.defaultValue,
+        hint: 'Defaults to the suggested start: the need date less the item’s lead time.',
+      },
+      {
+        ...selectField(
+          'parentOrderId',
+          'Parent order',
+          parents.map((p) => ({
+            value: text(p.order_id),
+            label: `${text(p.order_number)} · ${labelState(p.status)} · due ${text(p.due_date)}`,
+          })),
+          parents.length === 1 ? text(parents[0].order_id) : undefined,
+        ),
+        optional: true,
+        hint: 'Link it as a child of the order it supplies. Leave empty to make to stock.',
+      },
+    ],
+    submit: 'Create order',
+    run: async (values, key) => {
+      const result = await request(
+        '/manufacturing',
+        {
+          bomId: values.bomId,
+          machineId: values.machineId,
+          salesOrderId: null,
+          quantity: values.quantity,
+          priority: values.priority,
+          dueDate: values.dueDate,
+          salesOrderLineId: null,
+          parentOrderId: values.parentOrderId || null,
         },
         key,
       );

@@ -4,6 +4,7 @@ import type { Row } from '../../lib/api';
 import { date, fmt, labelState, money, num, text } from '../../lib/format';
 import { auditLabel } from '../audit/auditLabel';
 import { ProductMark } from '../products/ProductMark';
+import { OrderStructure } from './OrderStructure';
 
 /** Response of `GET /api/manufacturing/{id}`. */
 export type OrderDetailData = { order: Row; materials: Row[]; actuals: Row[]; events: Row[] };
@@ -53,6 +54,7 @@ export function OrderDetail({
             <h2>{text(o.product)}</h2>
             <p>
               BOM {text(o.bom_revision)} · Due {date(o.due_date)}
+              {o.parent_order_id ? ' · child order' : ''}
             </p>
           </div>
           <Badge value={o.status} />
@@ -100,6 +102,7 @@ export function OrderDetail({
           ]}
           compact
         />
+        <OrderStructure order={o} />
         <h3>Cost reconciliation</h3>
         <div className="reconciliation">
           {[

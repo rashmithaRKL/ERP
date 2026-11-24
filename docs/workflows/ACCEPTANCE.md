@@ -14,6 +14,9 @@ A screen alone does not satisfy a business workflow. Each supported command has 
 | Quality failure | Incoming failure → supplier return reversal; final failure → enforceable finished lot hold | Final rework/release/scrap disposition not implemented; unsafe dispatch remains blocked |
 | Local operations | Same local API/PostgreSQL transaction boundaries | Browser offline queue and cloud reconciliation not implemented or verified |
 | Costing | Actual FIFO materials + entered labour/machine → WIP/finished/scrap → dispatch COGS | Manufacturing subledger; full finance and statutory statements later |
+| Multi-level BOM | Semi-finished BOM approved first → parent BOM approved (no cycle at any depth) → explosion/where-used/cost roll-up through all levels → copy approved revision to draft → edit → compare → approve | Alternative components, phantom BOMs, effectivity dates and engineering change orders later |
+| Parent/child production | Parent MO (draft/approved) → child MOs for semi-finished shortages (due lead time before the parent) → independent approval of each child → reserve/issue/start/output → final QC releases the SF lot into the raw store → parent's ordinary reservation consumes it | Children are not rescheduled or cancelled automatically when the parent changes; capacity is not checked |
+| Multi-level MRP | Open MO demand → semi-finished netting (stock, QC stock, open/child MOs, safety stock) → planned production → raw/packaging gross demand → netting against stock and incoming purchases → purchase recommendations with order dates, pegged to driving orders → "Create MO" / "Create purchase" | Infinite capacity, lot-for-lot, single bucket per item; sales-line demand for finished goods is not exploded |
 
 ## Defined critical outcomes
 
@@ -35,6 +38,19 @@ A screen alone does not satisfy a business workflow. Each supported command has 
 16. Purchase invoice above the order price: payables carry the billed amount, GRNI clears at receipt cost, the difference is a balanced purchase price variance; over-billing a receipt is refused.
 17. Supplier return after partial invoicing: the uninvoiced part reverses GRNI, the invoiced part reduces payables; GRNI of a fully processed receipt nets to exactly zero (`procurement.SupplierReturnTest`).
 18. Legacy single-item purchase orders and receipts migrate to header + line with posted values unchanged (`procurement.ProcurementMigrationTest`).
+19. BOM cycle across levels (A → B → A, or deeper): approval rejected with the cycle path; the revision stays a draft.
+20. Parent BOM with a semi-finished component that has no approved BOM: approval rejected until the component's revision is approved (bottom-up).
+21. Child order for a shortage: quantity = requirement − released stock − open child supply; a second run finds nothing short (409); the same key replays the first result.
+22. Child output satisfies the parent: after final QC releases the child's SF lot, the parent's reservation allocates it FIFO with the older stock; issue consumes it.
+23. Parent link tampering: changing `parent_order_id` is rejected by the database trigger.
+
+## Multi-level browser acceptance (V7 demo data)
+
+1. **Bills of materials** (planner or admin): filter *Multi-level*; the *PET bottle 500ml · clear* (FG-101) R01 card shows *2 levels*, *1 semi-finished*, a rolled-up cost per unit with the single-level figure below it and level bars. **Structure** opens the drawer: change the quantity, collapse/expand nodes and use *Level 1 / All levels*; **Cost roll-up** and **Where used** tabs. On the preform (SF-001) card, **Structure → Where used** shows FG-101 R01/R02.
+2. On FG-101 **Compare** shows R01 → R02: carton changed (20 → 25), yield 99% → 98.5%, cost deltas. On R02 (draft) **Edit** changes a quantity; **Copy to draft** on R01 asks for a new reference (R03 suggested).
+3. **Manufacturing orders**: the FG-101 order due in 7 days (approved) shows **Order structure** in its drawer with one child order (SF-001 preform, "Child of …" in the list); the child's drawer shows its parent. The child needs approval by someone other than the planner who created it.
+4. **Material planning** (planner, warehouse or admin): the SF-001 preform row (level 1) shows planned production pegged to the draft FG-101 order due in 14 days (and safety stock); **Pegging** lists the orders; *Planned production* → **Create MO** prefills the BOM, quantity, start date and the parent order. *Purchase recommendations* → **Create purchase** prefills the purchasing form.
+5. On the draft FG-101 order (due in 14 days), the order structure shows the released preforms already allocated to the earlier order; **Create child orders for shortages** creates a preform child for its full requirement. Material planning then pegs no order demand to the preform; only the safety-stock top-up remains as planned production.
 
 ## Manual browser acceptance
 

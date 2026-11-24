@@ -29,6 +29,24 @@ export type State = {
   financial?: Row;
   journal?: Row[];
   users?: Row[];
+  /** V7: standard-cost roll-up of every BOM revision through all levels (BOM cards). */
+  bomCosts?: BomCost[];
+};
+/** One `bomCosts` row: per-unit material cost by level, total, depth and multi-level warnings. */
+export type BomCost = {
+  id: string;
+  bom_id: string;
+  unitCost: number;
+  singleLevelCost: number;
+  levels: { level: number; cost: number }[];
+  depth: number;
+  missingBoms: string[];
+  cycle: boolean;
+  truncated: boolean;
+  active: boolean;
+  source_bom_id: string | null;
+  source_revision: string | null;
+  semi_finished: number;
 };
 export type User = { id: string; name: string; email: string; role: string; tenant: Row };
 let csrf: { token: string; headerName: string } | undefined;

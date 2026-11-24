@@ -19,11 +19,13 @@ public class CatalogService {
     private final Store s;
     private final PasswordEncoder passwords;
     private final ItemService items;
+    private final BomService bomRules;
 
-    CatalogService(Store s, PasswordEncoder passwords, ItemService items) {
+    CatalogService(Store s, PasswordEncoder passwords, ItemService items, BomService bomRules) {
         this.s = s;
         this.passwords = passwords;
         this.items = items;
+        this.bomRules = bomRules;
     }
 
     @Transactional
@@ -134,6 +136,7 @@ public class CatalogService {
                             + String.join(
                                     ", ",
                                     inactive.stream().map(r -> str(r, "sku")).toList()));
+            bomRules.checkApprovable(a, b); // V7: sub-BOMs approved first, no cycles across levels
             s.db().update("UPDATE boms SET status='APPROVED' WHERE tenant_id=? AND id=?", a.tenant(), id);
             s.audit(a, "BOM_APPROVED", str(b, "revision"), "Material formula frozen for manufacturing");
             return Map.of("id", id, "status", "APPROVED");

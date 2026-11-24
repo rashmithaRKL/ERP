@@ -4229,6 +4229,389 @@
           }
         }
       }
+    },
+    "/boms/{id}": {
+      "post": {
+        "summary": "V7: replace a draft revision's output, yield and components (approved revisions are immutable)",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BomDraft"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Committed result; retry with same key returns prior result"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Role/CSRF denied"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "State/stock/period/idempotency conflict"
+          }
+        }
+      }
+    },
+    "/boms/{id}/copy": {
+      "post": {
+        "summary": "V7: copy an approved revision into a new draft revision",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BomCopy"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Committed result; retry with same key returns prior result"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Role/CSRF denied"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "State/stock/period/idempotency conflict"
+          }
+        }
+      }
+    },
+    "/boms/{id}/explosion": {
+      "get": {
+        "summary": "V7: indented multi-level explosion of a revision (snapshot rounding at every level); ADMIN/PLANNER/WAREHOUSE",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "quantity",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "number"
+            },
+            "description": "Default: the base output"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "{bom, quantity, depth, materialCost, unitCost, root, materials, warnings}"
+          },
+          "401": {
+            "description": "Sign-in required"
+          },
+          "403": {
+            "description": "Role denied"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "Not computable (for example whole pieces or a product without an approved revision)"
+          }
+        }
+      }
+    },
+    "/boms/explosion": {
+      "get": {
+        "summary": "V7: explosion of a product's active (latest approved) revision; ADMIN/PLANNER/WAREHOUSE",
+        "parameters": [
+          {
+            "name": "productId",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "quantity",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Same shape as /boms/{id}/explosion"
+          },
+          "401": {
+            "description": "Sign-in required"
+          },
+          "403": {
+            "description": "Role denied"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "Not computable (for example whole pieces or a product without an approved revision)"
+          }
+        }
+      }
+    },
+    "/boms/where-used": {
+      "get": {
+        "summary": "V7: multi-level where-used of an item up to the end products; ADMIN/PLANNER/WAREHOUSE",
+        "parameters": [
+          {
+            "name": "itemId",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "{item, depth, parents (nested), endProducts}"
+          },
+          "401": {
+            "description": "Sign-in required"
+          },
+          "403": {
+            "description": "Role denied"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "Not computable (for example whole pieces or a product without an approved revision)"
+          }
+        }
+      }
+    },
+    "/boms/compare": {
+      "get": {
+        "summary": "V7: component diff of two revisions of one product (per-unit quantities, rolled-up cost deltas); ADMIN/PLANNER/WAREHOUSE",
+        "parameters": [
+          {
+            "name": "from",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "{from, to, lines[{change ADDED|REMOVED|CHANGED|UNCHANGED, ...}], summary}"
+          },
+          "401": {
+            "description": "Sign-in required"
+          },
+          "403": {
+            "description": "Role denied"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "Not computable (for example whole pieces or a product without an approved revision)"
+          }
+        }
+      }
+    },
+    "/boms/{id}/cost": {
+      "get": {
+        "summary": "V7: standard-cost roll-up through all levels; ADMIN/PLANNER/WAREHOUSE",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "{unitCost, singleLevelCost, levels[{level, cost}], depth, missingBoms, components, ...}"
+          },
+          "401": {
+            "description": "Sign-in required"
+          },
+          "403": {
+            "description": "Role denied"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "Not computable (for example whole pieces or a product without an approved revision)"
+          }
+        }
+      }
+    },
+    "/manufacturing/{id}/children": {
+      "post": {
+        "summary": "V7: child orders for the semi-finished shortages of a draft or approved order; PLANNER",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChildOrders"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Committed result; retry with same key returns prior result"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Role/CSRF denied"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "State/stock/period/idempotency conflict"
+          }
+        }
+      }
+    },
+    "/manufacturing/{id}/tree": {
+      "get": {
+        "summary": "V7: order with ancestors, nested child orders and semi-finished shortages; all roles",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "{order, parent, ancestors, children, descendants, shortages, canPlanChildren}"
+          },
+          "401": {
+            "description": "Sign-in required"
+          },
+          "403": {
+            "description": "Role denied"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "Not computable (for example whole pieces or a product without an approved revision)"
+          }
+        }
+      }
+    },
+    "/planning/mrp": {
+      "get": {
+        "summary": "V7: multi-level MRP with low-level codes, pegging, planned production and purchase recommendations; ADMIN/PLANNER/WAREHOUSE",
+        "responses": {
+          "200": {
+            "description": "{today, summary, rows, plannedProduction, purchases}"
+          },
+          "401": {
+            "description": "Sign-in required"
+          },
+          "403": {
+            "description": "Role denied"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "Not computable (for example whole pieces or a product without an approved revision)"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -4310,6 +4693,11 @@
             "type": "string",
             "nullable": true,
             "description": "Confirmed sales order line this order fulfils (takes precedence over salesOrderId)"
+          },
+          "parentOrderId": {
+            "type": "string",
+            "nullable": true,
+            "description": "V7: a DRAFT/APPROVED order that consumes this order's product; the new order becomes its child (due no later than the parent, no sales line)"
           }
         }
       },
@@ -6158,6 +6546,105 @@
             "format": "date",
             "nullable": true,
             "description": "Default: the latest line expected date (today + lead time)"
+          }
+        }
+      },
+      "BomCopy": {
+        "type": "object",
+        "required": [
+          "revision"
+        ],
+        "properties": {
+          "revision": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 30
+          }
+        }
+      },
+      "BomDraft": {
+        "type": "object",
+        "required": [
+          "outputQty",
+          "yieldFactor",
+          "lines"
+        ],
+        "properties": {
+          "outputQty": {
+            "oneOf": [
+              {
+                "type": "string",
+                "pattern": "^\\d+(\\.\\d{1,6})?$"
+              },
+              {
+                "type": "number",
+                "exclusiveMinimum": true,
+                "minimum": 0
+              }
+            ]
+          },
+          "yieldFactor": {
+            "oneOf": [
+              {
+                "type": "string",
+                "pattern": "^\\d+(\\.\\d{1,6})?$"
+              },
+              {
+                "type": "number",
+                "exclusiveMinimum": true,
+                "minimum": 0
+              }
+            ],
+            "description": "0 < yield ≤ 1"
+          },
+          "lines": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 100,
+            "items": {
+              "type": "object",
+              "required": [
+                "itemId",
+                "quantity"
+              ],
+              "properties": {
+                "itemId": {
+                  "type": "string"
+                },
+                "quantity": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      },
+      "ChildOrders": {
+        "type": "object",
+        "properties": {
+          "machineId": {
+            "type": "string",
+            "nullable": true,
+            "description": "Defaults to the parent's work center"
+          },
+          "priority": {
+            "type": "string",
+            "enum": [
+              "NORMAL",
+              "HIGH",
+              "URGENT"
+            ],
+            "nullable": true,
+            "description": "Defaults to the parent's priority"
+          },
+          "itemIds": {
+            "type": "array",
+            "nullable": true,
+            "maxItems": 50,
+            "items": {
+              "type": "string"
+            },
+            "description": "Limit to these semi-finished materials"
           }
         }
       }

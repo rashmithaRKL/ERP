@@ -10,7 +10,10 @@ All business mutations require a unique `Idempotency-Key` header; keep it across
 |---|---|---|
 | GET | `/state?days=7|14|30|90` | Tenant read snapshot; all signed-in roles; financial aggregates PLANNER/ADMIN, user directory ADMIN |
 | GET | `/manufacturing/{id}` | Tenant-owned snapshot/materials/actuals/audit |
-| POST | `/manufacturing` | Create snapshotted order; PLANNER |
+| POST | `/manufacturing` | Create snapshotted order; optional `parentOrderId` (V7) makes it a child order; PLANNER |
+| POST | `/manufacturing/{id}/children` | V7: child orders for the semi-finished shortages of a DRAFT/APPROVED order `{machineId?, priority?, itemIds?}`; returns `{parentId, created, skipped}`; PLANNER |
+| GET | `/manufacturing/{id}/tree` | V7: `{order, parent, ancestors, children (nested), descendants, shortages, canPlanChildren}`; all roles |
+| GET | `/planning/mrp` | V7: multi-level plan `{today, summary, rows (with pegging), plannedProduction, purchases}`; ADMIN/PLANNER/WAREHOUSE |
 | POST | `/manufacturing/{id}/actions/{action}` | Validated lifecycle transition; roles depend on action |
 | POST | `/manufacturing/{id}/complete` | Partial/final output, scrap and actual conversion cost; OPERATOR |
 | POST | `/purchases` | Original single-item contract: creates a purchase order with one base-unit line and submits it for approval; PLANNER/WAREHOUSE |
@@ -48,8 +51,15 @@ All business mutations require a unique `Idempotency-Key` header; keep it across
 | GET / POST | `/item-categories`, `/item-categories/{id}` | Tree-ordered list with paths and item counts; create `{name, parentId?, description?}`; update `{name, parentId, description, active}` (cycles rejected); PLANNER for writes |
 | GET / POST | `/item-templates`, `/item-templates/{id}` | Variant families: list/detail; create `{code, name, description, type, uom, categoryId, attributes:[{name, values}]}`; update `{name, description, categoryId, attributes}` (attribute names fixed and used values kept once variants exist); PLANNER for writes |
 | POST | `/item-templates/{id}/variants` | Generate variants `{variants:[{values:{attr:value}, sku, name?, standardCost, reorderLevel?}]}` — each becomes an ordinary item; PLANNER |
-| POST | `/boms` | Draft single-level material formula; PLANNER |
-| POST | `/boms/{id}/approve` | Freeze approved revision; PLANNER |
+| POST | `/boms` | Draft material formula (components may be semi-finished items with their own BOM); PLANNER |
+| POST | `/boms/{id}/approve` | Freeze approved revision; V7: 409 when a semi-finished component has no approved BOM or when the revision would close a cycle at any depth; PLANNER |
+| POST | `/boms/{id}/copy` | V7: `{revision}`: an APPROVED revision becomes a new DRAFT (same output, yield, components; `source_bom_id` recorded); PLANNER |
+| POST | `/boms/{id}` | V7: replace a DRAFT's `{outputQty, yieldFactor, lines}`; approved revisions are immutable (409); PLANNER |
+| GET | `/boms/{id}/explosion?quantity=` | V7: indented multi-level explosion (default quantity = base output); ADMIN/PLANNER/WAREHOUSE |
+| GET | `/boms/explosion?productId=&quantity=` | V7: explosion of a product's active (latest approved) revision; ADMIN/PLANNER/WAREHOUSE |
+| GET | `/boms/where-used?itemId=` | V7: multi-level where-used up to the end products; ADMIN/PLANNER/WAREHOUSE |
+| GET | `/boms/compare?from=&to=` | V7: component diff of two revisions of the same product; ADMIN/PLANNER/WAREHOUSE |
+| GET | `/boms/{id}/cost` | V7: standard-cost roll-up (per-unit cost per level, total, direct components); ADMIN/PLANNER/WAREHOUSE |
 | POST | `/partners` | Customer/supplier; optional `phone`, `billingAddress`, `shippingAddress`, `taxId`, `creditLimit` (customers); SALES(customer), WAREHOUSE(supplier), PLANNER |
 | POST | `/machines` | Register idle work center; PLANNER |
 | POST | `/organization` | Update current organization/plant; ADMIN |
@@ -126,6 +136,20 @@ Lists return `{items, next}`; pass `next` as `before` for the next page (keyset 
 {"reason":"COUNT_VARIANCE","notes":"Recount of bay 4","lines":[{"kind":"DECREASE","lotId":"opaque-lot","quantity":"12"},{"kind":"FOUND","itemId":"opaque-item","warehouseId":"opaque-warehouse","quantity":"5","unitCost":"125","lotNumber":null}]}
 ```
 
+### Multi-level BOMs and planning (V7)
+
+A `SEMI_FINISHED` component whose product has an approved revision is the next level. The **active** revision of a product is its most recently created approved revision; explosion, cost roll-up, child orders and MRP use it. Revisions are approved bottom-up: approval rejects a semi-finished component without an approved BOM and any path of approved revisions that leads back to the product (`"This revision would create a BOM cycle: CMP → PRE → CMP"`).
+
+Explosion quantities follow the manufacturing snapshot at every level: `line quantity × parent quantity / (output × yield)` of that level's revision, rounded up to whole pieces for `pcs` and to 6 decimals otherwise; the next level scales from the rounded quantity (exactly what a child order would snapshot). Nodes carry `level`, `quantity`, `exactQuantity`, `perUnit`, `standardCost`, `extendedCost` (rolled up for expanded nodes), the expanded `bomId`/`revision`, `missingBom`/`cycle` flags and `children`; the response adds `materials` (bought-in totals across levels), `materialCost`, `unitCost`, `depth` and `warnings`. The cost roll-up values bought-in items at standard cost and semi-finished items at their active revision's rolled-up cost (`levels` = bought-in cost per unit of product consumed at each level; they add up to `unitCost`; `singleLevelCost` uses the direct components' item standard costs). Compare reports per-unit quantities (output and yield applied) so a changed base output alone is not a component change; changes are `ADDED`, `REMOVED`, `CHANGED`, `UNCHANGED`.
+
+Child orders: `POST /manufacturing/{id}/children` creates, for each semi-finished material of a DRAFT/APPROVED order with `shortage = required − reserved/issued − released unreserved stock left after earlier-due open orders (their requirements less their own children's supply) − pending supply of its open children (still to produce + output in final QC)`, one draft child order: quantity = shortage, the component's active revision, the parent's work center/priority unless given, due `lead_time_days` of the component before the parent. 409 when nothing is short. An explicit child is `POST /manufacturing` with `parentOrderId`: the parent must be DRAFT/APPROVED, consume the product, be due no earlier than the child, and the child must not be linked to a sales line. The link never changes (DB trigger). Children are ordinary orders: independent approval, and their released output lots satisfy the parent's normal reservation.
+
+MRP (`GET /planning/mrp`, and the `mrp` rows of `/state`): gross demand = unreserved snapshots of DRAFT/APPROVED orders (need date = order due date) + dependent demand of planned production (need date = its start). Per item, by low-level code: `shortage = gross + safety stock (active items) − released unreserved stock − stock in inspection − open MO quantity still to produce − incoming purchase supply`, lot-for-lot, whole pieces rounded up. Open demand is pegged in need-date order before safety stock; a pure safety-stock shortfall is needed today. `action`: `PRODUCE` (semi-finished with an approved BOM → `plannedProduction`, start = need − lead time), `PURCHASE` (bought-in → `purchases`, order date = need − lead time), `NO_BOM` (semi-finished without a BOM; listed as a purchase), `REVIEW` (inactive item with open demand), `NONE`. Rows: `level, gross, independent_demand, dependent_demand, available, inspection, incoming, on_order, safety, shortage, action, bom_id, need_date, start_date, late, drivers, supply_orders, pegging[]`; planned production adds `parent_orders` (DRAFT/APPROVED orders whose uncovered demand drives it, candidates for `parentOrderId`).
+
+```json
+{"machineId":null,"priority":"HIGH","itemIds":["opaque-semi-finished-item"]}
+```
+
 Lifecycle actions: `approve` (PLANNER, distinct from creator); `reserve` (PLANNER/WAREHOUSE); `issue` (WAREHOUSE); `start`, `pause`, `resume` (OPERATOR/PLANNER); `close`, `cancel` (PLANNER). Cancellation is available only before material issue, with reservations safely released. Issued order cancellation is blocked until a controlled return/variance procedure exists.
 
 Examples:
@@ -165,6 +189,7 @@ Units: stock, BOM quantities and documents are stored in the item's base unit. `
 Errors use HTTP 400 (invalid input), 401 (unauthenticated), 403 (role/CSRF), 404 (missing/unowned record), 409 (business state/quantity/reference conflict), 429 (login limit), and sanitized server errors. Business/validation errors return `{message}`. A lost response is resolved by retrying with the same key, not creating another logical transaction.
 
 `/state` key `purchases` is one summary row per purchase order (supplier, status, total, `line_count`, aggregated item names as `item`, summed base `quantity`/`received`/`returned` with `uom` when all lines share one) and `receipts` one row per received line and lot (GRN `number`, `delivery_note`, lot and its quality `status`, `invoiced`, `returned`); both replace the former single-item rows. MRP `incoming` = open base quantity on lines of APPROVED/PARTIAL orders.
+`/state` key `bomCosts` (V7) carries the roll-up of every revision (`bom_id, unitCost, singleLevelCost, levels, depth, missingBoms, cycle, active, source_bom_id, source_revision, semi_finished`); `orders` rows carry `parent_order_id`; `mrp` rows keep their original columns and add the multi-level ones listed above (without `pegging`).
 
 `/state` keys `sales` (one summary row per order: totals, line count, aggregated product names, summed quantity/delivered/returned with `uom` when all lines share one) and `salesLines` (open lines of confirmed orders with `planned` quantity, for the manufacturing-order dialog) replace the former single-item `sales` rows.
 

@@ -27,12 +27,12 @@ run by `target/surefire-reports/*.xml`.
 |---|---|
 | `lk.dexlanka.erp` | `ErpApplication` only (component scan root) |
 | `platform` | `Store` (posting primitives), `Actor` (identity + role checks), `ErpUser`, `SecurityConfig`, `LoginRateLimit`, `AuthController` (`/api/health`, `/api/auth/*`), `ApiErrors` (the single `@RestControllerAdvice`) |
-| `catalog` | Organization, user accounts, partners (maintenance and directory in `Partner*` files), items, work centers (machines), BOM revisions; item master (V4: `ItemService`, `UnitService` conversion service, `CategoryService`, `VariantService`, `ItemQuery`) |
+| `catalog` | Organization, user accounts, partners (maintenance and directory in `Partner*` files), items, work centers (machines), BOM revisions; item master (V4: `ItemService`, `UnitService` conversion service, `CategoryService`, `VariantService`, `ItemQuery`); multi-level BOMs (V7: `BomGraph` structure + roll-up, `BomService` copy/edit-draft + approval rules called from `CatalogService.approveBom`, `BomQuery` explosion/where-used/compare/cost, `BomStateSections`) |
 | `procurement` | Multi-line purchase orders in purchase units (`PurchaseOrderService`: draft/submit/independent approval/cancel/close short, drafts from MRP shortages), goods receipts per line (`ReceivingService`), supplier invoices with quantity/price variances (`SupplierInvoiceService`), supplier returns (`SupplierReturnService`), the read model (`ProcurementQuery`), open MRP supply (`ProcurementSupply`), shared rules (`PurchaseRules`) and the original single-item contract (`ProcurementService`) |
 | `quality` | Incoming and final inspections (including the supplier return of a failed incoming lot and MO completion after the last final release) |
 | `sales` | Multi-line sales orders (draft/confirm/cancel/close short), per-line dispatch (revenue/receivables and COGS per delivery), customer returns (`ReturnsService`), the sales read model (`SalesQuery`) |
-| `manufacturing` | Manufacturing-order lifecycle: snapshot, approval, reservation, issue, start/pause/resume, output, close/cancel |
-| `reporting` | `GET /api/state` (`StateQuery` + the `StateContributor` contract), `GET /api/manufacturing/{id}` (`OrderDetailsQuery`), cross-domain sections: inventory (lots, ledger), MRP, dashboard, audit/sync, finance |
+| `manufacturing` | Manufacturing-order lifecycle: snapshot, approval, reservation, issue, start/pause/resume, output, close/cancel; parent/child orders (V7: `ChildPlanning` shortages, `OrderTreeService` child orders, `OrderTreeQuery` order tree) |
+| `reporting` | `GET /api/state` (`StateQuery` + the `StateContributor` contract), `GET /api/manufacturing/{id}` (`OrderDetailsQuery`), cross-domain sections: inventory (lots, ledger), MRP, dashboard, audit/sync, finance; multi-level MRP (V7: `MrpPlanner` engine, `PlanningStateSections` with the isolated `incomingPurchaseSupply(tenant)` query, `PlanningQuery`) |
 | `demo` | `DemoDatabase` (embedded PostgreSQL for the `demo`/`test` profiles), `DemoSeed` (demo tenant, or first-start bootstrap tenant outside demo), `DemoPersonas` |
 
 A domain package contains, by convention:
@@ -62,8 +62,11 @@ Route ownership:
 | `procurement.ProcurementController` | `GET /purchases/orders`, `/purchases/orders/{id}`, `/purchases/receipts`, `/purchases/invoices`, `/purchases/returns`, `/purchases/sources`; `POST /purchases/orders`, `/purchases/orders/{id}`, `/purchases/orders/{id}/submit`, `/approve`, `/cancel`, `/close`, `/receipts`, `/invoices`, `/purchases/receipts/{id}/returns`, `/purchases/recommendations`; original contract `POST /purchases`, `/purchases/{id}/approve`, `/purchases/{id}/receive`, `/receipts/{id}/invoice` |
 | `quality.QualityController` | `POST /quality/{id}/inspect` |
 | `sales.SalesController` | `GET /sales/orders`, `GET /sales/orders/{id}`; `POST /sales/orders`, `/sales/orders/{id}`, `/sales/orders/{id}/confirm`, `/cancel`, `/close`, `/sales/orders/{id}/lines/{lineId}/dispatch`, `/sales/deliveries/{id}/returns`; original contract `POST /sales`, `/sales/{id}/dispatch` |
+| `catalog.BomController` | `GET /boms/{id}/explosion`, `/boms/explosion`, `/boms/where-used`, `/boms/compare`, `/boms/{id}/cost`; `POST /boms/{id}/copy`, `/boms/{id}` (edit draft) |
 | `manufacturing.ManufacturingController` | `POST /manufacturing`, `/manufacturing/{id}/actions/{action}`, `/manufacturing/{id}/complete` |
+| `manufacturing.OrderTreeController` | `GET /manufacturing/{id}/tree`; `POST /manufacturing/{id}/children` |
 | `reporting.ReportingController` | `GET /state`, `GET /manufacturing/{id}` |
+| `reporting.PlanningController` | `GET /planning/mrp` |
 
 ## How to add a feature module
 
@@ -261,6 +264,11 @@ annotate contributors with `@Transactional`. Existing keys, in order:
 | 290–300 | `audit`, `sync` | reporting (audit) |
 | 310–320 | `financial`, `journal` (ADMIN, PLANNER) | reporting (finance) |
 | 1300 | `salesLines` (open lines of confirmed orders, for planning) | sales |
+| 1700 | `bomCosts` (multi-level standard-cost roll-up per revision; V7) | catalog |
+
+V7 also added columns to existing keys: `orders` rows carry `parent_order_id`, and `mrp` rows (now computed by the
+multi-level `MrpPlanner`) keep their original columns and add `level`, `independent_demand`, `dependent_demand`,
+`inspection`, `on_order`, `safety`, `action`, `bom_id`, `need_date`, `start_date`, `late`, `drivers`.
 
 The frontend depends on these keys and their row shapes: changing an existing section's columns is an API change.
 
@@ -293,6 +301,7 @@ The database, not the Java code, is the last line of defence:
 | `supplier_invoices_immutable`, `supplier_invoice_lines_immutable`, `supplier_returns_immutable` (V6) | Posted supplier invoices, their lines and supplier returns cannot be changed or deleted. |
 | `tenant_default_units` (V4) | `AFTER INSERT ON tenants`: seeds the standard units of measure for every new tenant (`seed_default_units`). Items reference `units(tenant_id, code)`. |
 | `item_identity_guard` (V4) | `BEFORE UPDATE ON items`: the base unit cannot change once stock-ledger rows exist, and SKU/base unit/type cannot change once `item_is_referenced()` finds any row of any table with a foreign key to `items` (new document tables are covered automatically). |
+| `mo_parent_immutable` (V7) | `BEFORE UPDATE OF parent_order_id ON manufacturing_orders`: a child order's parent link never changes (SQLSTATE 23514 → 409), so links always point at older orders and cannot form cycles. BOM cycles and missing sub-BOMs are approval rules in `BomService.checkApprovable`, not triggers. |
 
 A new table of posted history gets the same protection by reusing the function:
 `CREATE TRIGGER <table>_immutable BEFORE UPDATE OR DELETE ON <table> FOR EACH ROW EXECUTE FUNCTION reject_history_mutation();`.
@@ -303,9 +312,12 @@ Trigger exceptions and constraint violations surface as `DataIntegrityViolationE
 
 `demo.DemoSeed` seeds the base demo tenant once, when `app.demo=true`; never edit it for a feature (V3 only moved its
 sales orders to the draft → confirm → per-line dispatch commands, V6 its two purchase orders to the draft → submit →
-approve → receive-lines commands). `demo.SalesDemoSeed` (`ORDER + 30`) adds the V3 sales documents and
-`demo.ProcurementDemoSeed` (`ORDER + 60`) the V6 purchase orders (one per state), an invoice with a price variance and a
-supplier return. A feature that needs
+approve → receive-lines commands). `demo.SalesDemoSeed` (`ORDER + 30`) adds the V3 sales documents,
+`demo.ItemMasterDemoSeed` (`ORDER + 40`) the V4 item master data, `inventory.InventoryDemoSeed` (`ORDER + 50`) the V5
+documents, `demo.ProcurementDemoSeed` (`ORDER + 60`) the V6 purchase orders (one per state), an invoice with a price
+variance and a supplier return, and `demo.PlanningDemoSeed` (`ORDER + 70`) the V7 two-level bottle/preform structure,
+an R02 draft copy, an approved parent order with a preform child order and a draft parent that drives planned
+production. A feature that needs
 demo data adds its own runner, ordered after the base seed and idempotent (it also runs against an existing
 `.local/postgres` demo database on the next start):
 

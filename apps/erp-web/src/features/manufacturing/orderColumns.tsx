@@ -7,7 +7,8 @@ import { ProductMark } from '../products/ProductMark';
 
 /** Manufacturing order table columns (Overview, Manufacturing orders). The order number opens the drawer. */
 export function useOrderColumns(): Column[] {
-  const { openOrder } = useWorkspace();
+  const { openOrder, data } = useWorkspace();
+  const numbers = new Map((data?.orders || []).map((o) => [o.id, text(o.number)]));
   return [
     {
       label: 'Manufacturing order',
@@ -23,7 +24,11 @@ export function useOrderColumns(): Column[] {
           >
             {text(r.number)}
           </button>
-          <span>{text(r.customer) || 'Make to stock'}</span>
+          <span>
+            {r.parent_order_id
+              ? `Child of ${numbers.get(text(r.parent_order_id)) || 'a parent order'}`
+              : text(r.customer) || 'Make to stock'}
+          </span>
         </div>
       ),
     },
