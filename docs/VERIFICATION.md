@@ -1,5 +1,31 @@
 # Verification record
 
+## Commercial core (V3–V9) — 21–25 November 2026
+
+Environment: Windows 11, Node 24.11.1, Maven 3.9.10 with JDK 21, embedded PostgreSQL 14 (zonky) for demo and tests, Brave with the Claude browser extension for visual checks. Work was built by parallel agents in git worktrees and merged in migration order; each merge was followed by the full suite.
+
+| Step | Commit | Backend tests | Notes |
+|---|---|---|---|
+| Baseline as received (Windows) | `831ebe9` | 21 / 0 failures | macOS `.local/postgres` incompatible (posix shm, `C.UTF-8`); fresh demo DB seeded |
+| Frontend + backend restructure (pure refactors) | `b8dadea`, `9870f97` | 21 / 0 | ~110-call API behaviour dump identical before/after |
+| V3 sales, V4 item master, V5 inventory | `214fccc`, `1a6aa02`, `4d823dc` | 83 / 0 | V3–V5 migrated the existing demo DB in place |
+| V6 procurement, V7 multi-level BOM/MRP, V8 administration | `d799e5e`, `1f20f1b`, `5afee50` | 151 / 0 | MRP incoming supply switched to purchase-order lines at merge |
+| V9 integration + frontend polish | `ae80aa8`, `81d6d79` | 174 / 0 | + 8 frontend unit tests (vitest); entry chunk 600 kB → 182 kB, no chunk warning |
+
+Every merge also passed `npm run typecheck`, `npm run build`, `npm run format:check -w apps/erp-web` and `mvn spotless:check`, and the demo API started with all migrations applied and no warnings.
+
+Browser checks (demo workspace, admin persona unless noted; no console errors on any page):
+
+- Sales: multi-line order drawer (lifecycle, per-line dispatch/plan, deliveries with return, linked production, close short); PO-ICP-7790 line shows "40 box × Rs. 1,375 (2,000 pcs)".
+- Item master: barcode `14790001000019` opens FG-001 with "1 box = 50 pcs"; semi-finished preform, variant family and categories present.
+- Inventory: approved and posted the Rs. 72,750 damage adjustment (created by the warehouse persona) — balanced journal Dr inventory adjustment / Cr raw inventory.
+- Purchasing: multi-line order (HDPE 120 bag = 3,000 kg, receipts with QC status, supplier return, match invoice / receive goods).
+- BOMs and planning: FG-101 two-level explosion for 1,000 units (1,011 preforms → 24.7695 kg PET resin, Rs. 18,032.64); MRP shows level-1 planned production for SF-001 with pegging and Create MO.
+- Administration: users with roles and last sign-in; server-paged audit trail with filters and CSV export.
+- Polish: Overview chart marks today as a dashed partial segment; MO drawer shows "WIP cost" and readable activity ("Materials reserved → Released", "WIP 221,301.74"); drawer tables fit at desktop width.
+
+Not verified in this round: phone-width layout of the V9 card tables (the browser window could not be resized), screen-reader behaviour, Docker deployment, backup/restore drills, load/performance targets. Known limitations are listed in each feature's section of `docs/FEATURES.md` and in the agent merge notes.
+
 ## Interface motion — 30 October 2026
 
 Executed against the local React workspace and the running PostgreSQL-backed API.

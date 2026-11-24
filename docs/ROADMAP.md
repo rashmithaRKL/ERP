@@ -6,7 +6,7 @@ Status language: **verified** means executed evidence exists; **implemented** me
 |---|---|---|
 | Phase 0 architecture, schema, security boundaries, API and local runtime | Implemented | External architecture/security review, target environment sign-off |
 | Phase 1 first manufacturing lifecycle | Implemented, integration-tested | Pilot operator acceptance and reconciliation on customer scenarios |
-| Phase 1 wider commercial core | In progress | Multi-line documents, SKU variants/conversions, stock counts/adjustments/returns/transfers, multi-level BOMs, approval configuration, proper server pagination, document imports and complete production onboarding |
+| Phase 1 wider commercial core | Implemented, integration-tested (V3–V9, November 2026) | Pilot acceptance with real operators and data; remaining gaps: supplier invoices in purchase units, credit notes/cash receipts, warehouse-level permissions, finite capacity (see `docs/VERIFICATION.md`) |
 | Phase 2 advanced factory operations | Planned | Versioned routing/skills/shifts, finite-capacity scheduling, maintenance workflows, full QC/rework/CAPA, genealogy explorer, validated utilization/OEE |
 | Phase 3 offline commercial deployment | Planned | Hardened local Postgres installation, local MFA/credential lifecycle, durable browser queue, single-writer partition sync, inbox deduplication, checkpoints/conflict review, licensing grace, signed Windows installer, proven restore/upgrade drills |
 | Phase 4 finance/industry/SaaS | Planned | Full chart of accounts/period admin/AP/AR/payments/taxes/statutory reports, country tax adapters with effective versions, customer provisioning, subscription entitlements, isolated support console, industry packages |
