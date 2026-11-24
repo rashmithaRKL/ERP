@@ -56,8 +56,10 @@ public final class SalesCommands {
     }
 
     /**
-     * One sales-order line. {@code id} is only meaningful when editing a draft (keep the id of an existing line to keep
-     * its identity); {@code discountPct} defaults to zero.
+     * One sales-order line. {@code quantity} and {@code unitPrice} are in {@code unit} (V9): the product's base unit
+     * (the default) or a unit it may be sold in (a conversion flagged for sales, or a standard unit of the same kind).
+     * {@code id} is only meaningful when editing a draft (keep the id of an existing line to keep its identity); {@code
+     * discountPct} defaults to zero.
      */
     public record Line(
             @Size(max = 64) String id,
@@ -70,7 +72,14 @@ public final class SalesCommands {
             BigDecimal unitPrice,
 
             @DecimalMin("0") @DecimalMax("100") @Digits(integer = 3, fraction = 4)
-            BigDecimal discountPct) {}
+            BigDecimal discountPct,
+
+            @Size(max = 20) String unit) {
+        /** A line in the product's base unit (the V3 shape). */
+        public Line(String id, String productId, BigDecimal quantity, BigDecimal unitPrice, BigDecimal discountPct) {
+            this(id, productId, quantity, unitPrice, discountPct, null);
+        }
+    }
 
     /** Draft sales order: create ({@code POST /api/sales/orders}) or replace a draft ({@code POST .../{id}}). */
     public record Order(

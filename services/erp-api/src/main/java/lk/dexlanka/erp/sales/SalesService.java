@@ -16,6 +16,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
+import lk.dexlanka.erp.catalog.UnitService;
 import lk.dexlanka.erp.platform.Actor;
 import lk.dexlanka.erp.platform.Store;
 import org.springframework.stereotype.Service;
@@ -28,6 +29,10 @@ import org.springframework.transaction.annotation.Transactional;
  * <p>Lifecycle: {@code DRAFT} (editable) → {@code CONFIRMED} → {@code PARTIAL} → {@code DELIVERED}; {@code CANCELLED}
  * before any delivery and while no linked manufacturing order is in progress; {@code CLOSED} (short, with a reason)
  * from {@code PARTIAL}.
+ *
+ * <p>Lines are entered in sales units (V9): the base unit or a conversion flagged for sales. Each line stores the
+ * entered quantity, unit, factor and exact base quantity ({@link UnitService#toBaseExact}), the price per entered unit
+ * and the base unit price. Dispatch, delivered/returned quantities and manufacturing demand are base quantities.
  */
 @Service
 public class SalesService {
@@ -50,9 +55,11 @@ public class SalesService {
     private static final BigDecimal HUNDRED = BigDecimal.valueOf(100);
 
     private final Store s;
+    private final UnitService units;
 
-    SalesService(Store s) {
+    SalesService(Store s, UnitService units) {
         this.s = s;
+        this.units = units;
     }
 
     // ------------------------------------------------------------------ documents
@@ -220,7 +227,7 @@ public class SalesService {
             var so = locked(a, id);
             require(so.get("status").equals("PARTIAL"), "Only partially delivered orders can be closed short");
             var open = s.list(
-                    "SELECT l.line_no,l.quantity-l.delivered AS open,i.uom FROM sales_order_lines l JOIN items i ON i.tenant_id=l.tenant_id AND i.id=l.product_id WHERE l.tenant_id=? AND l.sales_order_id=? AND l.delivered<l.quantity ORDER BY l.line_no",
+                    "SELECT l.line_no,l.base_quantity-l.delivered AS open,i.uom FROM sales_order_lines l JOIN items i ON i.tenant_id=l.tenant_id AND i.id=l.product_id WHERE l.tenant_id=? AND l.sales_order_id=? AND l.delivered<l.base_quantity ORDER BY l.line_no",
                     a.tenant(),
                     id);
             s.db().update(
@@ -277,7 +284,7 @@ public class SalesService {
                 "Only confirmed sales orders with an open quantity can be dispatched");
         var seen = new HashSet<String>();
         for (var lot : lots) require(seen.add(lot.lotId()), "Each lot can appear only once per dispatch");
-        BigDecimal ordered = dec(line.get("quantity"));
+        BigDecimal ordered = dec(line.get("base_quantity"));
         BigDecimal delivered = dec(line.get("delivered"));
         BigDecimal recognized = s.db().queryForObject(
                         "SELECT COALESCE(SUM(revenue_amount),0) FROM deliveries WHERE tenant_id=? AND sales_order_line_id=?",
@@ -340,7 +347,7 @@ public class SalesService {
                         a.tenant(),
                         lineId);
         String next = Boolean.TRUE.equals(s.db().queryForObject(
-                                "SELECT bool_and(delivered=quantity) FROM sales_order_lines WHERE tenant_id=? AND sales_order_id=?",
+                                "SELECT bool_and(delivered=base_quantity) FROM sales_order_lines WHERE tenant_id=? AND sales_order_id=?",
                                 Boolean.class,
                                 a.tenant(),
                                 id))
@@ -370,7 +377,7 @@ public class SalesService {
         s.one("SELECT id FROM sales_orders WHERE tenant_id=? AND id=?", a.tenant(), id);
         var lot = s.one("SELECT item_id FROM lots WHERE tenant_id=? AND id=?", a.tenant(), lotId);
         var lines = s.list(
-                "SELECT id,quantity-delivered AS open FROM sales_order_lines WHERE tenant_id=? AND sales_order_id=? AND product_id=? ORDER BY line_no",
+                "SELECT id,base_quantity-delivered AS open FROM sales_order_lines WHERE tenant_id=? AND sales_order_id=? AND product_id=? ORDER BY line_no",
                 a.tenant(),
                 id,
                 lot.get("item_id"));
@@ -397,7 +404,11 @@ public class SalesService {
         return p;
     }
 
-    /** Inserts lines 1..n in the given order and returns the product rows. {@code keep}: ids allowed to be reused. */
+    /**
+     * Inserts lines 1..n in the given order and returns the product rows. Each quantity is converted to the product's
+     * base unit exactly ({@link UnitService#toBaseExact}); a unit other than the base unit must be a conversion the
+     * product may be sold in (or a standard unit of the same kind). {@code keep}: ids allowed to be reused.
+     */
     private List<Map<String, Object>> writeLines(
             Actor a, String orderId, List<SalesCommands.Line> lines, Set<String> keep) {
         var products = new ArrayList<Map<String, Object>>();
@@ -408,7 +419,26 @@ public class SalesService {
                     "SELECT * FROM items WHERE tenant_id=? AND id=? AND type='FINISHED_GOOD' AND active=true",
                     a.tenant(),
                     l.productId());
-            s.quantity(str(item, "uom"), l.quantity());
+            String base = str(item, "uom");
+            String unit =
+                    l.unit() == null || l.unit().isBlank() ? base : l.unit().strip();
+            if (unit.equals(base)) s.quantity(base, l.quantity()); // the V3 message for fractional pieces
+            else {
+                var conversion = s.list(
+                        "SELECT sales FROM item_unit_conversions WHERE tenant_id=? AND item_id=? AND unit_code=?",
+                        a.tenant(),
+                        l.productId(),
+                        unit);
+                require(
+                        conversion.isEmpty()
+                                || Boolean.TRUE.equals(conversion.getFirst().get("sales")),
+                        "SKU " + item.get("sku") + " is not sold in " + unit
+                                + "; enable the conversion for sales or use another unit");
+            }
+            BigDecimal factor = units.factor(a, l.productId(), unit);
+            BigDecimal baseQuantity = units.toBaseExact(a, l.productId(), l.quantity(), unit);
+            s.quantity(base, baseQuantity);
+            require(baseQuantity.signum() > 0, "Line " + (number + 1) + " converts to zero " + base);
             String lineId = id();
             if (keep != null && l.id() != null && !l.id().isBlank()) {
                 require(keep.contains(l.id()), "A line does not belong to this sales order");
@@ -416,14 +446,18 @@ public class SalesService {
             }
             require(ids.add(lineId), "Each line can appear only once");
             s.db().update(
-                            "INSERT INTO sales_order_lines(id,tenant_id,sales_order_id,line_no,product_id,quantity,unit_price,discount_pct) VALUES(?,?,?,?,?,?,?,?)",
+                            "INSERT INTO sales_order_lines(id,tenant_id,sales_order_id,line_no,product_id,quantity,unit,factor,base_quantity,unit_price,base_unit_price,discount_pct) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
                             lineId,
                             a.tenant(),
                             orderId,
                             ++number,
                             l.productId(),
                             l.quantity(),
+                            unit,
+                            factor,
+                            baseQuantity,
                             l.unitPrice(),
+                            l.unitPrice().divide(factor, 6, RoundingMode.HALF_UP),
                             l.discountPct() == null ? BigDecimal.ZERO : l.discountPct());
             products.add(item);
         }
@@ -474,11 +508,15 @@ public class SalesService {
                 + amount(orderTotal) + " are above the limit of " + amount(limit));
     }
 
-    /** Net revenue of {@code quantity} at the line's unit price and discount. */
-    private static BigDecimal net(BigDecimal quantity, Map<String, Object> line) {
-        return money(quantity.multiply(dec(line.get("unit_price")))
+    /**
+     * Net revenue of {@code baseQuantity} at the line's price per entered unit and discount: base quantity / factor x
+     * unit price x (100 - discount) / 100, rounded once to the money scale (a base-unit line keeps the V3 result).
+     */
+    static BigDecimal net(BigDecimal baseQuantity, Map<String, Object> line) {
+        return money(baseQuantity
+                .multiply(dec(line.get("unit_price")))
                 .multiply(HUNDRED.subtract(dec(line.get("discount_pct"))))
-                .divide(HUNDRED));
+                .divide(HUNDRED.multiply(dec(line.get("factor"))), 20, RoundingMode.HALF_UP));
     }
 
     private static Map<String, Object> result(Map<String, Object> so, String status, List<String> warnings) {

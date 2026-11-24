@@ -76,7 +76,7 @@ public class ManufacturingService {
                                 a.tenant(),
                                 demand.get("id"));
                 require(
-                        planned.add(c.quantity()).compareTo(dec(demand.get("quantity"))) <= 0,
+                        planned.add(c.quantity()).compareTo(dec(demand.get("base_quantity"))) <= 0,
                         "Manufacturing quantity exceeds unplanned customer demand");
             }
             String id = id();

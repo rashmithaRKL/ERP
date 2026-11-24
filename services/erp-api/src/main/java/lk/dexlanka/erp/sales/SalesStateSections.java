@@ -36,7 +36,7 @@ class SalesStateSections implements StateContributor {
                 JOIN partners p ON p.tenant_id=so.tenant_id AND p.id=so.customer_id
                 LEFT JOIN LATERAL (
                     SELECT COUNT(*) AS line_count,
-                           COALESCE(SUM(l.quantity),0) AS quantity,
+                           COALESCE(SUM(l.base_quantity),0) AS quantity,
                            COALESCE(SUM(l.delivered),0) AS delivered,
                            COALESCE(SUM(l.returned),0) AS returned,
                            CASE WHEN COUNT(DISTINCT i.uom)=1 THEN MIN(i.uom) END AS uom,
@@ -52,7 +52,8 @@ class SalesStateSections implements StateContributor {
     private List<Map<String, Object>> salesLines(StateRequest r) {
         return s.list("""
                 SELECT l.id,l.sales_order_id,so.number,so.status,so.due_date,p.name AS customer,l.line_no,
-                       l.product_id,i.name AS product,i.sku,i.uom,l.quantity,l.delivered,
+                       l.product_id,i.name AS product,i.sku,i.uom,l.base_quantity AS quantity,l.delivered,
+                       l.quantity AS entered_quantity,l.unit,
                        COALESCE((SELECT SUM(o.quantity-o.scrap_qty) FROM manufacturing_orders o
                                  WHERE o.tenant_id=l.tenant_id AND o.sales_order_line_id=l.id
                                    AND o.status<>'CANCELLED'),0) AS planned
@@ -60,7 +61,7 @@ class SalesStateSections implements StateContributor {
                 JOIN sales_orders so ON so.tenant_id=l.tenant_id AND so.id=l.sales_order_id
                 JOIN partners p ON p.tenant_id=so.tenant_id AND p.id=so.customer_id
                 JOIN items i ON i.tenant_id=l.tenant_id AND i.id=l.product_id
-                WHERE l.tenant_id=? AND so.status IN ('CONFIRMED','PARTIAL') AND l.delivered<l.quantity
+                WHERE l.tenant_id=? AND so.status IN ('CONFIRMED','PARTIAL') AND l.delivered<l.base_quantity
                 ORDER BY so.due_date,so.number,l.line_no
                 LIMIT 250""", r.tenant());
     }

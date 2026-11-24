@@ -6,6 +6,7 @@
 .sales-editor-lines>h3{display:flex;align-items:center;gap:7px;padding:0 0 14px}
 .sales-editor-lines .form-error{margin-top:14px}
 .sales-editor-total{font-size:12px;font-variant-numeric:tabular-nums}
+.sales-conversions{list-style:none;margin:12px 0 0;padding:0;font-size:12px;line-height:1.7;font-variant-numeric:tabular-nums}
 
 .sales-drawer-loading{display:flex;justify-content:center;color:var(--muted)}
 .sales-spaced{margin-top:12px}

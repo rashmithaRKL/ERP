@@ -86,7 +86,8 @@ function Detail({
     ? STEPS.indexOf(data.deliveries.length ? 'PARTIAL' : o.confirmed_at ? 'CONFIRMED' : 'DRAFT')
     : STEPS.indexOf(status);
   const steps = ended ? [...STEPS.slice(0, index + 1), status] : STEPS;
-  const ordered = data.lines.reduce((s, l) => s + num(l.quantity), 0);
+  // Quantities are compared in base units (lines may be entered in sales units, V9).
+  const ordered = data.lines.reduce((s, l) => s + num(l.base_quantity), 0);
   const delivered = data.lines.reduce((s, l) => s + num(l.delivered), 0);
   const returned = data.lines.reduce((s, l) => s + num(l.returned), 0);
   const units = new Set(data.lines.map((l) => text(l.uom)));
@@ -166,7 +167,7 @@ function Detail({
             <strong>
               {unit
                 ? fmt(delivered)
-                : `${data.lines.filter((l) => num(l.delivered) >= num(l.quantity)).length}`}{' '}
+                : `${data.lines.filter((l) => num(l.delivered) >= num(l.base_quantity)).length}`}{' '}
               <small>{unit ? `/ ${fmt(ordered)} ${unit}` : `/ ${data.lines.length} lines`}</small>
             </strong>
           </div>
@@ -198,7 +199,8 @@ function Detail({
                     {text(l.line_no)}. {text(l.product)}
                   </strong>
                   <span>
-                    {text(l.sku)} · {money(l.unit_price)}
+                    {text(l.sku)} · {fmt(l.quantity, 3)} {text(l.unit)} × {money(l.unit_price)}
+                    {l.unit !== l.uom ? ` (${fmt(l.base_quantity, 3)} ${text(l.uom)})` : ''}
                     {num(l.discount_pct) > 0 ? ` less ${fmt(l.discount_pct, 2)}%` : ''}
                   </span>
                 </div>
@@ -209,10 +211,10 @@ function Detail({
               render: (l) => (
                 <div className="table-progress">
                   <span>
-                    {fmt(l.delivered)} <em>/ {fmt(l.quantity)}</em> {text(l.uom)}
+                    {fmt(l.delivered)} <em>/ {fmt(l.base_quantity)}</em> {text(l.uom)}
                     {num(l.returned) > 0 && <em> · {fmt(l.returned)} returned</em>}
                   </span>
-                  <Progress value={(num(l.delivered) / num(l.quantity)) * 100} />
+                  <Progress value={(num(l.delivered) / num(l.base_quantity)) * 100} />
                 </div>
               ),
             },
@@ -235,13 +237,19 @@ function Detail({
                       Dispatch
                     </button>
                   )}
-                  {open && num(l.planned) < num(l.quantity) && can('PLANNER') && (
+                  {open && num(l.planned) < num(l.base_quantity) && can('PLANNER') && (
                     <button
                       className="button small secondary"
                       onClick={() =>
                         createOrder(
                           workspace,
-                          { ...l, number: o.number, customer: o.customer, due_date: o.due_date },
+                          {
+                            ...l,
+                            quantity: l.base_quantity,
+                            number: o.number,
+                            customer: o.customer,
+                            due_date: o.due_date,
+                          },
                           () => invalidateSales(qc),
                         )
                       }

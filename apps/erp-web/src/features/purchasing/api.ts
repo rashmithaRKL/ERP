@@ -26,7 +26,7 @@ export type PurchaseOrderDetail = {
 /** `GET /api/purchases/receipts|invoices|returns`. */
 export type DocumentPage = { items: Row[]; next: string };
 
-/** One unit a purchase quantity can be entered in (`GET /api/items/{id}/units`). */
+/** One unit a document quantity can be entered in (`GET /api/items/{id}/units`). */
 export type ItemUnit = {
   code: string;
   name: string;
@@ -34,6 +34,7 @@ export type ItemUnit = {
   factor: number | string;
   source: 'BASE' | 'ITEM' | 'STANDARD';
   purchase: boolean;
+  sales: boolean;
 };
 export type ItemUnits = { itemId: string; baseUnit: string; baseDecimals: number; units: ItemUnit[] };
 
@@ -118,6 +119,14 @@ export function useItemUnits(itemIds: string[]) {
 /** Units an item may be purchased in: its base unit, conversions flagged for purchase and same-kind standard units. */
 export const purchaseUnits = (units?: ItemUnits) =>
   (units?.units || []).filter((u) => u.source !== 'ITEM' || u.purchase);
+
+/** Units an item may be sold in: its base unit, conversions flagged for sales and same-kind standard units (V9). */
+export const salesUnits = (units?: ItemUnits) =>
+  (units?.units || []).filter((u) => u.source !== 'ITEM' || u.sales);
+
+/** Base units in one `unit` of the item (1 for the base unit or while the units load). */
+export const unitFactor = (units: ItemUnits | undefined, unit: string) =>
+  Number(units?.units.find((u) => u.code === unit)?.factor ?? 1) || 1;
 
 /** Refresh purchasing documents, partner figures, MRP and item stock after a procurement transaction. */
 export const invalidatePurchasing = (qc: QueryClient) =>

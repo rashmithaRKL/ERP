@@ -33,7 +33,8 @@ export function DispatchDialog({
   const qc = useQueryClient();
   const { refresh, notify } = useWorkspace();
   const candidates = lots.filter((l) => l.item_id === line.product_id);
-  const outstanding = num(line.quantity) - num(line.delivered);
+  // Dispatch is in the base unit; the line may have been entered in a sales unit (V9).
+  const outstanding = num(line.base_quantity ?? line.quantity) - num(line.delivered);
   const whole = line.uom === 'pcs';
   const [quantities, setQuantities] = useState<Record<string, string>>({});
   const [reference, setReference] = useState(
@@ -111,7 +112,8 @@ export function DispatchDialog({
           <div className="field">
             <span>Net unit price</span>
             <div className="dispatch-price">
-              {money(num(line.unit_price) * (1 - num(line.discount_pct) / 100))}
+              {money(num(line.base_unit_price ?? line.unit_price) * (1 - num(line.discount_pct) / 100))}
+              {line.unit && line.unit !== line.uom && <small> per {text(line.uom)}</small>}
               {num(line.discount_pct) > 0 && <small> after {fmt(line.discount_pct, 2)}% discount</small>}
             </div>
           </div>

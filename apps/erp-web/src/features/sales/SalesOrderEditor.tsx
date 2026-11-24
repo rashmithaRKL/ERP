@@ -10,6 +10,7 @@ import type { LineItem } from '../../components/lineItems';
 import { request } from '../../lib/api';
 import type { Row } from '../../lib/api';
 import { fmt, money, num, text, today } from '../../lib/format';
+import { salesUnits, unitFactor, useItemUnits } from '../purchasing/api';
 import { invalidateSales } from './api';
 import type { SalesOrderDetail } from './api';
 import './sales.css';
@@ -49,6 +50,7 @@ export function SalesOrderEditor({
             quantity: plain(l.quantity),
             unitPrice: plain(l.unit_price),
             discountPct: num(l.discount_pct) ? plain(l.discount_pct) : '',
+            unit: text(l.unit),
           }),
         )
       : [newLine()],
@@ -66,10 +68,36 @@ export function SalesOrderEditor({
     (p) => p.type === 'CUSTOMER' && (p.active !== false || p.id === order?.customer_id),
   );
   const customer = data.partners.find((p) => p.id === customerId);
+  // Inactive products are hidden; one already on a draft line stays visible (marked) so the line can be changed.
   const products = data.items
     .filter((i) => i.type === 'FINISHED_GOOD' && (i.active !== false || lines.some((l) => l.itemId === i.id)))
-    .map((i) => ({ value: i.id, label: `${text(i.name)} · ${text(i.sku)}`, unit: text(i.uom) }));
+    .map((i) => ({
+      value: i.id,
+      label: `${text(i.name)} · ${text(i.sku)}${i.active === false ? ' (inactive)' : ''}`,
+      unit: text(i.uom),
+    }));
+  const units = useItemUnits(lines.map((l) => l.itemId));
   const total = lines.reduce((sum, l) => sum + lineNet(l), 0);
+
+  /** Keeps the price per entered unit consistent when a line switches unit (Rs 25/pcs → Rs 1,250/box of 50). */
+  function change(next: LineItem[]) {
+    setLines(
+      next.map((l) => {
+        const before = lines.find((p) => p.key === l.key);
+        if (!before || before.itemId !== l.itemId || (before.unit || '') === (l.unit || '') || !l.unitPrice)
+          return l;
+        const itemUnits = units.get(l.itemId);
+        const from = unitFactor(itemUnits, before.unit || itemUnits?.baseUnit || '');
+        const to = unitFactor(itemUnits, l.unit || itemUnits?.baseUnit || '');
+        return { ...l, unitPrice: String(Math.round((num(l.unitPrice) / from) * to * 1e6) / 1e6) };
+      }),
+    );
+    touched();
+  }
+  const converted = lines.filter((l) => {
+    const base = units.get(l.itemId)?.baseUnit;
+    return l.itemId && l.unit && base && l.unit !== base;
+  });
 
   async function save(e: FormEvent<HTMLFormElement>, confirm: boolean) {
     e.preventDefault();
@@ -87,6 +115,7 @@ export function SalesOrderEditor({
         quantity: l.quantity,
         unitPrice: l.unitPrice || '0',
         discountPct: l.discountPct || '0',
+        unit: l.unit || null,
       })),
     };
     try {
@@ -208,15 +237,36 @@ export function SalesOrderEditor({
           </h3>
           <LineItemsEditor
             lines={lines}
-            onChange={(next) => {
-              setLines(next);
-              touched();
-            }}
+            onChange={change}
             options={products}
             itemLabel="Product"
             emptyOption="Select a finished product"
             disabled={!!pending}
+            units={(line) => {
+              const choices = salesUnits(units.get(line.itemId));
+              return choices.length > 1
+                ? choices.map((u) => ({ code: u.code, decimals: u.decimals }))
+                : undefined;
+            }}
           />
+          {converted.length > 0 && (
+            <ul className="sales-conversions muted">
+              {converted.map((l) => {
+                const itemUnits = units.get(l.itemId);
+                const base = itemUnits?.baseUnit || '';
+                const factor = unitFactor(itemUnits, l.unit || base);
+                return (
+                  <li key={l.key}>
+                    Line {lines.indexOf(l) + 1}:{' '}
+                    {num(l.quantity) > 0
+                      ? `${fmt(l.quantity, 6)} ${l.unit} = ${fmt(num(l.quantity) * factor, 6)} ${base}`
+                      : `1 ${l.unit} = ${fmt(factor, 6)} ${base}`}
+                    {num(l.unitPrice) > 0 ? ` · ${money(num(l.unitPrice) / factor)} per ${base}` : ''}
+                  </li>
+                );
+              })}
+            </ul>
+          )}
           {error && (
             <div className="form-error" role="alert">
               {error}

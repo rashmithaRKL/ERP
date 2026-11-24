@@ -45,7 +45,7 @@ public class SalesQuery {
             """ + FROM + """
             LEFT JOIN LATERAL (
                 SELECT COUNT(*) AS line_count,
-                       COALESCE(SUM(l.quantity),0) AS quantity,
+                       COALESCE(SUM(l.base_quantity),0) AS quantity,
                        COALESCE(SUM(l.delivered),0) AS delivered,
                        COALESCE(SUM(l.returned),0) AS returned,
                        CASE WHEN COUNT(DISTINCT i.uom)=1 THEN MIN(i.uom) END AS uom,
@@ -117,7 +117,7 @@ public class SalesQuery {
                 WHERE so.tenant_id=? AND so.id=?""", t, id);
         var lines = s.list("""
                 SELECT l.*,i.sku,i.name AS product,i.uom,i.active AS product_active,
-                       l.quantity-l.delivered AS outstanding,
+                       l.base_quantity-l.delivered AS outstanding,
                        COALESCE((SELECT SUM(o.quantity-o.scrap_qty) FROM manufacturing_orders o
                                  WHERE o.tenant_id=l.tenant_id AND o.sales_order_line_id=l.id
                                    AND o.status<>'CANCELLED'),0) AS planned,
@@ -168,7 +168,7 @@ public class SalesQuery {
                 JOIN warehouses w ON w.tenant_id=lt.tenant_id AND w.id=lt.warehouse_id
                 WHERE lt.tenant_id=? AND lt.status='RELEASED' AND b.quantity>b.reserved
                   AND lt.item_id IN (SELECT product_id FROM sales_order_lines
-                                     WHERE tenant_id=? AND sales_order_id=? AND delivered<quantity)
+                                     WHERE tenant_id=? AND sales_order_id=? AND delivered<base_quantity)
                 ORDER BY lt.created_at,lt.id
                 LIMIT 200""", t, t, id);
         var activity = s.list("""
