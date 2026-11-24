@@ -32,7 +32,18 @@ export function CountsTab({ open: openCount }: { open: number }) {
     limit: 50,
   });
   const types = [...new Set(data.items.map((i) => text(i.type)))];
-  function startCount() {
+  const [loadingCategories, setLoadingCategories] = useState(false);
+  async function startCount() {
+    // Item categories (V4) with their full path; a category count includes every sub-category (V9).
+    let categories: Row[] = [];
+    setLoadingCategories(true);
+    try {
+      categories = (await request<{ items: Row[] }>('/item-categories')).items;
+    } catch {
+      categories = []; // the count can still start without a category filter
+    } finally {
+      setLoadingCategories(false);
+    }
     openForm({
       title: 'Start a cycle count',
       description:
@@ -66,6 +77,17 @@ export function CountsTab({ open: openCount }: { open: number }) {
           ),
           optional: true,
         },
+        {
+          ...selectField(
+            'categoryId',
+            'Only this category',
+            categories
+              .filter((c) => c.active !== false)
+              .map((c) => ({ value: c.id, label: text(c.path) || text(c.name) })),
+          ),
+          optional: true,
+          hint: 'Includes every sub-category. Combine with an item type to narrow it further.',
+        },
         selectField(
           'blind',
           'Counting mode',
@@ -86,6 +108,7 @@ export function CountsTab({ open: openCount }: { open: number }) {
             itemType: values.itemType || null,
             blind: values.blind === 'true',
             notes: values.notes || '',
+            categoryId: values.categoryId || null,
           },
           key,
         );
@@ -121,7 +144,7 @@ export function CountsTab({ open: openCount }: { open: number }) {
         </div>
         {can(...OPERATORS) && (
           <div className="inv-actions">
-            <button className="button primary small" onClick={startCount}>
+            <button className="button primary small" disabled={loadingCategories} onClick={startCount}>
               <ClipboardList size={14} />
               Start count
             </button>
@@ -151,7 +174,10 @@ export function CountsTab({ open: openCount }: { open: number }) {
               render: (r) => (
                 <div className="cell-stack">
                   <strong>{text(r.warehouse)}</strong>
-                  <span>{r.item ? text(r.item) : r.item_type ? labelState(r.item_type) : 'All items'}</span>
+                  <span>
+                    {r.item ? text(r.item) : r.item_type ? labelState(r.item_type) : 'All items'}
+                    {r.category ? ` · ${text(r.category)}` : ''}
+                  </span>
                 </div>
               ),
             },

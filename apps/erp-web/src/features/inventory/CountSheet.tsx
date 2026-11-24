@@ -104,7 +104,7 @@ export function CountSheet({
                       : c.item_type
                         ? `All ${text(c.item_type).toLowerCase().replaceAll('_', ' ')}`
                         : 'All items'}{' '}
-                    in {text(c.warehouse)}
+                    {c.category ? `of ${text(c.category)} ` : ''}in {text(c.warehouse)}
                   </h2>
                   <p>
                     {fmt(counted)} of {fmt(lines.length)} lots counted
