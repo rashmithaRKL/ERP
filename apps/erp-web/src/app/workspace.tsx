@@ -56,7 +56,7 @@ export type Workspace = {
    * (and inside the order drawer). Ignored while another `mutate()` is in flight.
    */
   mutate: (url: string, body?: unknown) => Promise<void>;
-  /** Invalidate the `['state']` and `['order']` queries. */
+  /** Invalidate the `['state']` and `['order']` queries and the paged `manufacturing`, `quality` and `reports` lists. */
   refresh: () => Promise<void>;
   /** Show a toast. Messages containing "success" or "downloaded" use the success style. */
   notify: (message: string) => void;
@@ -130,6 +130,10 @@ export function useWorkspaceState(user: User | null | undefined): Omit<Workspace
     await Promise.all([
       qc.invalidateQueries({ queryKey: ['state'] }),
       qc.invalidateQueries({ queryKey: ['order'] }),
+      // Server-paged lists (V9) that every transaction can change.
+      qc.invalidateQueries({ queryKey: ['manufacturing'] }),
+      qc.invalidateQueries({ queryKey: ['quality'] }),
+      qc.invalidateQueries({ queryKey: ['reports'] }),
     ]);
   }
   async function mutate(url: string, body: unknown = {}) {

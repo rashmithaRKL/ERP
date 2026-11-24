@@ -8,7 +8,10 @@ import lk.dexlanka.erp.reporting.StateRequest;
 import lk.dexlanka.erp.reporting.StateSection;
 import org.springframework.stereotype.Component;
 
-/** {@code /api/state} keys owned by the catalog: organization, users, plant, partners, work centers, items and BOMs. */
+/**
+ * {@code /api/state} keys owned by the catalog: organization, plant, partners, work centers, items and BOMs. (The
+ * {@code users} key was removed in V9; administrators read {@code GET /api/admin/users}.)
+ */
 @Component
 class CatalogStateSections implements StateContributor {
     private final Store s;
@@ -21,7 +24,6 @@ class CatalogStateSections implements StateContributor {
     public List<StateSection> sections() {
         return List.of(
                 StateSection.of("company", 100, this::company),
-                StateSection.of("users", 110, this::users).visibleToRoles("ADMIN"),
                 StateSection.of("factories", 120, this::factories),
                 StateSection.of("warehouses", 130, this::warehouses),
                 StateSection.of("partners", 140, this::partners),
@@ -33,11 +35,6 @@ class CatalogStateSections implements StateContributor {
 
     private Map<String, Object> company(StateRequest r) {
         return s.one("SELECT id,name,currency,demo FROM tenants WHERE id=?", r.tenant());
-    }
-
-    private List<Map<String, Object>> users(StateRequest r) {
-        return s.list(
-                "SELECT id,email,name,role,active FROM users WHERE tenant_id=? ORDER BY name LIMIT 250", r.tenant());
     }
 
     private List<Map<String, Object>> factories(StateRequest r) {

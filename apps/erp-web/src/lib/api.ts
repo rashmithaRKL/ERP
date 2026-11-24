@@ -18,16 +18,14 @@ export type State = {
   purchases: Row[];
   lots: Row[];
   inspections: Row[];
-  /** One row per received purchase-order line and lot (V6). */
-  receipts: Row[];
-  ledger: Row[];
   mrp: Row[];
   trend: { day: string; completed: number; scrap: number }[];
   metrics: Row;
   sync: Row;
+  /** ADMIN and PLANNER only. */
   financial?: Row;
-  journal?: Row[];
-  users?: Row[];
+  // Removed in V9 (screens read them server-paged): `users` (GET /admin/users), `receipts` (GET /purchases/receipts),
+  // `ledger` (GET /inventory/ledger) and `journal` (GET /reports/journal).
   /** V7: standard-cost roll-up of every BOM revision through all levels (BOM cards). */
   bomCosts?: BomCost[];
 };

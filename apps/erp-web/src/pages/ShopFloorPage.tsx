@@ -1,14 +1,21 @@
 import { ArrowUpRight, CalendarDays, Cpu, Pause, Play, Plus } from 'lucide-react';
 import { useWorkspace } from '../app/workspace';
 import { Badge, Empty, Panel, Progress } from '../components';
+import { PageFooter, PageState, useCursorPage } from '../features/lists/cursorPage';
 import { recordOutput } from '../features/manufacturing/forms';
 import { date, fmt, num, text } from '../lib/format';
 
-/** Route `/shopfloor`: operator job cards for released and running orders. */
+const PAGE = 24;
+
+/**
+ * Route `/shopfloor`: operator job cards for released, running, paused and quality-review orders, server-paged
+ * (`GET /api/manufacturing/orders?status=floor`).
+ */
 export default function ShopFloorPage() {
   const workspace = useWorkspace();
-  const { busy, can, mutate, openOrder, summary, user } = workspace;
-  const { active } = summary;
+  const { busy, can, mutate, openOrder, user } = workspace;
+  const paged = useCursorPage(['manufacturing', 'floor'], '/manufacturing/orders', { status: 'floor' }, PAGE);
+  const jobs = paged.rows;
   return (
     <>
       <div className="shopfloor-header">
@@ -19,10 +26,9 @@ export default function ShopFloorPage() {
         </div>
         <Badge value={user.role} />
       </div>
-      <div className="job-grid">
-        {active
-          .filter((r) => !['DRAFT', 'APPROVED', 'MATERIALS_RESERVED'].includes(text(r.status)))
-          .map((r) => (
+      <PageState paged={paged}>
+        <div className="job-grid">
+          {jobs.map((r) => (
             <Panel key={r.id} className="job-card">
               <div className="job-top">
                 <span>
@@ -90,8 +96,10 @@ export default function ShopFloorPage() {
               </div>
             </Panel>
           ))}
-      </div>
-      {!active.length && <Empty title="No jobs on the floor" />}
+        </div>
+        {!jobs.length && <Empty title="No jobs on the floor" />}
+      </PageState>
+      {(paged.hasNext || paged.hasPrevious) && <PageFooter paged={paged} label="jobs" />}
     </>
   );
 }

@@ -5,7 +5,10 @@ import { date, fmt, num, text, today } from '../../lib/format';
 import { isActive } from '../../lib/rows';
 import { ProductMark } from '../products/ProductMark';
 
-/** Manufacturing order table columns (Overview, Manufacturing orders). The order number opens the drawer. */
+/**
+ * Manufacturing order table columns (Overview, Manufacturing orders). The order number opens the drawer. Rows of
+ * `GET /api/manufacturing/orders` carry `parent_number`; `/api/state` rows resolve it from the loaded orders.
+ */
 export function useOrderColumns(): Column[] {
   const { openOrder, data } = useWorkspace();
   const numbers = new Map((data?.orders || []).map((o) => [o.id, text(o.number)]));
@@ -26,7 +29,7 @@ export function useOrderColumns(): Column[] {
           </button>
           <span>
             {r.parent_order_id
-              ? `Child of ${numbers.get(text(r.parent_order_id)) || 'a parent order'}`
+              ? `Child of ${text(r.parent_number) || numbers.get(text(r.parent_order_id)) || 'a parent order'}`
               : text(r.customer) || 'Make to stock'}
           </span>
         </div>

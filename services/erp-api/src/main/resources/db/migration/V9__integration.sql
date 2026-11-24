@@ -44,3 +44,11 @@ BEGIN
 END $$;
 ALTER TABLE sales_order_lines
     ADD CONSTRAINT sales_order_lines_delivered_check CHECK (delivered >= 0 AND delivered <= base_quantity);
+
+-- ------------------------------------------------------------------ keyset-paged lists (created_at DESC, id DESC)
+-- GET /api/manufacturing/orders and /api/reports/costs, /api/quality/inspections, /api/reports/journal.
+CREATE INDEX mo_tenant_created_id ON manufacturing_orders(tenant_id, created_at DESC, id DESC);
+CREATE INDEX inspections_tenant_created_id ON inspections(tenant_id, created_at DESC, id DESC);
+CREATE INDEX journal_entries_tenant_created_id ON journal_entries(tenant_id, created_at DESC, id DESC);
+CREATE INDEX journal_lines_tenant_entry ON journal_lines(tenant_id, entry_id);
+CREATE INDEX journal_lines_tenant_account ON journal_lines(tenant_id, account);
