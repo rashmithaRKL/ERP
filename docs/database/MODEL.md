@@ -1,6 +1,6 @@
 # Implemented data model
 
-Migrations: `V1__manufacturing_core.sql`, `V2__approved_bom_integrity.sql`, `V3__sales_documents_partners_returns.sql`, `V4__item_master.sql` (item master; see below), `V5__inventory_operations.sql` (inventory operations, below), `V6__procurement_documents.sql` (procurement documents, below), `V7__multi_level_bom_planning.sql` (multi-level BOMs and parent/child orders, below), `V8__administration.sql` (administration, below), `V9__integration.sql` (integration, below), `V10__routings_shifts_skills_operations.sql` (routings, shift calendars, skills and operations, below), `V11__maintenance_downtime.sql` (maintenance and downtime, below), `V12__quality_management.sql` (quality management, below). Primary IDs are UUID strings except readable demonstration master IDs. Every tenant-owned table carries `tenant_id`; references use owner/id composites where operational records cross domains. Tenant-scoped document/SKU/lot/BOM revision uniqueness prevents duplicates.
+Migrations: `V1__manufacturing_core.sql`, `V2__approved_bom_integrity.sql`, `V3__sales_documents_partners_returns.sql`, `V4__item_master.sql` (item master; see below), `V5__inventory_operations.sql` (inventory operations, below), `V6__procurement_documents.sql` (procurement documents, below), `V7__multi_level_bom_planning.sql` (multi-level BOMs and parent/child orders, below), `V8__administration.sql` (administration, below), `V9__integration.sql` (integration, below), `V10__routings_shifts_skills_operations.sql` (routings, shift calendars, skills and operations, below), `V11__maintenance_downtime.sql` (maintenance and downtime, below), `V12__quality_management.sql` (quality management, below), `V15__oee_utilization.sql` (OEE and utilization snapshots, below). Primary IDs are UUID strings except readable demonstration master IDs. Every tenant-owned table carries `tenant_id`; references use owner/id composites where operational records cross domains. Tenant-scoped document/SKU/lot/BOM revision uniqueness prevents duplicates.
 
 ```mermaid
 erDiagram
@@ -334,3 +334,32 @@ Postings (all through `Store.ledger` / `Store.journal`, period-checked, in the c
 | Failed incoming inspection (unchanged) | `SUPPLIER_RETURN_QC` (purchase order id) | Dr `GRNI` / Cr `RAW_INVENTORY`; recorded on the NCR as an automatic RETURN_TO_SUPPLIER disposition |
 
 For genealogy/recall (V14): follow `rework_lot_links` (input lot → output lot) and `lots.source_type='REWORK'`; NCRs reference the lot, inspection, MO, supplier and customer return, and `ncrs.source` already accepts `RECALL` (raising an NCR on a released lot holds it). For OEE (V15): quality losses are `ncr_dispositions` of type SCRAP (quantity, `value_amount`, `posted_at`) and the `QUALITY_SCRAP` ledger rows; rework yield is `rework_orders.output_quantity / input_quantity`; a manufacturing order whose failed final lot is fully dispositioned now completes (V12 generalization of the Phase 1 completion rule).
+
+## OEE and utilization (`V15__oee_utilization.sql`)
+
+```mermaid
+erDiagram
+    MACHINES ||--o{ OEE_DAY_SNAPSHOTS : "closed days"
+    OEE_DAY_SNAPSHOTS ||--o| OEE_DAY_SNAPSHOTS : "supersedes"
+    USERS ||--o{ OEE_DAY_SNAPSHOTS : "closed by"
+```
+
+OEE is **computed, not stored**, from records that already exist: shift working time (`routing.CalendarService`), the
+effective downtime view `machine_downtime` (V11), operation time logs and quantity reports (`mo_operation_time_logs`,
+`mo_operation_reports`, the ideal cycle time `mo_operations.run_minutes_per_unit`, V10), production actuals of orders
+without a routing (Phase 1, "untimed output") and, reported apart from the OEE, posted SCRAP dispositions and rework
+orders of produced lots (V12). The method (precedence of planned stops, breakdowns, changeover, other stops, setup,
+run and unrecorded idle; capping; statuses; roll-ups) is
+[ADR-007 in ARCHITECTURE.md](../architecture/ARCHITECTURE.md#adr-007-oee-method-v15).
+
+| Table / change | Purpose and rules |
+|---|---|
+| `oee_day_snapshots` | A closed business day (Asia/Colombo) of one work center: `machine_id`, `day`, `version` (1, 2, … per machine and day), `status` `CURRENT` / `SUPERSEDED`, `method` (calculation method version), `oee_status` ∈ `MEASURED`, `NOT_SCHEDULED`, `NO_DATA`, `UNTIMED`; the calendar it was computed with (`calendar_source` ASSIGNED/PLANT_DEFAULT/NONE, `calendar_code`); minutes `calendar`, `scheduled`, `planned_stop`, `planned` (planned production time), `run`, `setup` (setup + changeover), `breakdown`, `other_stop`, `unrecorded`, `net_run`, `fully_productive` (`numeric(12,4)`); `good_count`, `total_count`; ratios `availability`, `performance` (capped at 1), `quality`, `oee` (`numeric(9,6)`, 0..1, NULL = not measurable; only a MEASURED day can carry an OEE); `figures jsonb` = the complete read-model figures (working intervals, downtime by reason with event numbers, per-operation run/setup/counts, warnings, uncapped performance); `reason` (required, ≥ 5 characters, for versions after the first), `supersedes_id` (set exactly for versions after the first), `closed_by`, `closed_at`, `superseded_at` (set exactly when SUPERSEDED). Partial unique index: one CURRENT version per `(tenant, machine, day)`; indexes by day (current) and by machine/day/version. |
+| `oee_snapshot_guard` (trigger) | `protect_oee_snapshot()`: snapshots are never deleted; SUPERSEDED rows are frozen; a CURRENT row may only become SUPERSEDED with `superseded_at` set and every other column unchanged (compared as `to_jsonb(row)` without those two). Raises plain exceptions (HTTP 409). |
+| `production_actuals_tenant_created` (index) | `(tenant_id, created_at)` on `production_actuals` (`IF NOT EXISTS`): untimed output per day. |
+
+Closing (`POST /api/performance/close`, PLANNER) is idempotent per work center and day: a CURRENT snapshot is left
+unchanged; a recalculation (with a reason) supersedes it and inserts version n + 1, so the earlier figures stay
+auditable. Days that are not closed are always computed live. The demo seed's backfilled history is execution data
+only (see the backend README): dedicated orders `MO-DEMO-OEE-1..3` (CLOSED, no stock or cost postings) whose time logs
+and reports carry the note "Demo OEE history (backfilled by the V15 demo seed)".

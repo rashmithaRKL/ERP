@@ -9990,6 +9990,197 @@
           }
         }
       }
+    },
+    "/performance/oee": {
+      "get": {
+        "summary": "OEE by work center and day or week: plant roll-up (time-weighted), trend series, heatmap cells, utilization, data coverage and warnings (V15, every role)",
+        "parameters": [
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "description": "Inclusive Asia/Colombo business day (default 13 days before `to`)",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "description": "Inclusive Asia/Colombo business day (default and latest: today; range at most 92 days)",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "machine",
+            "in": "query",
+            "required": false,
+            "description": "Work center id (default: every work center)",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "bucket",
+            "in": "query",
+            "required": false,
+            "description": "`day` (default) or `week` (ISO weeks)",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "day",
+                "week"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "JSON object"
+          },
+          "400": {
+            "description": "Malformed date"
+          },
+          "404": {
+            "description": "Work center missing or unowned"
+          },
+          "409": {
+            "description": "Range or bucket rejected"
+          }
+        }
+      }
+    },
+    "/performance/losses": {
+      "get": {
+        "summary": "Loss waterfall, six big losses (unmeasured ones flagged), downtime Pareto in shift time and quality losses including post-production scrap and rework (V15, every role)",
+        "parameters": [
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "description": "Inclusive Asia/Colombo business day (default 13 days before `to`)",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "description": "Inclusive Asia/Colombo business day (default and latest: today; range at most 92 days)",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "machine",
+            "in": "query",
+            "required": false,
+            "description": "Work center id (default: every work center)",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "JSON object"
+          },
+          "400": {
+            "description": "Malformed date"
+          },
+          "404": {
+            "description": "Work center missing or unowned"
+          },
+          "409": {
+            "description": "Range or bucket rejected"
+          }
+        }
+      }
+    },
+    "/performance/days/{machineId}/{date}": {
+      "get": {
+        "summary": "One work-center day: live figures with working intervals, stops, operations and warnings, the closed snapshot (calendarChanged/differs) and every snapshot version (V15, every role)",
+        "parameters": [
+          {
+            "name": "machineId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "date",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "JSON object"
+          },
+          "400": {
+            "description": "Malformed date"
+          },
+          "404": {
+            "description": "Work center missing or unowned"
+          },
+          "409": {
+            "description": "Future date"
+          }
+        }
+      }
+    },
+    "/performance/close": {
+      "post": {
+        "summary": "Close (snapshot) the OEE of a completed business day per work center, idempotent per work center and day; recalculate a closed day with a reason as a new version that keeps the previous one (PLANNER)",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Committed result `{date, closed, recalculated, unchanged, snapshots}`; retry with same key returns prior result"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Role/CSRF denied"
+          },
+          "404": {
+            "description": "Work center not found or unowned"
+          },
+          "409": {
+            "description": "Day not completed, older than a year, recalculation without reason, or idempotency conflict"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CloseOeeDay"
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -13924,6 +14115,41 @@
           },
           "note": {
             "type": "string"
+          }
+        }
+      },
+      "CloseOeeDay": {
+        "type": "object",
+        "required": [
+          "date"
+        ],
+        "properties": {
+          "date": {
+            "type": "string",
+            "format": "date",
+            "pattern": "d{4}-d{2}-d{2}",
+            "description": "Completed Asia/Colombo business day (before today, within the last year)"
+          },
+          "machineIds": {
+            "type": "array",
+            "nullable": true,
+            "maxItems": 200,
+            "items": {
+              "type": "string",
+              "maxLength": 64
+            },
+            "description": "Work centers to close; empty or null = every work center"
+          },
+          "recalculate": {
+            "type": "boolean",
+            "nullable": true,
+            "description": "Record a new version of an already closed day (needs a reason)"
+          },
+          "reason": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 400,
+            "description": "Why the day is recalculated (at least 5 characters)"
           }
         }
       }

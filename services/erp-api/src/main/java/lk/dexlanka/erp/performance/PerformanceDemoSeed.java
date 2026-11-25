@@ -286,9 +286,9 @@ public class PerformanceDemoSeed implements ApplicationRunner {
 
     /**
      * Runs {@code op} through the free time in [from, to): the routing setup first, a start-up setup after a long gap,
-     * short unrecorded gaps (idle, small stops), reports every two hours of run. With a {@code supplier} (packing) the
-     * reported count never exceeds the good output the supplier reported before; a segment is skipped while it has
-     * nothing to pack.
+     * short unrecorded gaps (idle, small stops), reports every two hours of run and at midnight. With a {@code supplier}
+     * (packing) the reported count never exceeds the good output the supplier reported before: packing starts with about
+     * an hour of bottles waiting and stops when they run out (the wait is unrecorded idle, an availability loss).
      */
     private void generate(
             Spans free,
@@ -322,24 +322,34 @@ public class PerformanceDemoSeed implements ApplicationRunner {
                 // Run for 1.5–4 hours, then a short unrecorded stop.
                 long runEnd = Math.min(stopAt, a + (90 + rnd.nextInt(150)) * MIN);
                 double dayPerf = perf + (rnd.nextDouble() - 0.5) * 0.08;
-                if (supplier != null) {
-                    long available = available(supplier, a) - consumed;
-                    if (available < 500) {
-                        a = runEnd + (10 + rnd.nextInt(20)) * MIN;
-                        continue;
-                    }
+                // Packing starts only with about an hour of bottles waiting.
+                if (supplier != null && available(supplier, a) - consumed < 3_000) {
+                    a += (20 + rnd.nextInt(40)) * MIN;
+                    continue;
                 }
-                op.logs.add(new Object[] {"RUN", a, runEnd});
+                long logEnd = runEnd;
+                boolean starved = false;
                 for (long t = a; t < runEnd; ) {
                     long reportAt = Math.min(Math.min(runEnd, t + 120 * MIN), nextMidnight(t));
                     long count = (long) Math.floor((reportAt - t) / (double) MIN * dayPerf / op.ideal.doubleValue());
-                    if (supplier != null) count = Math.min(count, available(supplier, stamp(reportAt)) - consumed);
+                    if (supplier != null) {
+                        long available = available(supplier, stamp(reportAt)) - consumed;
+                        if (count > available) {
+                            // Out of bottles: the line stops when the last one is packed (waiting is unrecorded idle).
+                            count = Math.max(0, available);
+                            reportAt = t + (long) Math.ceil(count * op.ideal.doubleValue() / dayPerf * MIN);
+                            logEnd = reportAt;
+                            starved = true;
+                        }
+                    }
                     double rate = scrapRate * (0.6 + rnd.nextDouble() * 0.8);
                     op.report(count, rate, stamp(reportAt));
-                    consumed += Math.max(0, count);
+                    consumed += count;
                     t = reportAt;
+                    if (starved) break;
                 }
-                a = runEnd + (3 + rnd.nextInt(maxGap)) * MIN;
+                if (logEnd > a) op.logs.add(new Object[] {"RUN", a, logEnd});
+                a = (starved ? logEnd + (45 + rnd.nextInt(60)) * MIN : runEnd) + (3 + rnd.nextInt(maxGap)) * MIN;
             }
             previousEnd = b;
         }
