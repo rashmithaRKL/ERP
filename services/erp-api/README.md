@@ -95,6 +95,13 @@ Each feature owns one Flyway version and one `/api/state` order range, so parall
 | `V7` | multi-level BOM and MRP explosion | 1700–1799 |
 | `V8` | administration: user management, approval policies, CSV imports, audit pagination | 1800–1899 |
 | `V9` | integration: pagination rollout, approval and unit wiring | 1900–1999 |
+| `V10` | Phase 2 routings: versioned routings and operations, shift calendars, skills, manufacturing-order operation tracking | 2000–2099 |
+| `V11` | Phase 2 maintenance: preventive plans, maintenance work orders, spare parts, downtime events, machine status | 2100–2199 |
+| `V12` | Phase 2 quality: inspection plans and measurements, nonconformance reports, dispositions, rework, CAPA | 2200–2299 |
+| `V13` | Phase 2 finite-capacity scheduling (builds on V10–V12) | 2300–2399 |
+| `V14` | Phase 2 genealogy explorer and recalls (builds on V10–V12) | 2400–2499 |
+| `V15` | Phase 2 OEE and utilization (builds on V10–V12) | 2500–2599 |
+| `V16` | Phase 2 integration | 2600–2699 |
 
 Branches are merged to `main` in ascending migration order (Flyway runs with `outOfOrder=false`), two features at a
 time. A feature that needs a second migration uses a sub-version of its own number (e.g. `V3_1__…`) so it still sorts
