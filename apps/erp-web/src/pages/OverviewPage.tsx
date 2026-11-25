@@ -5,6 +5,7 @@ import {
   ArrowRight,
   ArrowUpRight,
   Boxes,
+  CalendarClock,
   ChartNoAxesCombined,
   CheckCheck,
   CircleDollarSign,
@@ -104,6 +105,9 @@ export default function OverviewPage() {
   // V12 quality: open critical nonconformances and overdue CAPA actions (`qualityAlerts` state key).
   const criticalNcrs = num(data.qualityAlerts?.open_critical_ncrs);
   const overdueCapa = num(data.qualityAlerts?.overdue_capa_actions);
+  // V13 scheduling: open orders the published schedule projects to finish after their due date.
+  const lateScheduled = num(data.schedule?.late_orders);
+  const firstLate = data.schedule?.late?.[0];
   return (
     <>
       <motion.div className="stats-grid" variants={stagger} initial="hidden" animate="visible">
@@ -427,7 +431,8 @@ export default function OverviewPage() {
                 (purchaseAttention ? 1 : 0) +
                 (maintenanceAttention ? 1 : 0) +
                 (criticalNcrs ? 1 : 0) +
-                (overdueCapa ? 1 : 0)}
+                (overdueCapa ? 1 : 0) +
+                (lateScheduled ? 1 : 0)}
             </span>
           }
           className="attention-panel"
@@ -460,6 +465,27 @@ export default function OverviewPage() {
                   </p>
                   <span>
                     Open maintenance
+                    <ArrowRight size={11} />
+                  </span>
+                </div>
+              </button>
+            )}
+            {lateScheduled > 0 && (
+              <button className="attention-item" onClick={() => navigate('/schedule')}>
+                <span className="attention-symbol red">
+                  <CalendarClock size={16} />
+                </span>
+                <div>
+                  <strong>
+                    {plural(lateScheduled, 'order will finish late', 'orders will finish late')}
+                  </strong>
+                  <p>
+                    {firstLate
+                      ? `${text(firstLate.number)} (${text(firstLate.product)}) is projected past its due date in the published schedule.`
+                      : 'The published schedule projects them past their due dates.'}
+                  </p>
+                  <span>
+                    Open production schedule
                     <ArrowRight size={11} />
                   </span>
                 </div>

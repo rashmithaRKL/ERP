@@ -6,6 +6,7 @@ import { codeLabel, date, fmt, humanizeText, labelState, money, num, text } from
 import { approversText, useApprovalPolicy } from '../approvals/policies';
 import { auditLabel } from '../audit/auditLabel';
 import { ProductMark } from '../products/ProductMark';
+import { OrderProjection } from '../schedule/OrderProjection';
 import { OperationsSection } from './OperationsSection';
 import { OrderStructure } from './OrderStructure';
 
@@ -113,6 +114,8 @@ export function OrderDetail({
           compact
         />
         <OperationsSection order={o} />
+        {/* V13: projected completion from the published (and newest draft) schedule. */}
+        <OrderProjection orderId={o.id} />
         <OrderStructure order={o} />
         <h3>Cost reconciliation</h3>
         <div className="reconciliation">

@@ -1,6 +1,7 @@
 import {
   Activity,
   Boxes,
+  CalendarRange,
   Cpu,
   Factory,
   FileChartColumn,
@@ -42,6 +43,7 @@ const QualityPage = lazyPage(() => import('../pages/QualityPage'));
 const ReportsPage = lazyPage(() => import('../pages/ReportsPage'));
 const RoutingsPage = lazyPage(() => import('../pages/RoutingsPage'));
 const SalesPage = lazyPage(() => import('../pages/SalesPage'));
+const SchedulePage = lazyPage(() => import('../pages/SchedulePage'));
 const ShopFloorPage = lazyPage(() => import('../pages/ShopFloorPage'));
 const WorkCentersPage = lazyPage(() => import('../pages/WorkCentersPage'));
 
@@ -182,6 +184,23 @@ export const routes: PageRoute[] = [
       roles: ['PLANNER'],
       run: () => {
         requestNewRouting();
+      },
+    },
+  },
+  {
+    path: '/schedule',
+    label: 'Production schedule',
+    icon: CalendarRange,
+    roles: ['ADMIN', 'PLANNER', 'OPERATOR', 'VIEWER'],
+    group: 'MANUFACTURING',
+    page: SchedulePage,
+    description: 'Every operation on finite capacity: who runs what, when, and what will be late.',
+    action: {
+      label: 'Run scheduler',
+      roles: ['PLANNER'],
+      // Loaded on demand so the schedule feature stays out of the entry chunk.
+      run: (workspace) => {
+        void import('../features/schedule/forms').then((forms) => forms.runScheduler(workspace));
       },
     },
   },

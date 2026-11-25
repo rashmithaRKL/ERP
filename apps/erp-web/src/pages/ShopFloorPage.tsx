@@ -5,6 +5,7 @@ import { Badge, Empty, Panel } from '../components';
 import { hoursText, useWorkCenterSummary } from '../features/routings/api';
 import { FloorOrderCards } from '../features/routings/FloorOrderCards';
 import { OperationQueue } from '../features/routings/OperationQueue';
+import { NextOperations } from '../features/schedule/NextOperations';
 import type { Row } from '../lib/api';
 import { fmt, num, text } from '../lib/format';
 
@@ -111,6 +112,8 @@ export default function ShopFloorPage() {
                 </span>
               </div>
               <OperationQueue key={machine.id} machine={machine} />
+              {/* V13: what the published schedule plans next on this work center. */}
+              <NextOperations machineId={machine.id} />
             </section>
           )}
         </>

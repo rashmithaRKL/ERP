@@ -55,11 +55,18 @@ export function HelpDialog({ onClose }: { onClose: () => void }) {
           supplier, rework into a new re-inspected lot) and CAPA with root-cause analysis and independent
           effectiveness checks.
         </p>
+        <p>
+          Production schedule: planners run a finite-capacity scheduler over every open operation (shift
+          calendars, holidays, overtime, maintenance windows and open downtime, alternate work centers),
+          compare the draft with the published schedule, publish it, and pin or drag operations to a work
+          center and time. Everyone sees the published Gantt, late orders and capacity load; the Shop floor
+          lists the next scheduled operations of each work center.
+        </p>
         <h3>What remains on the roadmap</h3>
         <p>
-          Finite-capacity scheduling, validated OEE, full finance and tax localization, personnel workflows,
-          extended onboarding, MFA, cloud synchronization, signed Windows installation, SaaS billing and AI
-          services. The repository documents acceptance criteria and readiness gaps.
+          Validated OEE, full finance and tax localization, personnel workflows, extended onboarding, MFA,
+          cloud synchronization, signed Windows installation, SaaS billing and AI services. The repository
+          documents acceptance criteria and readiness gaps.
         </p>
         <div className="help-callout">
           <ShieldCheck size={18} />

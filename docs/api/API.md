@@ -343,6 +343,40 @@ Operations lifecycle: an order created for a product with a current approved rou
 {"code":"NIGHT","name":"Night shift","startTime":"22:00","endTime":"06:00","breakStart":"02:00","breakMinutes":30,"weekdays":[1,2,3,4,5]}
 ```
 
+### Finite-capacity scheduling (`/schedule/*`, V13)
+
+Writes are PLANNER (ADMIN also allowed) and take an `Idempotency-Key`. ADMIN and PLANNER read every run; other roles read only the PUBLISHED run (`/runs/{id}`, `/gantt`, `/late`, `/capacity`; 403 for drafts and superseded runs), `GET /schedule`, `/schedule/next` and `/schedule/orders/{id}`. Times in responses are UTC ISO-8601 instants; query dates `from`/`to` are inclusive Asia/Colombo calendar days (at most 42). Scheduling rules: see the backend README (`scheduling` package) and `ScheduleEngine`.
+
+| Method | Path | Purpose / allowed roles (ADMIN also allowed) |
+|---|---|---|
+| GET | `/schedule` | `{published, draft, pins, defaults, now}`: the published run header (null when none), the newest draft and the active pin count (planners only), the run defaults (`horizonDays` 28, `breakdownHours` 8, `useAlternates` true, `includeDrafts` false) |
+| GET | `/schedule/runs?status=&limit=&before=` | Runs newest first (keyset on `created_at, id`; `status` DRAFT/PUBLISHED/SUPERSEDED/DISCARDED): number, status, horizon (`horizon_start`, `horizon_end`, `horizon_days`), parameters, `base_run_id`/`base_number`, counts (`orders_count`, `operations_count`, `late_orders`, `unscheduled_orders`, `pins_honoured`, `pin_conflicts`), `makespan_end`, creator/publisher names and times; ADMIN/PLANNER |
+| GET | `/schedule/runs/{id}` | `{run, orders, pins}`: every order the run considered in scheduling sequence (`status` SCHEDULED / NO_ROUTING / BEYOND_HORIZON / NO_OPEN_WORK, `projected_start`, `projected_end`, `due_end`, `late`, `lateness_minutes`, `remaining_minutes`, `warnings`, the current order status, `estimate_minutes` used and `current_estimate`), and the pinned operations with `pin_status` HONOURED/CONFLICT and `pin_note` |
+| GET | `/schedule/runs/{id}/gantt?from=&to=` | Default: the run's first 7 days. `{run, from, to, now, machines}`; per work center (by code): `working` intervals and `closed` dates (live `routing.CalendarService`), `blocks` the run avoided (MAINTENANCE windows and DOWNTIME, `assumed_end`), `bars` overlapping the window: order, operation (`operation_id` null = the estimated run of an order without a routing), `start_at`, `end_at`, `minutes`, `segments` (working intervals), `late`, `alternate`, `running`, `pin_status`, the current status |
+| GET | `/schedule/runs/{id}/late` | `{run, items}`: late orders, latest first, with `projected_end`, `due_date`, `lateness_minutes` (for BEYOND_HORIZON: at least horizon end − due) |
+| GET | `/schedule/runs/{id}/capacity?from=&to=` | Default: the run's horizon (≤ 42 days). Per work center and day: `calendar_minutes`, `blocked_minutes` (run blocks inside working time), `available_minutes`, `scheduled_minutes`, `load_pct`, `overloaded` (scheduled > available: only when working time was removed after the run), `closed`; totals per work center |
+| GET | `/schedule/runs/{id}/compare?with=` | Against `with`, else the run published when this one was created, else the current published run: `{run, base, summary:{moved, new, dropped, newly_late, no_longer_late, later, earlier}, orders:[{change, delta_minutes, …}], operations:[changes only: MOVED/NEW/DROPPED with work center and start in both runs]}`; ADMIN/PLANNER |
+| GET | `/schedule/next?machineId=&limit=` | The published run's operations on a work center that have not ended and are still open, by scheduled start (limit 1–50, default 10): `{run, machine, items}`; every role |
+| GET | `/schedule/orders/{id}` | `{published, draft}`: the order's projection (status, projected start/end, lateness, operations with work center and times) in the published run and, for planners, the newest draft |
+| GET | `/schedule/pins` | Active pins with order, operation, work center, start, reason, author; ADMIN/PLANNER |
+| POST | `/schedule/runs` | `{horizonDays? (1–90), useAlternates?, breakdownHours? (1–168), includeDrafts?, notes?}`: schedules every open operation from now into a new DRAFT run (orders APPROVED … PARTIALLY_COMPLETED, ON_HOLD included; DRAFT orders only with `includeDrafts`); returns `{id, number, status, orders, operations, lateOrders, unscheduledOrders, pinsHonoured, pinConflicts}`; PLANNER |
+| POST | `/schedule/runs/{id}/publish` | The newest DRAFT becomes PUBLISHED; the previous PUBLISHED run becomes SUPERSEDED (`superseded_by_run_id`) and older drafts DISCARDED. 409 for a run that is not a draft or when a newer run exists; PLANNER |
+| POST | `/schedule/runs/{id}/discard` | DRAFT → DISCARDED; PLANNER |
+| POST | `/schedule/pins` | `{orderId?, operationId?, machineId, start, reason?, rerun}`: pins a PENDING/READY operation (or, with `orderId` only, the estimated run of an order without a routing that has not started) to an allowed work center (current, routing or alternate) and start (`yyyy-MM-ddTHH:mm` Asia/Colombo or ISO with offset; moved forward to the next free working minute). Validated by scheduling with it: 409 when the start has passed, is beyond the horizon, the work center cannot run the operation, a predecessor or child order ends later, it overlaps another pin, or another pin would be displaced. Replaces the operation's active pin. `rerun` also creates a DRAFT (`run` in the response); PLANNER |
+| POST | `/schedule/pins/{id}/remove` | `{rerun}`: removes an active pin (kept with `removed_at`); 409 when already removed; PLANNER |
+| POST | `/schedule/estimates` | `{orderId, minutes (1–525600), notes?}`: remaining-duration estimate of an open order without a routing (409 for routed or closed orders); PLANNER |
+| POST | `/schedule/estimates/{orderId}/remove` | Removes the estimate (and the order's pin); 409 when there is none; PLANNER |
+
+```json
+{"horizonDays":28,"useAlternates":true,"breakdownHours":8,"includeDrafts":false,"notes":"Week 48"}
+```
+
+```json
+{"orderId":null,"operationId":"opaque-operation","machineId":"pk01","start":"2026-11-27T14:00","reason":"Customer collection slot","rerun":true}
+```
+
+`/state` key `schedule` (V13, every role): `{published: {id, number, published_at, horizon_start, horizon_end} | null, late_orders, unscheduled_orders, late: [≤ 5 rows: order_id, number, product, priority, due_date, projected_end, lateness_minutes, status]}`; counts only orders that are still open.
+
 Lifecycle actions: `approve` (an approver role of the `MANUFACTURING_ORDER` policy — default PLANNER, ADMIN always — distinct from the creator; orders the policy auto-approves are created APPROVED); `reserve` (PLANNER/WAREHOUSE); `issue` (WAREHOUSE); `start`, `pause`, `resume` (OPERATOR/PLANNER); `close`, `cancel` (PLANNER). Cancellation is available only before material issue, with reservations safely released. Issued order cancellation is blocked until a controlled return/variance procedure exists.
 
 Examples:

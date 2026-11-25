@@ -33,6 +33,15 @@ export type State = {
   /** V12 quality attention counts (open / open critical NCRs, pending concessions and supplier returns, open rework,
    * overdue CAPA actions, the caller's overdue CAPA actions). */
   qualityAlerts?: Record<string, number>;
+  /** V13: the published schedule run and its late/unscheduled order counts with up to five late orders. */
+  schedule?: ScheduleSummary;
+};
+/** `schedule` state key (V13): published run (null when none), late and unscheduled open orders, five latest late orders. */
+export type ScheduleSummary = {
+  published: Row | null;
+  late_orders: number;
+  unscheduled_orders: number;
+  late: Row[];
 };
 /** `maintenance` state key (V11): counts plus up to five open breakdowns and overdue preventive plans. */
 export type MaintenanceSummary = {

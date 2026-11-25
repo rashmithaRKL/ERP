@@ -11,6 +11,8 @@ export function AttentionCenter({ onClose }: { onClose: () => void }) {
   const { active, shortages, pendingQc } = summary;
   const breakdowns = data?.maintenance?.breakdowns || [];
   const overduePlans = data?.maintenance?.overdue || [];
+  // V13: open orders the published schedule projects to finish after their due date.
+  const lateScheduled = data?.schedule?.late || [];
   return (
     <Overlay
       title="Attention center"
@@ -30,6 +32,11 @@ export function AttentionCenter({ onClose }: { onClose: () => void }) {
             title: `${text(p.title)} overdue on ${text(p.machine)}`,
             body: `Preventive plan ${text(p.number)} was due ${text(p.next_due_date).substring(0, 10)}`,
             path: '/maintenance?tab=plans',
+          })),
+          ...lateScheduled.map((o) => ({
+            title: `${text(o.number)} will finish late`,
+            body: `${text(o.product)} · due ${text(o.due_date).substring(0, 10)} · projected late by ${Math.round(num(o.lateness_minutes) / 60)} h`,
+            path: '/schedule',
           })),
           ...shortages.map((m) => ({
             title: `${m.name} needs replenishment`,
@@ -90,6 +97,7 @@ export function AttentionCenter({ onClose }: { onClose: () => void }) {
           !num(data?.metrics.overdue) &&
           !breakdowns.length &&
           !overduePlans.length &&
+          !lateScheduled.length &&
           !num(data?.qualityAlerts?.open_critical_ncrs) &&
           !num(data?.qualityAlerts?.overdue_capa_actions) && <Empty title="You’re all caught up" />}
       </div>
