@@ -2,7 +2,7 @@
 
 Base: `/api`, same origin. Machine-readable OpenAPI: `.openapi/openapi.json` in the repository root.
 
-Authentication uses an HTTP-only session cookie. Fetch `GET /auth/csrf` to receive `{token,headerName}` and attach that header on every unsafe request, including login/logout. Form login is `POST /auth/login` with URL-encoded `email` and `password`; it answers `{authenticated:true, mustChangePassword}` and records the account's last sign-in. Only active accounts can sign in. Refresh the CSRF token after login/logout. `GET /auth/me` returns the authenticated identity and organization plus `mustChangePassword`, `lastLoginAt` and `passwordChangedAt`. The explicit demo profile additionally supports `POST /auth/demo?role=admin|planner|warehouse|operator|quality`; this returns 404 outside demo (409 when an administrator deactivated that persona).
+Authentication uses an HTTP-only session cookie. Fetch `GET /auth/csrf` to receive `{token,headerName}` and attach that header on every unsafe request, including login/logout. Form login is `POST /auth/login` with URL-encoded `email` and `password`; it answers `{authenticated:true, mustChangePassword}` and records the account's last sign-in. Only active accounts can sign in. Refresh the CSRF token after login/logout. `GET /auth/me` returns the authenticated identity and organization plus `mustChangePassword`, `lastLoginAt` and `passwordChangedAt`. The explicit demo profile additionally supports `POST /auth/demo?role=admin|planner|warehouse|operator|quality|maintenance`; this returns 404 outside demo (409 when an administrator deactivated that persona).
 
 Every authenticated request is revalidated against the account (`platform.SessionGuard`): a deactivated account, or a session older than the account's last password reset/change, is signed out (401 on that request); a role or name change made by an administrator applies to the user's next request. While `mustChangePassword` is true (after an administrator reset, and for accounts created through `POST /users`), every route except `/auth/me`, `/auth/csrf`, `/auth/config`, `/auth/logout`, `/auth/password` and `/health` answers 403 `{"message":"Change your temporary password to continue","code":"PASSWORD_CHANGE_REQUIRED"}`.
 
@@ -46,7 +46,7 @@ All business mutations require a unique `Idempotency-Key` header; keep it across
 | GET | `/partners?type=&q=&status=&limit=&before=` | Partner directory by name, keyset-paged; `type` CUSTOMER/SUPPLIER, `status` all/active/inactive, `q` matches name/email/phone/tax ID; rows include `open_documents` and (customers) `receivables` |
 | GET | `/partners/{id}` | `{partner, documents, activity}` (last 10 orders or purchases, partner audit events) |
 | POST | `/partners/{id}` | Edit name, email, phone, addresses, tax ID, payment days, credit limit (customers), active; audited; SALES(customer), WAREHOUSE(supplier), PLANNER |
-| POST | `/items` | Create item (`RAW_MATERIAL`/`SEMI_FINISHED`/`FINISHED_GOOD`/`PACKAGING`, any active tenant unit, optional `description`, `categoryId`, `reorderQuantity`, `leadTimeDays`); PLANNER |
+| POST | `/items` | Create item (`RAW_MATERIAL`/`SEMI_FINISHED`/`FINISHED_GOOD`/`PACKAGING`/`SPARE_PART` (V11: maintenance stock, never a BOM component), any active tenant unit, optional `description`, `categoryId`, `reorderQuantity`, `leadTimeDays`); PLANNER |
 | GET | `/items?q=&type=&category=&active=&limit=&after=` | Item page ordered by SKU (keyset cursor `after` = `next`), `total` and type/active `facets`; `q` matches SKU/name/description or an exact barcode; `category` includes sub-categories (`none` = uncategorized); all roles |
 | GET | `/items/{id}` | Item detail: usage locks, category path, units, conversions, barcodes, variant family, stock by warehouse/lot, where-used, producing BOMs, recent movements, item history; all roles |
 | GET | `/items/{id}/movements?limit=&before=` | Stock ledger of the item, newest first, keyset cursor; all roles |
@@ -74,7 +74,7 @@ All business mutations require a unique `Idempotency-Key` header; keep it across
 | POST | `/partners` | Customer/supplier; optional `phone`, `billingAddress`, `shippingAddress`, `taxId`, `creditLimit` (customers); SALES(customer), WAREHOUSE(supplier), PLANNER |
 | POST | `/machines` | Register idle work center; PLANNER |
 | POST | `/organization` | Update current organization/plant; ADMIN |
-| POST | `/users` | Create a bcrypt-backed tenant account `{email, name, password (16–128), role}`; the account must choose its own password at first sign-in; an email already in use → 409; ADMIN |
+| POST | `/users` | Create a bcrypt-backed tenant account `{email, name, password (16–128), role}` (roles ADMIN, PLANNER, WAREHOUSE, OPERATOR, QUALITY, SALES, VIEWER, MAINTENANCE); the account must choose its own password at first sign-in; an email already in use → 409; ADMIN |
 
 ### Procurement documents (`/purchases/*`, V6)
 
@@ -160,6 +160,51 @@ MRP (`GET /planning/mrp`, and the `mrp` rows of `/state`): gross demand = unrese
 ```json
 {"machineId":null,"priority":"HIGH","itemIds":["opaque-semi-finished-item"]}
 ```
+
+### Maintenance and downtime (`/maintenance/*`, V11)
+
+Date-times in bodies are ISO-8601 with an offset (`2026-11-25T08:30:00+05:30`, `…Z`); without an offset they are read as Asia/Colombo local time; 400 when malformed. Downtime may not start or end in the future (5 minutes of clock tolerance). Query dates `from`/`to` are inclusive Asia/Colombo calendar days. Lists return `{items, next}` (keyset; pass `next` as `before`; `limit` 1–200, default 25; 409 outside). All reads are open to every signed-in role of the tenant.
+
+| Method | Path | Purpose / allowed roles (ADMIN also allowed) |
+|---|---|---|
+| GET | `/maintenance/work-orders?status=&type=&machine=&q=&limit=&before=` | Work orders, newest first. `status` = `OPEN` (REQUESTED, APPROVED, SCHEDULED, IN_PROGRESS) or one code; `type` CORRECTIVE/PREVENTIVE; `q` matches number, title, machine code. `{items, next, counts}` (`counts` per status, tenant-wide). Rows: number, type, status, priority, title, machine, plan, due date, window, assignee, requester/approver names, timestamps, `labour_hours, labour_cost, parts_cost, total_cost`, checklist progress, `open_downtime` |
+| GET | `/maintenance/work-orders/{id}` | `{order, checklist, parts, labour, downtime, journal, events}`; `parts` rows carry `returnable` for issues |
+| POST | `/maintenance/work-orders` | Corrective request `{machineId, title, description?, priority? (NORMAL/HIGH/URGENT; default HIGH with a breakdown), breakdown, downtimeStartedAt?, downtimeEventId?, manufacturingOrderId?}`. `breakdown: true` also opens a BREAKDOWN (unplanned) downtime event linked to the order (409 when the machine already has open downtime: link it with `downtimeEventId` instead); OPERATOR/PLANNER/MAINTENANCE |
+| POST | `/maintenance/work-orders/{id}/approve` | `{scheduledStart?, scheduledEnd?, assigneeId?}`: REQUESTED → APPROVED, or SCHEDULED with a window; a different person than the requester (409 also for ADMIN); PLANNER |
+| POST | `/maintenance/work-orders/{id}/schedule` | `{scheduledStart, scheduledEnd, assigneeId?}`: APPROVED/SCHEDULED → SCHEDULED (window ≤ 31 days); PLANNER |
+| POST | `/maintenance/work-orders/{id}/start` | APPROVED/SCHEDULED → IN_PROGRESS. 409 while an MO is IN_PROGRESS/PARTIALLY_COMPLETED on the machine (pause it first) or another order is in progress there. Machine → MAINTENANCE; the work is covered by open downtime (the order's own, an unlinked open breakdown, or a new event: PLANNED_MAINTENANCE for preventive/scheduled work, BREAKDOWN for unscheduled corrective work; any other open event of the machine is closed at the start); MAINTENANCE |
+| POST | `/maintenance/work-orders/{id}/progress` | `{checklist?:[{index, result: PASS/FAIL/NA, note}], findings?, actions?}` while IN_PROGRESS; MAINTENANCE |
+| POST | `/maintenance/work-orders/{id}/labour` | `{hours (±, 2 dp), technicianId?, notes?}` while IN_PROGRESS, costed at the tenant labour rate; posts Dr `MAINTENANCE_EXPENSE` / Cr `MAINTENANCE_LABOUR_CLEARING` (reversed for negative hours; total never below 0); closed period → 409; MAINTENANCE |
+| POST | `/maintenance/work-orders/{id}/parts` | `{itemId, quantity, notes?}`: issues a `SPARE_PART` item from released, unreserved lots, oldest first (ledger `MAINTENANCE_ISSUE`; Dr `MAINTENANCE_EXPENSE` / Cr the item's inventory account); APPROVED/SCHEDULED/IN_PROGRESS; returns `{movements, value}`; MAINTENANCE |
+| POST | `/maintenance/work-orders/{id}/parts/{movementId}/return` | `{quantity, notes?}`: unused parts of one issue back into its lot at the issue's unit value (ledger `MAINTENANCE_RETURN`, reversed journal); before completion; MAINTENANCE |
+| POST | `/maintenance/work-orders/{id}/complete` | `{findings, actions?, checklist?, meterReading?}`: every checklist item needs a result; machine → IDLE, the order's open downtime closes now; a preventive order reschedules its plan to today + interval; MAINTENANCE |
+| POST | `/maintenance/work-orders/{id}/cancel` | `{reason}` before work starts and after every issued part is returned; cancelling a preventive order skips that occurrence (plan due date + one interval); PLANNER |
+| GET | `/maintenance/plans?machine=&due=&horizon=&active=&limit=&before=` | Plans by next due date (keyset on `next_due_date, id`). `due` = `overdue` (before today) or `due` (≤ today + `horizon`, default 7); `active` `true` (default), `false` or `all`. Rows add `days_until_due`, `due_state` (OVERDUE/DUE/UPCOMING/INACTIVE), `open_order`, `meter_reading`, `checklist`; `{items, next, counts:{overdue, due_soon, active}, today}` |
+| GET | `/maintenance/plans/{id}` | `{plan, orders (last 20), events}` |
+| POST | `/maintenance/plans`, `/maintenance/plans/{id}` | Create `{machineId, title, description?, checklist:[text], intervalDays (1–3650), intervalHours?, nextDueDate, estimatedHours?, priority?}` / update (same without `machineId`, plus `active`); PLANNER |
+| POST | `/maintenance/plans/generate` | `{horizonDays (0–31)}`: one PREVENTIVE order per active plan due within the horizon, SCHEDULED on the due date at 08:00 Asia/Colombo (or the next full hour once that passed) for the plan's estimated hours, approved by the caller, checklist copied. Never while the plan has an open order; unique per plan and due date (DB index). `{created, skipped}`; PLANNER |
+| GET | `/maintenance/downtime?machine=&reason=&from=&to=&status=&history=&limit=&before=` | Downtime events, newest start first; effective events only unless `history=true` (adds SUPERSEDED/VOID). Rows: number, machine, reason, planned, start/end, status, `minutes` (open: until now), MO/work order links, `corrects`/`corrected_by`, reporter/closer |
+| POST | `/maintenance/downtime` | `{machineId, reason, planned?, startedAt?, endedAt?, manufacturingOrderId?, notes?}`; without `endedAt` the event stays OPEN (one per machine). Reasons: BREAKDOWN (always unplanned), PLANNED_MAINTENANCE (always planned), CHANGEOVER (default planned), MATERIAL_SHORTAGE, NO_OPERATOR, QUALITY_HOLD, UTILITIES, OTHER (default unplanned). Overlap with another effective event of the machine → 409; OPERATOR/PLANNER/MAINTENANCE |
+| POST | `/maintenance/downtime/{id}/close` | `{endedAt?, notes?}` (default now); refused while the linked work order is in progress; OPERATOR/PLANNER/MAINTENANCE |
+| POST | `/maintenance/downtime/{id}/correct` | `{reason, planned?, startedAt, endedAt, notes?, correctionReason, withdraw}`: a CLOSED event becomes SUPERSEDED and the corrected event (CLOSED, or VOID with `withdraw`) is recorded with `corrects_id`; PLANNER |
+| GET | `/maintenance/machines`, `/maintenance/machines/{id}` | Every machine with open downtime, open/in-progress orders, next PM due and overdue plans; one machine with `{machine, openDowntime, orders, plans, meter, runningOrders, metrics (last 30 days), history (15)}` |
+| GET | `/maintenance/machines/{id}/history?limit=&before=` | Downtime events, work orders, status changes and meter readings of a machine, newest first (`kind`, `at`, `reference`, `code`, `status`, `detail`, `value`, `flag`, `actor`) |
+| POST | `/maintenance/machines/{id}/status` | `{status: IDLE/RUNNING, reason}`: a planner's correction; 409 while a work order is in progress, and RUNNING while downtime is open; MAINTENANCE is entered only by starting an order; PLANNER |
+| POST | `/maintenance/machines/{id}/meter` | `{reading, notes?}`: run-hour meter (never backwards); a run-hour plan whose interval is reached since its last service is due today; returns `{plansDue}`; MAINTENANCE/PLANNER/OPERATOR |
+| GET | `/maintenance/metrics?from=&to=&machine=` | Default the last 30 days (≤ 366). `{from, to, periodMinutes, machines:[{id, code, events, failures, downtimeMinutes, plannedMinutes, unplannedMinutes, mttrMinutes, mtbfHours}], pareto:[{reason, minutes, events, share, cumulative}], totals}`. Durations are clipped to the period (open events run to now); failures = BREAKDOWN events starting in the period; MTTR = mean full length of closed failures (minutes); MTBF = (period − downtime) / failures (hours, calendar time, null without failures) |
+| GET | `/maintenance/spare-parts`, `/maintenance/technicians` | Active spare parts with released available stock; active MAINTENANCE/ADMIN users (assignees) |
+| GET / POST | `/maintenance/settings` | `{labourRate}` (LKR per hour, default 1,500; `customized`, `updatedAt`, `updatedBy`); set is ADMIN only |
+
+```json
+{"machineId":"opaque-machine","title":"Hydraulic pressure drops","description":"","priority":"URGENT","breakdown":true,"downtimeStartedAt":"2026-11-25T07:40:00+05:30","downtimeEventId":null,"manufacturingOrderId":null}
+```
+
+```json
+{"machineId":"opaque-machine","reason":"CHANGEOVER","planned":null,"startedAt":"2026-11-24T13:00:00+05:30","endedAt":"2026-11-24T13:40:00+05:30","manufacturingOrderId":null,"notes":"Mould change"}
+```
+
+`/state` key `maintenance` (order 2100): `{open_breakdowns, open_downtime, overdue_plans, awaiting_approval, in_progress, breakdowns (≤ 5 open BREAKDOWN events), overdue (≤ 5 overdue plans)}` for the overview and attention center.
+
 ### Administration (`/admin/*`, ADMIN only)
 
 | Method | Path | Purpose |
