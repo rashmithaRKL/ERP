@@ -84,11 +84,11 @@ export function PlansTab({ onOpenOrder }: { onOpenOrder: (id: string) => void })
           key,
         );
         maintenanceChanged();
-        workspace.notify(
-          result.created.length
-            ? `${result.created.length} preventive ${result.created.length === 1 ? 'order' : 'orders'} generated successfully: ${result.created.map((c) => c.number).join(', ')}.`
-            : `No new orders: ${result.skipped.length ? `${result.skipped.length} due ${result.skipped.length === 1 ? 'plan already has' : 'plans already have'} an order` : 'no plan is due in that horizon'}.`,
-        );
+        const message = result.created.length
+          ? `${result.created.length} preventive ${result.created.length === 1 ? 'order' : 'orders'} generated successfully: ${result.created.map((c) => c.number).join(', ')}.`
+          : `No new orders: ${result.skipped.length ? `${result.skipped.length} due ${result.skipped.length === 1 ? 'plan already has' : 'plans already have'} an order` : 'no plan is due in that horizon'}.`;
+        // After the form dialog's generic success toast, so the outcome stays visible.
+        setTimeout(() => workspace.notify(message), 0);
       },
     });
   }

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Check, CirclePlay, ClipboardCheck, LoaderCircle, PackageMinus, Timer, Undo2 } from 'lucide-react';
@@ -61,11 +61,25 @@ export function WorkOrderDrawer({ id, onClose }: { id: string; onClose: () => vo
   const technicians = useTechnicians(planner || technician);
   const spareParts = useSpareParts(issuable);
 
+  // Take the server's checklist and notes, unless the technician has unsaved edits (another action, e.g. logging
+  // labour, refetches the order).
+  const synced = useRef('');
+  const local = JSON.stringify([checklist, findings, actions]);
+  const localRef = useRef(local);
+  localRef.current = local;
   useEffect(() => {
     if (!detail.data) return;
-    setChecklist(detail.data.checklist);
-    setFindings(text(detail.data.order.findings));
-    setActions(text(detail.data.order.actions));
+    const server = [
+      detail.data.checklist,
+      text(detail.data.order.findings),
+      text(detail.data.order.actions),
+    ] as const;
+    if (!synced.current || localRef.current === synced.current) {
+      setChecklist(server[0]);
+      setFindings(server[1]);
+      setActions(server[2]);
+    }
+    synced.current = JSON.stringify(server);
   }, [detail.data]);
 
   async function act(url: string, body: unknown, success: string) {

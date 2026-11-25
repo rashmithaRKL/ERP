@@ -88,12 +88,15 @@ class MaintenanceDemoSeed implements ApplicationRunner {
         if (!demo
                 || s.list("SELECT 1 FROM tenants WHERE id=?", DemoPersonas.TENANT)
                         .isEmpty()) return;
+        // The persona commits on its own, so the role switch works even when the demo records below cannot be added.
+        try {
+            tx.executeWithoutResult(status -> persona());
+        } catch (RuntimeException e) {
+            log.warn("Maintenance demo persona (V11) was not added: {}", e.getMessage());
+        }
         // An existing demo database may have drifted (machines busy, stock used): never block startup for it.
         try {
-            tx.executeWithoutResult(status -> {
-                persona();
-                seed();
-            });
+            tx.executeWithoutResult(status -> seed());
         } catch (RuntimeException e) {
             log.warn("Maintenance demo data (V11) was not added: {}", e.getMessage());
         }
