@@ -254,9 +254,7 @@ public class InspectionPlanService {
 
     /** The id of the plan governing an inspection of {@code item} of {@code type}, or null. */
     String applicablePlan(Actor a, Object item, Object type) {
-        return s.db()
-                .queryForObject(
-                        "SELECT applicable_inspection_plan(?,?,?)", String.class, a.tenant(), item, type);
+        return s.db().queryForObject("SELECT applicable_inspection_plan(?,?,?)", String.class, a.tenant(), item, type);
     }
 
     Evaluation evaluate(Actor a, String planId, List<QualityCommands.Measurement> measurements) {

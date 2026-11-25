@@ -33,7 +33,8 @@ final class QualityPaging {
         args.add(cursor);
         args.add(limit + 1);
         var rows = s.list(
-                select + from + " AND (?::text IS NULL OR (" + alias + ".created_at," + alias + ".id) < (SELECT c.created_at,c.id FROM "
+                select + from + " AND (?::text IS NULL OR (" + alias + ".created_at," + alias
+                        + ".id) < (SELECT c.created_at,c.id FROM "
                         + table + " c WHERE c.tenant_id=" + alias + ".tenant_id AND c.id=?))"
                         + " ORDER BY " + alias + ".created_at DESC," + alias + ".id DESC LIMIT ?",
                 args.toArray());

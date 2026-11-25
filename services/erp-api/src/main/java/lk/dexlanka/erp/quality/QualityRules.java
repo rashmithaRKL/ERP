@@ -120,19 +120,14 @@ class QualityRules {
         if (status.equals("QUARANTINE")) release = true;
         else if (status.equals("REJECTED")) {
             BigDecimal remaining = dec(lot.get("quantity"));
-            BigDecimal conceded = dec(s.one(
-                            """
+            BigDecimal conceded = dec(s.one("""
                             SELECT COALESCE(SUM(d.quantity),0) AS q FROM ncr_dispositions d
                             JOIN ncrs n ON n.tenant_id=d.tenant_id AND n.id=d.ncr_id
                             WHERE d.tenant_id=? AND n.lot_id=? AND d.type='USE_AS_IS' AND d.status='POSTED'
-                              AND n.status IN ('DISPOSITIONED','CLOSED')""",
-                            a.tenant(),
-                            lotId)
-                    .get("q"));
+                              AND n.status IN ('DISPOSITIONED','CLOSED')""", a.tenant(), lotId).get("q"));
             release = remaining.signum() > 0 && remaining.compareTo(conceded) <= 0;
         }
-        if (release)
-            s.db().update("UPDATE lots SET status='RELEASED' WHERE tenant_id=? AND id=?", a.tenant(), lotId);
+        if (release) s.db().update("UPDATE lots SET status='RELEASED' WHERE tenant_id=? AND id=?", a.tenant(), lotId);
     }
 
     /**
@@ -147,16 +142,13 @@ class QualityRules {
         if (rows.isEmpty()) return;
         var o = rows.getFirst();
         if (java.util.Set.of("COMPLETED", "CLOSED", "CANCELLED").contains(str(o, "status"))) return;
-        var unresolved = s.list(
-                """
+        var unresolved = s.list("""
                 SELECT 1 FROM inspections i JOIN lots l ON l.tenant_id=i.tenant_id AND l.id=i.lot_id
                 WHERE i.tenant_id=? AND l.source_type='MANUFACTURING' AND l.source_id=?
                   AND NOT (i.status='PASSED'
                            OR (i.status='FAILED' AND EXISTS(
                                  SELECT 1 FROM ncrs n WHERE n.tenant_id=i.tenant_id AND n.inspection_id=i.id
-                                   AND n.source='INSPECTION' AND n.status IN ('DISPOSITIONED','CLOSED'))))""",
-                a.tenant(),
-                orderId);
+                                   AND n.source='INSPECTION' AND n.status IN ('DISPOSITIONED','CLOSED'))))""", a.tenant(), orderId);
         if (unresolved.isEmpty()
                 && dec(o.get("good_qty")).add(dec(o.get("scrap_qty"))).compareTo(dec(o.get("quantity"))) == 0)
             s.db().update(

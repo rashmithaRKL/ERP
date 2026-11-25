@@ -24,7 +24,10 @@ public final class InspectionPlanCommands {
             @NotBlank @Size(max = 120) String name,
             @Size(max = 64) String itemId,
             @Size(max = 64) String categoryId,
-            @NotBlank @Pattern(regexp = "INCOMING|FINAL|RETURN|REWORK") String inspectionType,
+
+            @NotBlank @Pattern(regexp = "INCOMING|FINAL|RETURN|REWORK")
+            String inspectionType,
+
             @Size(max = 2000) String notes,
             @NotEmpty @Size(max = 40) List<@Valid @NotNull Characteristic> characteristics) {}
 
@@ -44,7 +47,10 @@ public final class InspectionPlanCommands {
      */
     public record Characteristic(
             @NotBlank @Size(max = 120) String name,
-            @NotBlank @Pattern(regexp = "VARIABLE|ATTRIBUTE") String kind,
+
+            @NotBlank @Pattern(regexp = "VARIABLE|ATTRIBUTE")
+            String kind,
+
             @Size(max = 20) String unit,
             @Digits(integer = 14, fraction = 6) BigDecimal nominal,
             @Digits(integer = 14, fraction = 6) BigDecimal lowerLimit,
@@ -56,7 +62,9 @@ public final class InspectionPlanCommands {
 
     /** A defect code: created with {@code POST /quality/defect-codes}, edited with {@code POST .../{code}}. */
     public record DefectCode(
-            @NotBlank @Pattern(regexp = "[A-Z0-9][A-Z0-9_-]{0,19}") String code,
+            @NotBlank @Pattern(regexp = "[A-Z0-9][A-Z0-9_-]{0,19}")
+            String code,
+
             @NotBlank @Size(max = 120) String name,
             @Size(max = 400) String description,
             @NotNull Boolean active) {}

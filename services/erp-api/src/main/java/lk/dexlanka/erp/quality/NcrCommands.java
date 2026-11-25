@@ -23,21 +23,30 @@ public final class NcrCommands {
      * documents a nonconformance with nothing to disposition and closes directly.
      */
     public record Raise(
-            @NotBlank @Pattern(regexp = "PRODUCTION|SUPPLIER|CUSTOMER|INTERNAL|AUDIT|RECALL") String source,
-            @NotBlank @Pattern(regexp = "MINOR|MAJOR|CRITICAL") String severity,
+            @NotBlank @Pattern(regexp = "PRODUCTION|SUPPLIER|CUSTOMER|INTERNAL|AUDIT|RECALL")
+            String source,
+
+            @NotBlank @Pattern(regexp = "MINOR|MAJOR|CRITICAL")
+            String severity,
+
             @NotBlank @Size(max = 20) String defectCode,
             @NotBlank @Size(max = 160) String title,
             @NotBlank @Size(max = 4000) String description,
             @Size(max = 2000) String containment,
             @Size(max = 64) String itemId,
             @Size(max = 64) String lotId,
-            @NotNull @DecimalMin("0") @Digits(integer = 12, fraction = 6) BigDecimal quantity,
+
+            @NotNull @DecimalMin("0") @Digits(integer = 12, fraction = 6)
+            BigDecimal quantity,
+
             @Size(max = 64) String manufacturingOrderId,
             @Size(max = 64) String supplierId) {}
 
     /** Edits the classification and texts of an open NCR. */
     public record Update(
-            @NotBlank @Pattern(regexp = "MINOR|MAJOR|CRITICAL") String severity,
+            @NotBlank @Pattern(regexp = "MINOR|MAJOR|CRITICAL")
+            String severity,
+
             @NotBlank @Size(max = 20) String defectCode,
             @NotBlank @Size(max = 160) String title,
             @NotBlank @Size(max = 4000) String description,
@@ -48,8 +57,12 @@ public final class NcrCommands {
      * only).
      */
     public record Disposition(
-            @NotBlank @Pattern(regexp = "USE_AS_IS|SCRAP|RETURN_TO_SUPPLIER|REWORK") String type,
-            @NotNull @DecimalMin("0.000001") @Digits(integer = 12, fraction = 6) BigDecimal quantity,
+            @NotBlank @Pattern(regexp = "USE_AS_IS|SCRAP|RETURN_TO_SUPPLIER|REWORK")
+            String type,
+
+            @NotNull @DecimalMin("0.000001") @Digits(integer = 12, fraction = 6)
+            BigDecimal quantity,
+
             @NotBlank @Size(max = 2000) String note,
             @Size(max = 2000) String instructions) {}
 
@@ -60,7 +73,8 @@ public final class NcrCommands {
 
     /** Posts the supplier return of a RETURN_TO_SUPPLIER disposition (warehouse). */
     public record ShipReturn(
-            @NotBlank @Size(max = 80) String debitNote, @Size(max = 400) String reason) {}
+            @NotBlank @Size(max = 80) String debitNote,
+            @Size(max = 400) String reason) {}
 
     public record Close(@NotBlank @Size(max = 2000) String note) {}
 
@@ -71,12 +85,18 @@ public final class NcrCommands {
      * input value plus {@code labourCost} plus the value of the extra {@code materials} issued from released lots.
      */
     public record ReworkComplete(
-            @NotNull @DecimalMin("0.000001") @Digits(integer = 12, fraction = 6) BigDecimal outputQuantity,
-            @NotNull @DecimalMin("0") @Digits(integer = 12, fraction = 6) BigDecimal labourCost,
+            @NotNull @DecimalMin("0.000001") @Digits(integer = 12, fraction = 6)
+            BigDecimal outputQuantity,
+
+            @NotNull @DecimalMin("0") @Digits(integer = 12, fraction = 6)
+            BigDecimal labourCost,
+
             @Size(max = 20) List<@Valid @NotNull Material> materials,
             @Size(max = 2000) String note) {}
 
     public record Material(
             @NotBlank @Size(max = 64) String lotId,
-            @NotNull @DecimalMin("0.000001") @Digits(integer = 12, fraction = 6) BigDecimal quantity) {}
+
+            @NotNull @DecimalMin("0.000001") @Digits(integer = 12, fraction = 6)
+            BigDecimal quantity) {}
 }

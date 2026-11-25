@@ -74,8 +74,7 @@ public class CapaQuery {
 
     /** One CAPA with its NCRs, actions (with overdue flags) and activity. */
     public Map<String, Object> capa(Actor a, String id) {
-        var capa = s.one(
-                """
+        var capa = s.one("""
                 SELECT c.*,o.name AS owner,o.role AS owner_role,u.name AS created_by_name,v.name AS verified_by_name,
                        x.name AS cancelled_by_name,
                        (c.status NOT IN ('CLOSED','CANCELLED') AND c.due_date<CURRENT_DATE) AS overdue
@@ -84,32 +83,20 @@ public class CapaQuery {
                 LEFT JOIN users u ON u.id=c.created_by
                 LEFT JOIN users v ON v.id=c.verified_by
                 LEFT JOIN users x ON x.id=c.cancelled_by
-                WHERE c.tenant_id=? AND c.id=?""",
-                a.tenant(),
-                id);
+                WHERE c.tenant_id=? AND c.id=?""", a.tenant(), id);
         var out = new LinkedHashMap<String, Object>();
         out.put("capa", capa);
-        out.put(
-                "ncrs",
-                s.list(
-                        """
+        out.put("ncrs", s.list("""
                         SELECT n.id,n.number,n.title,n.status,n.severity,n.defect_code FROM capa_ncrs k
                         JOIN ncrs n ON n.tenant_id=k.tenant_id AND n.id=k.ncr_id
-                        WHERE k.tenant_id=? AND k.capa_id=? ORDER BY n.number""",
-                        a.tenant(),
-                        id));
-        out.put(
-                "actions",
-                s.list(
-                        """
+                        WHERE k.tenant_id=? AND k.capa_id=? ORDER BY n.number""", a.tenant(), id));
+        out.put("actions", s.list("""
                         SELECT x.*,o.name AS owner,v.name AS completed_by_name,
                                (x.status='OPEN' AND x.due_date<CURRENT_DATE) AS overdue
                         FROM capa_actions x
                         JOIN users o ON o.id=x.owner_id
                         LEFT JOIN users v ON v.id=x.completed_by
-                        WHERE x.tenant_id=? AND x.capa_id=? ORDER BY x.seq""",
-                        a.tenant(),
-                        id));
+                        WHERE x.tenant_id=? AND x.capa_id=? ORDER BY x.seq""", a.tenant(), id));
         out.put(
                 "activity",
                 s.list(
@@ -135,21 +122,13 @@ public class CapaQuery {
                   AND (NOT ?::boolean OR (x.status='OPEN' AND x.due_date<CURRENT_DATE))
                   AND (NOT ?::boolean OR x.owner_id=?)""";
         return QualityPaging.page(
-                s,
-                """
+                s, """
                 SELECT x.*,c.number AS capa,c.title AS capa_title,c.status AS capa_status,o.name AS owner,
-                       (x.status='OPEN' AND x.due_date<CURRENT_DATE) AS overdue""",
-                from,
-                "x",
-                "capa_actions",
-                args(a.tenant(), st, st, overdue, mine, a.id()),
-                limit,
-                before);
+                       (x.status='OPEN' AND x.due_date<CURRENT_DATE) AS overdue""", from, "x", "capa_actions", args(a.tenant(), st, st, overdue, mine, a.id()), limit, before);
     }
 
     long overdueActions(Actor a) {
-        return s.db()
-                .queryForObject(
+        return s.db().queryForObject(
                         "SELECT COUNT(*) FROM capa_actions x JOIN capas c ON c.tenant_id=x.tenant_id AND c.id=x.capa_id WHERE x.tenant_id=? AND x.status='OPEN' AND x.due_date<CURRENT_DATE AND c.status NOT IN ('CLOSED','CANCELLED')",
                         Long.class,
                         a.tenant());

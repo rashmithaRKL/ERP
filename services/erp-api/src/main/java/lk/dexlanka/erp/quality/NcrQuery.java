@@ -110,9 +110,7 @@ public class NcrQuery {
 
     /** One NCR with its links, dispositions, rework orders, linked CAPAs and activity. */
     public Map<String, Object> ncr(Actor a, String id) {
-        var ncr = s.one(
-                NCR_COLUMNS
-                        + """
+        var ncr = s.one(NCR_COLUMNS + """
                         ,l.status AS lot_status,l.source_type AS lot_source_type,i.uom AS item_uom,i.type AS item_type,
                                COALESCE(b.quantity,0) AS lot_quantity,COALESCE(b.reserved,0) AS lot_reserved,
                                q.type AS inspection_type,q.status AS inspection_status,q.inspected_by,q.inspected_at,
@@ -133,15 +131,10 @@ public class NcrQuery {
                         LEFT JOIN partners p ON p.tenant_id=n.tenant_id AND p.id=n.supplier_id
                         LEFT JOIN customer_returns cr ON cr.tenant_id=n.tenant_id AND cr.id=n.customer_return_id
                         LEFT JOIN rework_orders rw ON rw.tenant_id=n.tenant_id AND rw.id=n.rework_order_id
-                        WHERE n.tenant_id=? AND n.id=?""",
-                a.tenant(),
-                id);
+                        WHERE n.tenant_id=? AND n.id=?""", a.tenant(), id);
         var out = new LinkedHashMap<String, Object>();
         out.put("ncr", ncr);
-        out.put(
-                "dispositions",
-                s.list(
-                        """
+        out.put("dispositions", s.list("""
                         SELECT x.*,u.name AS created_by_name,v.name AS decided_by_name,sr.number AS supplier_return,
                                rw.status AS rework_status,rw.output_lot_id,ol.number AS output_lot
                         FROM ncr_dispositions x
@@ -150,18 +143,11 @@ public class NcrQuery {
                         LEFT JOIN supplier_returns sr ON sr.tenant_id=x.tenant_id AND sr.id=x.supplier_return_id
                         LEFT JOIN rework_orders rw ON rw.tenant_id=x.tenant_id AND rw.id=x.rework_order_id
                         LEFT JOIN lots ol ON ol.tenant_id=rw.tenant_id AND ol.id=rw.output_lot_id
-                        WHERE x.tenant_id=? AND x.ncr_id=? ORDER BY x.line_no""",
-                        a.tenant(),
-                        id));
-        out.put(
-                "capas",
-                s.list(
-                        """
+                        WHERE x.tenant_id=? AND x.ncr_id=? ORDER BY x.line_no""", a.tenant(), id));
+        out.put("capas", s.list("""
                         SELECT c.id,c.number,c.title,c.status FROM capa_ncrs x
                         JOIN capas c ON c.tenant_id=x.tenant_id AND c.id=x.capa_id
-                        WHERE x.tenant_id=? AND x.ncr_id=? ORDER BY c.created_at""",
-                        a.tenant(),
-                        id));
+                        WHERE x.tenant_id=? AND x.ncr_id=? ORDER BY c.created_at""", a.tenant(), id));
         out.put(
                 "activity",
                 s.list(
@@ -201,8 +187,8 @@ public class NcrQuery {
         var counts = new LinkedHashMap<String, Object>();
         counts.put("OPEN", 0L);
         counts.put("COMPLETED", 0L);
-        for (var r : s.list(
-                "SELECT status,COUNT(*) AS n FROM rework_orders WHERE tenant_id=? GROUP BY status", a.tenant()))
+        for (var r :
+                s.list("SELECT status,COUNT(*) AS n FROM rework_orders WHERE tenant_id=? GROUP BY status", a.tenant()))
             counts.put((String) r.get("status"), r.get("n"));
         page.put("counts", counts);
         return page;
@@ -210,8 +196,7 @@ public class NcrQuery {
 
     /** One rework order: costs, materials, lot links (genealogy) and the output inspection. */
     public Map<String, Object> rework(Actor a, String id) {
-        var rw = s.one(
-                """
+        var rw = s.one("""
                 SELECT r.*,i.sku,i.name AS item,i.uom,i.type AS item_type,il.number AS input_lot,
                        ol.number AS output_lot,ol.status AS output_lot_status,n.number AS ncr,n.title AS ncr_title,
                        u.name AS created_by_name,v.name AS completed_by_name,
@@ -226,31 +211,19 @@ public class NcrQuery {
                 LEFT JOIN lots ol ON ol.tenant_id=r.tenant_id AND ol.id=r.output_lot_id
                 LEFT JOIN users u ON u.id=r.created_by
                 LEFT JOIN users v ON v.id=r.completed_by
-                WHERE r.tenant_id=? AND r.id=?""",
-                a.tenant(),
-                id);
+                WHERE r.tenant_id=? AND r.id=?""", a.tenant(), id);
         var out = new LinkedHashMap<String, Object>();
         out.put("rework", rw);
-        out.put(
-                "materials",
-                s.list(
-                        """
+        out.put("materials", s.list("""
                         SELECT m.*,l.number AS lot,i.sku,i.name AS item,i.uom FROM rework_materials m
                         JOIN lots l ON l.tenant_id=m.tenant_id AND l.id=m.lot_id
                         JOIN items i ON i.tenant_id=m.tenant_id AND i.id=m.item_id
-                        WHERE m.tenant_id=? AND m.rework_order_id=? ORDER BY m.created_at,m.id""",
-                        a.tenant(),
-                        id));
-        out.put(
-                "links",
-                s.list(
-                        """
+                        WHERE m.tenant_id=? AND m.rework_order_id=? ORDER BY m.created_at,m.id""", a.tenant(), id));
+        out.put("links", s.list("""
                         SELECT k.*,il.number AS input_lot,ol.number AS output_lot FROM rework_lot_links k
                         JOIN lots il ON il.tenant_id=k.tenant_id AND il.id=k.input_lot_id
                         JOIN lots ol ON ol.tenant_id=k.tenant_id AND ol.id=k.output_lot_id
-                        WHERE k.tenant_id=? AND k.rework_order_id=? ORDER BY k.role DESC,il.number""",
-                        a.tenant(),
-                        id));
+                        WHERE k.tenant_id=? AND k.rework_order_id=? ORDER BY k.role DESC,il.number""", a.tenant(), id));
         out.put(
                 "activity",
                 s.list(
@@ -270,21 +243,15 @@ public class NcrQuery {
                         "SELECT id,number,status,severity,defect_code,title,quantity,uom,created_at FROM ncrs WHERE tenant_id=? AND lot_id=? ORDER BY created_at DESC",
                         a.tenant(),
                         lotId));
-        var origin = s.list(
-                """
+        var origin = s.list("""
                 SELECT r.id,r.number,r.status,r.input_quantity,r.output_quantity,r.output_value,n.number AS ncr,
                        il.id AS input_lot_id,il.number AS input_lot
                 FROM rework_orders r
                 JOIN ncrs n ON n.tenant_id=r.tenant_id AND n.id=r.ncr_id
                 JOIN lots il ON il.tenant_id=r.tenant_id AND il.id=r.input_lot_id
-                WHERE r.tenant_id=? AND r.output_lot_id=?""",
-                a.tenant(),
-                lotId);
+                WHERE r.tenant_id=? AND r.output_lot_id=?""", a.tenant(), lotId);
         out.put("reworkOrigin", origin.isEmpty() ? null : origin.getFirst());
-        out.put(
-                "reworkedInto",
-                s.list(
-                        """
+        out.put("reworkedInto", s.list("""
                         SELECT r.id,r.number,r.status,k.role,k.quantity,ol.id AS output_lot_id,ol.number AS output_lot
                         FROM rework_lot_links k
                         JOIN rework_orders r ON r.tenant_id=k.tenant_id AND r.id=k.rework_order_id
@@ -293,11 +260,7 @@ public class NcrQuery {
                         UNION ALL
                         SELECT r.id,r.number,r.status,'REWORKED',r.input_quantity,NULL,NULL FROM rework_orders r
                         WHERE r.tenant_id=? AND r.input_lot_id=? AND r.status='OPEN'
-                        ORDER BY 2""",
-                        a.tenant(),
-                        lotId,
-                        a.tenant(),
-                        lotId));
+                        ORDER BY 2""", a.tenant(), lotId, a.tenant(), lotId));
         return out;
     }
 

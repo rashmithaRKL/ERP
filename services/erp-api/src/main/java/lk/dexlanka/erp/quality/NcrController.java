@@ -132,9 +132,7 @@ class NcrController {
 
     @GetMapping("/quality/summary")
     Map<String, Object> summary(
-            Authentication a,
-            @RequestParam(required = false) String from,
-            @RequestParam(required = false) String to) {
+            Authentication a, @RequestParam(required = false) String from, @RequestParam(required = false) String to) {
         return query.summary(Actor.of(a), from, to);
     }
 

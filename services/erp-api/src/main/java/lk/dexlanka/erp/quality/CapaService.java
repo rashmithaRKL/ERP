@@ -151,7 +151,9 @@ public class CapaService {
         return s.once(a, key, "capa-action-done:" + actionId, c, () -> {
             var action = action(a, actionId);
             if (!a.id().equals(action.get("owner_id"))) a.allow("QUALITY");
-            require(action.get("status").equals("OPEN"), "This action is already " + str(action, "status").toLowerCase());
+            require(
+                    action.get("status").equals("OPEN"),
+                    "This action is already " + str(action, "status").toLowerCase());
             var capa = locked(a, str(action, "capa_id"));
             require(
                     Set.of("OPEN", "IN_PROGRESS").contains(str(capa, "status")),
@@ -201,7 +203,8 @@ public class CapaService {
             var capa = locked(a, id);
             require(capa.get("status").equals("OPEN"), "Only an open CAPA can be started");
             require(
-                    capa.get("root_cause_category") != null && !str(capa, "root_cause").isBlank(),
+                    capa.get("root_cause_category") != null
+                            && !str(capa, "root_cause").isBlank(),
                     "Record the root-cause category and analysis first");
             require(
                     !s.list(
@@ -262,7 +265,11 @@ public class CapaService {
                                 a.id(),
                                 a.tenant(),
                                 id);
-                s.audit(a, "CAPA_VERIFIED", str(capa, "number"), "Effective · " + c.note().strip());
+                s.audit(
+                        a,
+                        "CAPA_VERIFIED",
+                        str(capa, "number"),
+                        "Effective · " + c.note().strip());
                 return Map.of("id", id, "status", "CLOSED");
             }
             s.db().update(
@@ -270,7 +277,11 @@ public class CapaService {
                             c.note().strip(),
                             a.tenant(),
                             id);
-            s.audit(a, "CAPA_REOPENED", str(capa, "number"), "Not effective · " + c.note().strip());
+            s.audit(
+                    a,
+                    "CAPA_REOPENED",
+                    str(capa, "number"),
+                    "Not effective · " + c.note().strip());
             return Map.of("id", id, "status", "IN_PROGRESS");
         });
     }
@@ -280,7 +291,9 @@ public class CapaService {
         a.allow("QUALITY");
         return s.once(a, key, "capa-cancel:" + id, c, () -> {
             var capa = locked(a, id);
-            require(!CLOSED.contains(str(capa, "status")), "This CAPA is already " + str(capa, "status").toLowerCase());
+            require(
+                    !CLOSED.contains(str(capa, "status")),
+                    "This CAPA is already " + str(capa, "status").toLowerCase());
             s.db().update(
                             "UPDATE capas SET status='CANCELLED',cancelled_by=?,cancelled_at=now(),cancel_reason=?,updated_at=now() WHERE tenant_id=? AND id=?",
                             a.id(),
@@ -309,11 +322,7 @@ public class CapaService {
     }
 
     private void status(Actor a, String id, String status) {
-        s.db().update(
-                        "UPDATE capas SET status=?,updated_at=now() WHERE tenant_id=? AND id=?",
-                        status,
-                        a.tenant(),
-                        id);
+        s.db().update("UPDATE capas SET status=?,updated_at=now() WHERE tenant_id=? AND id=?", status, a.tenant(), id);
     }
 
     /** Distinct NCR ids of this tenant (404 for an unknown one). */

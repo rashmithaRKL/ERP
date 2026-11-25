@@ -130,7 +130,8 @@ public class NcrService {
                             reworkOrder,
                             c.quantity(),
                             uom,
-                            hold);
+                            hold,
+                            a.id());
             if (hold)
                 s.db().update("UPDATE lots SET status='QUARANTINE' WHERE tenant_id=? AND id=?", a.tenant(), lotId);
             s.audit(
@@ -208,7 +209,8 @@ public class NcrService {
                         number,
                         critical ? "CRITICAL" : "MAJOR",
                         defect,
-                        "Failed " + type.toLowerCase() + " inspection · " + lot.get("sku") + " lot " + lot.get("number"),
+                        "Failed " + type.toLowerCase() + " inspection · " + lot.get("sku") + " lot "
+                                + lot.get("number"),
                         description,
                         returned
                                 ? "Whole lot returned to the supplier by the failed incoming inspection"
@@ -288,19 +290,23 @@ public class NcrService {
         a.allow("QUALITY");
         return s.once(a, key, "ncr-close:" + id, c, () -> {
             var n = locked(a, id);
-            boolean nothingToDisposition = n.get("lot_id") == null || dec(n.get("quantity")).signum() == 0;
+            boolean nothingToDisposition =
+                    n.get("lot_id") == null || dec(n.get("quantity")).signum() == 0;
             require(
                     n.get("status").equals("DISPOSITIONED") || (n.get("status").equals("OPEN") && nothingToDisposition),
                     n.get("status").equals("OPEN")
                             ? "Disposition the whole affected quantity before closing"
-                            : "This nonconformance is already " + str(n, "status").toLowerCase());
+                            : "This nonconformance is already "
+                                    + str(n, "status").toLowerCase());
             var openRework = s.list(
                     "SELECT number FROM rework_orders WHERE tenant_id=? AND ncr_id=? AND status='OPEN' ORDER BY number LIMIT 1",
                     a.tenant(),
                     id);
             require(
                     openRework.isEmpty(),
-                    openRework.isEmpty() ? "" : "Complete rework order " + openRework.getFirst().get("number") + " first");
+                    openRework.isEmpty()
+                            ? ""
+                            : "Complete rework order " + openRework.getFirst().get("number") + " first");
             s.db().update(
                             "UPDATE ncrs SET status='CLOSED',closed_by=?,closed_at=now(),close_note=?,updated_at=now() WHERE tenant_id=? AND id=?",
                             a.id(),
@@ -407,8 +413,8 @@ public class NcrService {
                     require(
                             lot.get("source_type").equals("PURCHASE") && !r.isEmpty(),
                             "Only purchased lots can be returned to the supplier");
-                    BigDecimal returnable =
-                            dec(r.getFirst().get("quantity")).subtract(dec(r.getFirst().get("returned")));
+                    BigDecimal returnable = dec(r.getFirst().get("quantity"))
+                            .subtract(dec(r.getFirst().get("returned")));
                     require(
                             c.quantity().compareTo(returnable) <= 0,
                             "Return exceeds the received quantity not yet returned (" + plain(returnable) + " " + uom
@@ -476,9 +482,7 @@ public class NcrService {
             require(d.get("status").equals("PENDING_APPROVAL"), "This disposition is not awaiting approval");
             var n = locked(a, str(d, "ncr_id"));
             require(n.get("status").equals("OPEN"), "The nonconformance is no longer open");
-            require(
-                    !a.id().equals(d.get("created_by")),
-                    "A different authorized person must approve this concession");
+            require(!a.id().equals(d.get("created_by")), "A different authorized person must approve this concession");
             boolean approve = c.decision().equals("APPROVE");
             s.db().update(
                             "UPDATE ncr_dispositions SET status=?,decided_by=?,decided_at=now(),decision_note=?,posted_at=CASE WHEN ? THEN now() END WHERE tenant_id=? AND id=?",
@@ -488,11 +492,17 @@ public class NcrService {
                             approve,
                             a.tenant(),
                             dispositionId);
-            String detail = plain(dec(d.get("quantity"))) + " " + n.get("uom") + " used as is · " + c.note().strip();
+            String detail = plain(dec(d.get("quantity"))) + " " + n.get("uom") + " used as is · "
+                    + c.note().strip();
             if (approve) s.audit(a, "NCR_CONCESSION_APPROVED", str(n, "number"), detail);
             else s.audit(a, "NCR_CONCESSION_REJECTED", str(n, "number"), detail);
             return Map.of(
-                    "id", dispositionId, "status", approve ? "POSTED" : "REJECTED", "ncrStatus", refresh(a, str(n, "id")));
+                    "id",
+                    dispositionId,
+                    "status",
+                    approve ? "POSTED" : "REJECTED",
+                    "ncrStatus",
+                    refresh(a, str(n, "id")));
         });
     }
 
@@ -512,7 +522,8 @@ public class NcrService {
             require(n.get("status").equals("OPEN"), "The nonconformance is no longer open");
             var lot = rules.lockedLot(a, str(d, "lot_id"));
             String held = str(lot, "status");
-            List<Object> children = s.list(
+            List<Object> children = s
+                    .list(
                             "SELECT id FROM lots WHERE tenant_id=? AND source_type='TRANSFER' AND source_id=? AND status='QUARANTINE'",
                             a.tenant(),
                             lot.get("id"))
@@ -527,7 +538,9 @@ public class NcrService {
                     a,
                     str(d, "receipt_id"),
                     new ProcurementCommands.SupplierReturn(
-                            dec(d.get("quantity")), reason.length() > 400 ? reason.substring(0, 400) : reason, c.debitNote()),
+                            dec(d.get("quantity")),
+                            reason.length() > 400 ? reason.substring(0, 400) : reason,
+                            c.debitNote()),
                     "ncr-rts-" + dispositionId);
             s.db().update("UPDATE lots SET status=? WHERE tenant_id=? AND id=?", held, a.tenant(), lot.get("id"));
             for (Object child : children)
