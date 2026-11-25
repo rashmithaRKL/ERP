@@ -73,9 +73,10 @@ public class ScheduleService {
         var result = ScheduleEngine.schedule(input);
         String id = id();
         String number = s.number(a, "SCH");
-        var published = s.list(
-                "SELECT id FROM schedule_runs WHERE tenant_id=? AND status='PUBLISHED'", a.tenant());
-        long late = result.orders().stream().filter(ScheduleEngine.OrderResult::late).count();
+        var published = s.list("SELECT id FROM schedule_runs WHERE tenant_id=? AND status='PUBLISHED'", a.tenant());
+        long late = result.orders().stream()
+                .filter(ScheduleEngine.OrderResult::late)
+                .count();
         long unscheduled = result.orders().stream()
                 .filter(o -> o.status().equals(ScheduleEngine.NO_ROUTING)
                         || o.status().equals(ScheduleEngine.BEYOND_HORIZON))
@@ -92,8 +93,8 @@ public class ScheduleService {
                         """
                         INSERT INTO schedule_runs(id,tenant_id,number,status,horizon_start,horizon_end,horizon_days,use_alternates,breakdown_hours,
                           include_drafts,notes,base_run_id,orders_count,operations_count,late_orders,unscheduled_orders,pins_honoured,pin_conflicts,
-                          makespan_end,created_by)
-                        VALUES(?,?,?,'DRAFT',?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                          makespan_end,created_by,created_at)
+                        VALUES(?,?,?,'DRAFT',?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,clock_timestamp())""",
                         id,
                         a.tenant(),
                         number,
@@ -144,7 +145,11 @@ public class ScheduleService {
         for (var p : result.operations()) {
             var op = p.operation();
             var segments = p.segments().stream()
-                    .map(x -> Map.of("start", at(x.start()).toString(), "end", at(x.end()).toString()))
+                    .map(x -> Map.of(
+                            "start",
+                            at(x.start()).toString(),
+                            "end",
+                            at(x.end()).toString()))
                     .toList();
             opRows.add(new Object[] {
                 id(),
@@ -200,7 +205,9 @@ public class ScheduleService {
                 number,
                 result.operations().size() + " operations of " + result.orders().size() + " orders over "
                         + params.horizonDays() + " days; " + late + " late, " + unscheduled + " unscheduled"
-                        + (result.pins().isEmpty() ? "" : "; " + honoured + " of " + result.pins().size() + " pins honoured"));
+                        + (result.pins().isEmpty()
+                                ? ""
+                                : "; " + honoured + " of " + result.pins().size() + " pins honoured"));
         var out = new LinkedHashMap<String, Object>();
         out.put("id", id);
         out.put("number", number);
@@ -221,18 +228,12 @@ public class ScheduleService {
             var run = s.one("SELECT * FROM schedule_runs WHERE tenant_id=? AND id=?", a.tenant(), id);
             require(run.get("status").equals("DRAFT"), "Only a draft schedule can be published");
             require(
-                    s.list(
-                                    """
+                    s.list("""
                                     SELECT 1 FROM schedule_runs r WHERE r.tenant_id=? AND r.status IN ('DRAFT','PUBLISHED','SUPERSEDED') AND r.id<>?
-                                      AND (r.created_at,r.id) > (?::timestamptz,?)""",
-                                    a.tenant(),
-                                    id,
-                                    run.get("created_at"),
-                                    id)
-                            .isEmpty(),
+                                      AND (r.created_at,r.id) > (?::timestamptz,?)""", a.tenant(), id, run.get("created_at"), id).isEmpty(),
                     "A newer schedule run exists; publish the newest run or run the scheduler again");
-            var previous = s.list(
-                    "SELECT id,number FROM schedule_runs WHERE tenant_id=? AND status='PUBLISHED'", a.tenant());
+            var previous =
+                    s.list("SELECT id,number FROM schedule_runs WHERE tenant_id=? AND status='PUBLISHED'", a.tenant());
             s.db().update(
                             "UPDATE schedule_runs SET status='SUPERSEDED',superseded_at=now(),superseded_by_run_id=? WHERE tenant_id=? AND status='PUBLISHED'",
                             id,
@@ -364,11 +365,10 @@ public class ScheduleService {
                             .filter(b -> b.machineId().equals(c.machineId()))
                             .toList());
             Long start = timeline.nextWorking(requested);
-            require(
-                    start != null,
-                    str(machine, "code") + " has no working time after that start within the horizon");
+            require(start != null, str(machine, "code") + " has no working time after that start within the horizon");
             String pinKey = ScheduleEngine.key(orderId, operationId);
-            var others = input.pins().stream().filter(p -> !p.key().equals(pinKey)).toList();
+            var others =
+                    input.pins().stream().filter(p -> !p.key().equals(pinKey)).toList();
             var baseline = ScheduleEngine.schedule(withPins(input, others));
             var candidate = new ScheduleEngine.Pin("candidate", orderId, operationId, c.machineId(), start);
             var withPin = new ArrayList<>(others);
@@ -477,7 +477,8 @@ public class ScheduleService {
                     !Boolean.TRUE.equals(order.get("routed")),
                     "This order has a routing; its operations are scheduled from the routing");
             require(
-                    !List.of("QUALITY_REVIEW", "COMPLETED", "CLOSED", "CANCELLED").contains(str(order, "status")),
+                    !List.of("QUALITY_REVIEW", "COMPLETED", "CLOSED", "CANCELLED")
+                            .contains(str(order, "status")),
                     "This manufacturing order is no longer open for scheduling");
             s.db().update(
                             """
@@ -493,7 +494,8 @@ public class ScheduleService {
                     a,
                     "SCHEDULE_ESTIMATE_SET",
                     str(order, "number"),
-                    "Remaining duration estimate " + c.minutes().stripTrailingZeros().toPlainString() + " min on "
+                    "Remaining duration estimate "
+                            + c.minutes().stripTrailingZeros().toPlainString() + " min on "
                             + str(
                                     s.one(
                                             "SELECT code FROM machines WHERE tenant_id=? AND id=?",
@@ -511,10 +513,13 @@ public class ScheduleService {
     public Map<String, Object> removeEstimate(Actor a, String orderId, String key) {
         a.allow("PLANNER");
         return s.once(a, key, "schedule-estimate-remove:" + orderId, Map.of(), () -> {
-            var order = s.one(
-                    "SELECT id,number FROM manufacturing_orders WHERE tenant_id=? AND id=?", a.tenant(), orderId);
+            var order =
+                    s.one("SELECT id,number FROM manufacturing_orders WHERE tenant_id=? AND id=?", a.tenant(), orderId);
             require(
-                    s.db().update("DELETE FROM schedule_estimates WHERE tenant_id=? AND order_id=?", a.tenant(), orderId)
+                    s.db().update(
+                                            "DELETE FROM schedule_estimates WHERE tenant_id=? AND order_id=?",
+                                            a.tenant(),
+                                            orderId)
                             > 0,
                     "This order has no duration estimate");
             s.db().update(

@@ -91,10 +91,14 @@ public class ScheduleQuery {
         out.put(
                 "defaults",
                 Map.of(
-                        "horizonDays", ScheduleInputs.DEFAULT_HORIZON_DAYS,
-                        "breakdownHours", ScheduleInputs.DEFAULT_BREAKDOWN_HOURS,
-                        "useAlternates", true,
-                        "includeDrafts", false));
+                        "horizonDays",
+                        ScheduleInputs.DEFAULT_HORIZON_DAYS,
+                        "breakdownHours",
+                        ScheduleInputs.DEFAULT_BREAKDOWN_HOURS,
+                        "useAlternates",
+                        true,
+                        "includeDrafts",
+                        false));
         out.put("now", at(ScheduleService.now()).toString());
         return out;
     }
@@ -105,19 +109,12 @@ public class ScheduleQuery {
         require(limit >= 1 && limit <= 200, "Choose a page size between 1 and 200");
         String state = blank(status) ? null : status;
         String cursor = blank(before) ? null : before;
-        var rows = s.list(
-                HEADER + """
+        var rows = s.list(HEADER + """
                  WHERE r.tenant_id=? AND (?::text IS NULL OR r.status=?)
                   AND (?::text IS NULL OR (r.created_at,r.id) <
                        (SELECT c.created_at,c.id FROM schedule_runs c WHERE c.tenant_id=r.tenant_id AND c.id=?))
                 ORDER BY r.created_at DESC,r.id DESC
-                LIMIT ?""",
-                a.tenant(),
-                state,
-                state,
-                cursor,
-                cursor,
-                limit + 1);
+                LIMIT ?""", a.tenant(), state, state, cursor, cursor, limit + 1);
         boolean more = rows.size() > limit;
         var items = more ? rows.subList(0, limit) : rows;
         var out = new LinkedHashMap<String, Object>();
@@ -134,10 +131,7 @@ public class ScheduleQuery {
         var run = run(a, id);
         var out = new LinkedHashMap<String, Object>();
         out.put("run", run);
-        out.put(
-                "orders",
-                s.list(
-                        """
+        out.put("orders", s.list("""
                         SELECT ro.*,o.number,o.status AS current_status,o.quantity,i.name AS product,i.sku,i.uom,m.code AS machine_code,
                                e.minutes AS current_estimate,p.number AS parent_number,
                                (SELECT COUNT(*) FROM schedule_run_operations x WHERE x.tenant_id=ro.tenant_id AND x.run_id=ro.run_id AND x.order_id=ro.order_id) AS operations
@@ -148,13 +142,8 @@ public class ScheduleQuery {
                         LEFT JOIN manufacturing_orders p ON p.tenant_id=o.tenant_id AND p.id=ro.parent_order_id
                         LEFT JOIN schedule_estimates e ON e.tenant_id=ro.tenant_id AND e.order_id=ro.order_id
                         WHERE ro.tenant_id=? AND ro.run_id=?
-                        ORDER BY ro.sequence""",
-                        a.tenant(),
-                        id));
-        out.put(
-                "pins",
-                s.list(
-                        """
+                        ORDER BY ro.sequence""", a.tenant(), id));
+        out.put("pins", s.list("""
                         SELECT x.pin_id,x.pin_status,x.pin_note,x.order_id,x.operation_id,x.seq,x.name,x.machine_id,m.code AS machine_code,
                                x.start_at,p.start_at AS pinned_start,pm.code AS pinned_machine_code,o.number AS order_number
                         FROM schedule_run_operations x
@@ -163,9 +152,7 @@ public class ScheduleQuery {
                         JOIN machines pm ON pm.tenant_id=p.tenant_id AND pm.id=p.machine_id
                         JOIN manufacturing_orders o ON o.tenant_id=x.tenant_id AND o.id=x.order_id
                         WHERE x.tenant_id=? AND x.run_id=? AND x.pin_id IS NOT NULL
-                        ORDER BY p.start_at,x.id""",
-                        a.tenant(),
-                        id));
+                        ORDER BY p.start_at,x.id""", a.tenant(), id));
         return out;
     }
 
@@ -184,13 +171,12 @@ public class ScheduleQuery {
         var end = window[1];
         var windowStart = start.atStartOfDay(CalendarService.ZONE).toOffsetDateTime();
         var windowEnd = end.plusDays(1).atStartOfDay(CalendarService.ZONE).toOffsetDateTime();
-        var machines = s.list(
-                "SELECT id,code,name,kind,status FROM machines WHERE tenant_id=? ORDER BY code,id", a.tenant());
+        var machines =
+                s.list("SELECT id,code,name,kind,status FROM machines WHERE tenant_id=? ORDER BY code,id", a.tenant());
         var availability = calendars.availability(
                 a.tenant(), machines.stream().map(m -> str(m, "id")).toList(), start, end);
         var bars = new HashMap<String, List<Map<String, Object>>>();
-        for (var bar : s.list(
-                """
+        for (var bar : s.list("""
                 SELECT x.id,x.order_id,x.operation_id,x.seq,x.name,x.operation_status,x.machine_id,x.planned_machine_id,x.alternate,
                        x.start_at,x.end_at,x.minutes,x.remaining_minutes,x.planned_minutes,x.segments::text AS segments,x.late,x.running,
                        x.pin_id,x.pin_status,x.pin_note,pm.code AS planned_machine_code,
@@ -203,11 +189,7 @@ public class ScheduleQuery {
                 JOIN schedule_run_orders ro ON ro.tenant_id=x.tenant_id AND ro.run_id=x.run_id AND ro.order_id=x.order_id
                 LEFT JOIN mo_operations op ON op.tenant_id=x.tenant_id AND op.id=x.operation_id
                 WHERE x.tenant_id=? AND x.run_id=? AND x.end_at>=? AND x.start_at<?
-                ORDER BY x.machine_id,x.start_at,x.id""",
-                a.tenant(),
-                id,
-                windowStart,
-                windowEnd)) {
+                ORDER BY x.machine_id,x.start_at,x.id""", a.tenant(), id, windowStart, windowEnd)) {
             var row = new LinkedHashMap<String, Object>(bar);
             row.put("segments", segments(str(bar, "segments")));
             bars.computeIfAbsent(str(bar, "machine_id"), k -> new ArrayList<>()).add(row);
@@ -218,7 +200,8 @@ public class ScheduleQuery {
                 a.tenant(),
                 id,
                 windowStart,
-                windowEnd)) blocks.computeIfAbsent(str(b, "machine_id"), k -> new ArrayList<>()).add(b);
+                windowEnd))
+            blocks.computeIfAbsent(str(b, "machine_id"), k -> new ArrayList<>()).add(b);
         var rows = new ArrayList<Map<String, Object>>();
         for (int i = 0; i < machines.size(); i++) {
             var m = machines.get(i);
@@ -286,17 +269,14 @@ public class ScheduleQuery {
     /** {@code GET /api/schedule/runs/{id}/late}: the run's late orders, latest first, with projected completion. */
     public Map<String, Object> late(Actor a, String id) {
         var run = run(a, id);
-        var items = s.list(
-                """
+        var items = s.list("""
                 SELECT ro.order_id,ro.priority,ro.due_date,ro.due_end,ro.projected_start,ro.projected_end,ro.status,ro.lateness_minutes,
                        ro.warnings,ro.order_status,o.number,o.status AS current_status,o.quantity,i.name AS product,i.sku,i.uom
                 FROM schedule_run_orders ro
                 JOIN manufacturing_orders o ON o.tenant_id=ro.tenant_id AND o.id=ro.order_id
                 JOIN items i ON i.tenant_id=o.tenant_id AND i.id=o.product_id
                 WHERE ro.tenant_id=? AND ro.run_id=? AND ro.late
-                ORDER BY ro.lateness_minutes DESC,ro.sequence""",
-                a.tenant(),
-                id);
+                ORDER BY ro.lateness_minutes DESC,ro.sequence""", a.tenant(), id);
         return Map.of("run", run, "items", items);
     }
 
@@ -311,8 +291,8 @@ public class ScheduleQuery {
         var run = run(a, id);
         int horizon = ((Number) run.get("horizon_days")).intValue();
         var window = window(run, from, to, Math.min(horizon + 1, MAX_WINDOW_DAYS));
-        var machines = s.list(
-                "SELECT id,code,name,kind,status FROM machines WHERE tenant_id=? ORDER BY code,id", a.tenant());
+        var machines =
+                s.list("SELECT id,code,name,kind,status FROM machines WHERE tenant_id=? ORDER BY code,id", a.tenant());
         var availability = calendars.availability(
                 a.tenant(), machines.stream().map(m -> str(m, "id")).toList(), window[0], window[1]);
         var blocks = new HashMap<String, List<ScheduleEngine.Span>>();
@@ -341,16 +321,20 @@ public class ScheduleQuery {
             for (var day : availability.get(i).days()) {
                 var working = day.intervals().stream()
                         .map(w -> new ScheduleEngine.Span(
-                                Math.floorDiv(w.start().toEpochSecond(), 60), Math.floorDiv(w.end().toEpochSecond(), 60)))
+                                Math.floorDiv(w.start().toEpochSecond(), 60),
+                                Math.floorDiv(w.end().toEpochSecond(), 60)))
                         .toList();
-                long calendar = working.stream()
-                        .mapToLong(ScheduleEngine.Span::minutes)
-                        .sum();
+                long calendar =
+                        working.stream().mapToLong(ScheduleEngine.Span::minutes).sum();
                 long free = ScheduleEngine.subtract(working, blocks.getOrDefault(machineId, List.of())).stream()
                         .mapToLong(ScheduleEngine.Span::minutes)
                         .sum();
                 long dayStart = day.date().atStartOfDay(CalendarService.ZONE).toEpochSecond() / 60;
-                long dayEnd = day.date().plusDays(1).atStartOfDay(CalendarService.ZONE).toEpochSecond() / 60;
+                long dayEnd = day.date()
+                                .plusDays(1)
+                                .atStartOfDay(CalendarService.ZONE)
+                                .toEpochSecond()
+                        / 60;
                 long busy = 0;
                 for (var seg : scheduled.getOrDefault(machineId, List.of()))
                     busy += Math.max(0, Math.min(seg.end(), dayEnd) - Math.max(seg.start(), dayStart));
@@ -412,8 +396,7 @@ public class ScheduleQuery {
         out.put("base", base);
         var orders = new ArrayList<Map<String, Object>>();
         var counts = new LinkedHashMap<String, Integer>();
-        for (var r : s.list(
-                """
+        for (var r : s.list("""
                 WITH a AS (SELECT * FROM schedule_run_orders WHERE tenant_id=? AND run_id=?),
                      b AS (SELECT * FROM schedule_run_orders WHERE tenant_id=? AND run_id=?)
                 SELECT COALESCE(a.order_id,b.order_id) AS order_id,o.number,i.name AS product,o.priority,o.due_date,
@@ -423,12 +406,7 @@ public class ScheduleQuery {
                 FROM a FULL OUTER JOIN b ON b.order_id=a.order_id
                 JOIN manufacturing_orders o ON o.tenant_id=? AND o.id=COALESCE(a.order_id,b.order_id)
                 JOIN items i ON i.tenant_id=o.tenant_id AND i.id=o.product_id
-                ORDER BY sort,o.number""",
-                a.tenant(),
-                id,
-                a.tenant(),
-                baseId,
-                a.tenant())) {
+                ORDER BY sort,o.number""", a.tenant(), id, a.tenant(), baseId, a.tenant())) {
             var row = new LinkedHashMap<String, Object>(r);
             String change;
             Long delta = null;
@@ -455,8 +433,7 @@ public class ScheduleQuery {
         int moved = 0;
         int added = 0;
         int dropped = 0;
-        for (var r : s.list(
-                """
+        for (var r : s.list("""
                 WITH a AS (SELECT * FROM schedule_run_operations WHERE tenant_id=? AND run_id=?),
                      b AS (SELECT * FROM schedule_run_operations WHERE tenant_id=? AND run_id=?)
                 SELECT COALESCE(a.order_id,b.order_id) AS order_id,COALESCE(a.operation_id,b.operation_id) AS operation_id,
@@ -467,12 +444,7 @@ public class ScheduleQuery {
                 JOIN manufacturing_orders o ON o.tenant_id=? AND o.id=COALESCE(a.order_id,b.order_id)
                 LEFT JOIN machines ma ON ma.tenant_id=o.tenant_id AND ma.id=a.machine_id
                 LEFT JOIN machines mb ON mb.tenant_id=o.tenant_id AND mb.id=b.machine_id
-                ORDER BY COALESCE(a.start_at,b.start_at),o.number,COALESCE(a.seq,b.seq)""",
-                a.tenant(),
-                id,
-                a.tenant(),
-                baseId,
-                a.tenant())) {
+                ORDER BY COALESCE(a.start_at,b.start_at),o.number,COALESCE(a.seq,b.seq)""", a.tenant(), id, a.tenant(), baseId, a.tenant())) {
             String change;
             Long delta = null;
             if (r.get("machine_id") == null) {
@@ -520,12 +492,7 @@ public class ScheduleQuery {
         var out = new LinkedHashMap<String, Object>();
         out.put("run", run);
         out.put("machine", machine);
-        out.put(
-                "items",
-                run == null
-                        ? List.of()
-                        : s.list(
-                                """
+        out.put("items", run == null ? List.of() : s.list("""
                                 SELECT x.id,x.order_id,x.operation_id,x.seq,x.name,x.start_at,x.end_at,x.minutes,x.late,x.running,x.pin_status,
                                        o.number AS order_number,o.priority,o.due_date,i.name AS product,i.sku,
                                        COALESCE(op.status,o.status) AS current_status
@@ -537,11 +504,7 @@ public class ScheduleQuery {
                                   AND COALESCE(op.status,'OPEN') NOT IN ('DONE','CANCELLED')
                                   AND o.status NOT IN ('QUALITY_REVIEW','COMPLETED','CLOSED','CANCELLED')
                                 ORDER BY x.start_at,x.id
-                                LIMIT ?""",
-                                a.tenant(),
-                                run.get("id"),
-                                machineId,
-                                limit));
+                                LIMIT ?""", a.tenant(), run.get("id"), machineId, limit));
         return out;
     }
 
@@ -558,38 +521,26 @@ public class ScheduleQuery {
     }
 
     private Map<String, Object> projection(String tenant, String orderId, String status) {
-        var rows = s.list(
-                """
+        var rows = s.list("""
                 SELECT r.id AS run_id,r.number AS run_number,r.status AS run_status,r.created_at AS run_created_at,r.published_at,
                        ro.status,ro.projected_start,ro.projected_end,ro.late,ro.lateness_minutes,ro.due_date,ro.warnings,ro.sequence
                 FROM schedule_run_orders ro JOIN schedule_runs r ON r.tenant_id=ro.tenant_id AND r.id=ro.run_id
                 WHERE ro.tenant_id=? AND ro.order_id=? AND r.status=?
-                ORDER BY r.created_at DESC,r.id DESC LIMIT 1""",
-                tenant,
-                orderId,
-                status);
+                ORDER BY r.created_at DESC,r.id DESC LIMIT 1""", tenant, orderId, status);
         if (rows.isEmpty()) return null;
         var row = new LinkedHashMap<String, Object>(rows.getFirst());
-        row.put(
-                "operations",
-                s.list(
-                        """
+        row.put("operations", s.list("""
                         SELECT x.operation_id,x.seq,x.name,x.machine_id,m.code AS machine_code,x.start_at,x.end_at,x.minutes,x.late,x.alternate,x.pin_status
                         FROM schedule_run_operations x JOIN machines m ON m.tenant_id=x.tenant_id AND m.id=x.machine_id
                         WHERE x.tenant_id=? AND x.run_id=? AND x.order_id=?
-                        ORDER BY x.seq,x.start_at""",
-                        tenant,
-                        row.get("run_id"),
-                        orderId));
+                        ORDER BY x.seq,x.start_at""", tenant, row.get("run_id"), orderId));
         return row;
     }
 
     /** {@code GET /api/schedule/pins}: active pins (ADMIN/PLANNER). */
     public Map<String, Object> pins(Actor a) {
         a.allow("PLANNER");
-        return Map.of(
-                "items",
-                s.list("""
+        return Map.of("items", s.list("""
                         SELECT p.id,p.order_id,p.operation_id,p.machine_id,p.start_at,p.reason,p.created_at,u.name AS created_by_name,
                                o.number AS order_number,op.seq,op.name AS operation,op.status AS operation_status,m.code AS machine_code
                         FROM schedule_pins p

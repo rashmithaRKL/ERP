@@ -60,10 +60,7 @@ class ScheduleStateSections implements StateContributor {
                                 Long.class,
                                 r.tenant(),
                                 run.get("id")));
-        result.put(
-                "late",
-                s.list(
-                        """
+        result.put("late", s.list("""
                         SELECT ro.order_id,o.number,i.name AS product,ro.priority,ro.due_date,ro.projected_end,ro.lateness_minutes,ro.status
                         FROM schedule_run_orders ro
                         JOIN manufacturing_orders o ON o.tenant_id=ro.tenant_id AND o.id=ro.order_id
@@ -71,9 +68,7 @@ class ScheduleStateSections implements StateContributor {
                         WHERE ro.tenant_id=? AND ro.run_id=? AND ro.late AND """ + " " + STILL_OPEN + """
 
                         ORDER BY ro.lateness_minutes DESC,ro.sequence
-                        LIMIT 5""",
-                        r.tenant(),
-                        run.get("id")));
+                        LIMIT 5""", r.tenant(), run.get("id")));
         return result;
     }
 }

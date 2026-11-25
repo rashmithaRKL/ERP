@@ -96,14 +96,12 @@ class ScheduleController {
     }
 
     @PostMapping("/runs/{id}/publish")
-    Map<String, Object> publish(
-            Authentication a, @PathVariable String id, @RequestHeader("Idempotency-Key") String k) {
+    Map<String, Object> publish(Authentication a, @PathVariable String id, @RequestHeader("Idempotency-Key") String k) {
         return service.publish(Actor.of(a), id, k);
     }
 
     @PostMapping("/runs/{id}/discard")
-    Map<String, Object> discard(
-            Authentication a, @PathVariable String id, @RequestHeader("Idempotency-Key") String k) {
+    Map<String, Object> discard(Authentication a, @PathVariable String id, @RequestHeader("Idempotency-Key") String k) {
         return service.discard(Actor.of(a), id, k);
     }
 

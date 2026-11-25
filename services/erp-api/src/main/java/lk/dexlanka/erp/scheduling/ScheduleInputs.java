@@ -15,7 +15,6 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Map;
 import lk.dexlanka.erp.platform.Store;
 import lk.dexlanka.erp.routing.CalendarService;
 import org.springframework.stereotype.Component;
@@ -65,11 +64,10 @@ class ScheduleInputs {
         for (var m : s.list("SELECT id,code FROM machines WHERE tenant_id=? ORDER BY code,id", tenant)) {
             String id = str(m, "id");
             codes.put(id, str(m, "code"));
-            var working = calendars
-                    .workingIntervals(tenant, id, from.toInstant(), to.toInstant())
-                    .stream()
+            var working = calendars.workingIntervals(tenant, id, from.toInstant(), to.toInstant()).stream()
                     .map(i -> new ScheduleEngine.Span(
-                            Math.floorDiv(i.start().toEpochSecond(), 60), Math.floorDiv(i.end().toEpochSecond(), 60)))
+                            Math.floorDiv(i.start().toEpochSecond(), 60),
+                            Math.floorDiv(i.end().toEpochSecond(), 60)))
                     .toList();
             machines.add(new ScheduleEngine.Machine(id, str(m, "code"), working));
         }
@@ -114,8 +112,7 @@ class ScheduleInputs {
         }
 
         // ------------------------------------------------------------ orders, operations, estimates
-        var orderRows = s.list(
-                """
+        var orderRows = s.list("""
                 SELECT o.id,o.number,o.status,o.priority,o.due_date::text AS due_date,o.created_at,o.parent_order_id,o.machine_id,
                        EXISTS (SELECT 1 FROM mo_operations x WHERE x.tenant_id=o.tenant_id AND x.order_id=o.id) AS routed,
                        e.minutes AS estimate
@@ -123,25 +120,21 @@ class ScheduleInputs {
                 LEFT JOIN schedule_estimates e ON e.tenant_id=o.tenant_id AND e.order_id=o.id
                 WHERE o.tenant_id=? AND o.status IN (""" + in + """
                 )
-                ORDER BY o.created_at,o.id""",
-                tenant);
+                ORDER BY o.created_at,o.id""", tenant);
         var alternates = new HashMap<String, List<String>>();
-        for (var x : s.list(
-                """
+        for (var x : s.list("""
                 SELECT op.id AS operation_id,x.machine_id
                 FROM mo_operations op
                 JOIN manufacturing_orders o ON o.tenant_id=op.tenant_id AND o.id=op.order_id
                 JOIN routing_operation_alternates x ON x.tenant_id=op.tenant_id AND x.operation_id=op.routing_operation_id
                 WHERE op.tenant_id=? AND op.status NOT IN ('DONE','CANCELLED') AND o.status IN (""" + in + """
                 )
-                ORDER BY op.id,x.machine_id""",
-                tenant))
+                ORDER BY op.id,x.machine_id""", tenant))
             alternates
                     .computeIfAbsent(str(x, "operation_id"), k -> new ArrayList<>())
                     .add(str(x, "machine_id"));
         var operations = new LinkedHashMap<String, List<ScheduleEngine.Operation>>();
-        for (var op : s.list(
-                """
+        for (var op : s.list("""
                 SELECT op.id,op.order_id,op.seq,op.name,op.status,op.machine_id,op.planned_machine_id,op.planned_minutes,
                        ro.machine_id AS routing_machine_id,
                        COALESCE((SELECT SUM(CASE WHEN l.ended_at IS NULL
@@ -153,9 +146,7 @@ class ScheduleInputs {
                 JOIN routing_operations ro ON ro.tenant_id=op.tenant_id AND ro.id=op.routing_operation_id
                 WHERE op.tenant_id=? AND o.status IN (""" + in + """
                 )
-                ORDER BY op.order_id,op.seq""",
-                from,
-                tenant)) {
+                ORDER BY op.order_id,op.seq""", from, tenant)) {
             String status = str(op, "status");
             BigDecimal planned = dec(op.get("planned_minutes"));
             BigDecimal actual = dec(op.get("actual_minutes"));
@@ -170,7 +161,8 @@ class ScheduleInputs {
             var candidates = new ArrayList<String>();
             candidates.add(current);
             others.stream()
-                    .sorted(Comparator.comparing((String m) -> codes.getOrDefault(m, "")).thenComparing(m -> m))
+                    .sorted(Comparator.comparing((String m) -> codes.getOrDefault(m, ""))
+                            .thenComparing(m -> m))
                     .forEach(candidates::add);
             operations
                     .computeIfAbsent(str(op, "order_id"), k -> new ArrayList<>())

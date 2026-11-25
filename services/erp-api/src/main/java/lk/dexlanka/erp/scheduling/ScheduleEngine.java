@@ -163,7 +163,10 @@ final class ScheduleEngine {
 
     record Result(List<OrderResult> orders, List<Placed> operations, Map<String, PinOutcome> pins) {
         OrderResult order(String id) {
-            return orders.stream().filter(o -> o.order().id().equals(id)).findFirst().orElse(null);
+            return orders.stream()
+                    .filter(o -> o.order().id().equals(id))
+                    .findFirst()
+                    .orElse(null);
         }
 
         List<Placed> placed(String orderId) {
@@ -198,9 +201,7 @@ final class ScheduleEngine {
             this.code = machine.code();
             this.free = subtract(
                     machine.working(),
-                    blocks.stream()
-                            .map(b -> new Span(b.start(), b.end()))
-                            .toList());
+                    blocks.stream().map(b -> new Span(b.start(), b.end())).toList());
         }
 
         /** The earliest free working minute at or after {@code t}, or null when there is none in the horizon. */
@@ -281,9 +282,8 @@ final class ScheduleEngine {
                 .sorted(Comparator.comparingLong(Span::start))
                 .toList();
         var out = new ArrayList<Span>();
-        for (var span : intervals.stream()
-                .sorted(Comparator.comparingLong(Span::start))
-                .toList()) {
+        for (var span :
+                intervals.stream().sorted(Comparator.comparingLong(Span::start)).toList()) {
             long cursor = span.start();
             for (var hole : sortedHoles) {
                 if (hole.end() <= cursor || hole.start() >= span.end()) continue;
@@ -330,7 +330,8 @@ final class ScheduleEngine {
             for (var o : in.orders()) orders.put(o.id(), o);
             for (var o : in.orders())
                 if (o.parentId() != null && orders.containsKey(o.parentId()))
-                    children.computeIfAbsent(o.parentId(), k -> new ArrayList<>()).add(o);
+                    children.computeIfAbsent(o.parentId(), k -> new ArrayList<>())
+                            .add(o);
         }
 
         Result execute() {
@@ -451,7 +452,9 @@ final class ScheduleEngine {
                         var segments = timeline.consume(pin.start(), minutes(op.remaining()));
                         if (segments == null) problem = "The pinned operation does not finish before the horizon end";
                         else {
-                            long end = segments.isEmpty() ? pin.start() : segments.getLast().end();
+                            long end = segments.isEmpty()
+                                    ? pin.start()
+                                    : segments.getLast().end();
                             var clash = timeline.conflict(pin.start(), end);
                             if (clash != null) problem = "The pinned time overlaps " + describe(clash.key);
                             else p = new Placement(timeline.machineId, timeline.code, pin.start(), end, segments);
@@ -508,8 +511,7 @@ final class ScheduleEngine {
                 long lateness = Math.max(0, in.now() - order.dueEnd());
                 results.put(
                         order.id(),
-                        new OrderResult(
-                                order, sequence, NO_ROUTING, null, null, lateness > 0, lateness, 0, warnings));
+                        new OrderResult(order, sequence, NO_ROUTING, null, null, lateness > 0, lateness, 0, warnings));
                 return;
             }
             if (open.isEmpty()) {
