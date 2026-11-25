@@ -12,6 +12,7 @@ import {
   ShieldCheck,
   ShoppingBag,
   ShoppingCart,
+  Workflow,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { matchPath } from 'react-router-dom';
@@ -22,6 +23,7 @@ import { createWorkCenter } from '../features/machines/forms';
 import { createItem } from '../features/products/forms';
 import { createPurchase } from '../features/purchasing/forms';
 import { createSalesOrder } from '../features/sales/forms';
+import { requestNewRouting } from '../features/routings/events';
 import { lazyPage } from './lazyPage';
 import type { LazyPage } from './lazyPage';
 
@@ -36,6 +38,7 @@ const ProductsPage = lazyPage(() => import('../pages/ProductsPage'));
 const PurchasingPage = lazyPage(() => import('../pages/PurchasingPage'));
 const QualityPage = lazyPage(() => import('../pages/QualityPage'));
 const ReportsPage = lazyPage(() => import('../pages/ReportsPage'));
+const RoutingsPage = lazyPage(() => import('../pages/RoutingsPage'));
 const SalesPage = lazyPage(() => import('../pages/SalesPage'));
 const ShopFloorPage = lazyPage(() => import('../pages/ShopFloorPage'));
 const WorkCentersPage = lazyPage(() => import('../pages/WorkCentersPage'));
@@ -163,6 +166,22 @@ export const routes: PageRoute[] = [
     description: 'Approved formulas and the materials behind every product.',
     exportRows: (data) => data.boms,
     action: { label: 'New BOM revision', roles: ['PLANNER'], run: (workspace) => workspace.openBomEditor() },
+  },
+  {
+    path: '/routings',
+    label: 'Routings & shifts',
+    icon: Workflow,
+    roles: ['ADMIN', 'PLANNER'],
+    group: 'MANUFACTURING',
+    page: RoutingsPage,
+    description: 'How every product is made, and when each work center can make it.',
+    action: {
+      label: 'New routing',
+      roles: ['PLANNER'],
+      run: () => {
+        requestNewRouting();
+      },
+    },
   },
   {
     path: '/shopfloor',

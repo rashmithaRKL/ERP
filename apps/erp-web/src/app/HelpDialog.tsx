@@ -30,6 +30,11 @@ export function HelpDialog({ onClose }: { onClose: () => void }) {
           </li>
           <li>Reserve materials, issue to WIP, and start the manufacturing order.</li>
           <li>
+            On the Shop floor, pick your work center and run the order&apos;s operations (start, pause,
+            report, finish) when its product has an approved routing. Routings, shift calendars and skills
+            live under Routings &amp; shifts.
+          </li>
+          <li>
             Record partial or final output on the shop floor. Review each resulting lot in Quality control.
           </li>
           <li>

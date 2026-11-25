@@ -1,0 +1,166 @@
+/* Routings & shifts and the operation-centric shop floor (V10). Uses the shared tokens from styles.css; light and dark
+   themes. */
+
+/* Page frame */
+.routing-banner .banner-trailing { margin-left: auto; color: var(--muted); }
+.routing-tabbar { margin-bottom: 20px; }
+.routing-tabbar .list-tabs { border-bottom: 0; }
+.routing-tabbar .list-tabs .tab-list { overflow-x: auto; scrollbar-width: none; }
+.inline-chip { margin-left: 6px; vertical-align: 1px; }
+.inline-icon { margin-left: 5px; vertical-align: -1px; color: var(--muted); }
+.form-fields .full, .form-fields .wide { grid-column: 1 / -1; }
+
+/* Drawer facts */
+.routing-facts {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  margin: 16px 0;
+  background: var(--soft);
+}
+.routing-facts > div { padding: 12px 14px; border-right: 1px solid var(--border); min-width: 0; }
+.routing-facts > div:last-child { border-right: 0; }
+.routing-facts span { display: block; font-size: 11px; color: var(--muted); margin-bottom: 6px; }
+.routing-facts strong { font-family: 'Manrope Variable', sans-serif; font-size: 17px; color: var(--heading); }
+.routing-notes { font-size: 12px; color: var(--secondary); margin-bottom: 12px; }
+.compare-select { max-width: 320px; margin-bottom: 4px; }
+
+/* Routing editor */
+.routing-editor-ops { padding: 0 22px 22px; }
+.routing-editor-ops > h3 { display: flex; align-items: center; gap: 7px; margin: 4px 0 14px; }
+.routing-op-editor {
+  position: relative;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  padding: 14px 44px 14px 14px;
+  margin: 0 0 14px;
+  min-width: 0;
+  background: var(--surface);
+}
+.routing-op-editor > legend { font-size: 11px; font-weight: 600; color: var(--secondary); padding: 0 6px; }
+.routing-op-grid { display: grid; grid-template-columns: 90px minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr); gap: 12px; }
+.routing-op-grid .field.wide { grid-column: span 3; }
+.routing-op-grid .field.full { grid-column: 1 / -1; }
+.routing-op-remove { position: absolute; top: 12px; right: 10px; }
+.check-field { display: inline-flex; align-items: center; gap: 7px; font-size: 12px; color: var(--text); cursor: pointer; }
+.check-field input { width: 15px; height: 15px; accent-color: #d72638; }
+.routing-op-grid > .check-field { align-self: end; min-height: 37px; }
+.check-row { display: flex; flex-wrap: wrap; gap: 8px 16px; padding-top: 4px; }
+.routing-op-grid .alternates > span { font-size: 13px; font-weight: 500; }
+fieldset.field { border: 0; padding: 0; margin: 0; }
+fieldset.field > legend { font-size: 13px; font-weight: 500; margin-bottom: 8px; padding: 0; }
+
+/* Shift calendars */
+.week-panel { margin-bottom: 20px; }
+.week-nav { display: flex; align-items: center; gap: 6px; }
+.week-error { margin: 0 20px 12px; }
+.week-scroll { overflow-x: auto; padding: 0 20px 20px; }
+.week-scroll:focus-visible { outline-offset: -3px; }
+.week-table { width: 100%; border-collapse: collapse; font-size: 12px; min-width: 720px; }
+.week-table th, .week-table td { border-bottom: 1px solid var(--border); padding: 9px 8px; text-align: left; vertical-align: top; }
+.week-table thead th { font-size: 11px; font-weight: 500; color: var(--muted); white-space: nowrap; }
+.week-table thead th small { display: block; font-size: 10px; margin-top: 2px; }
+.week-table tbody th { font-weight: 500; min-width: 150px; }
+.week-table tbody th select {
+  margin-top: 3px; height: 29px; border: 1px solid var(--border); border-radius: 5px; background: var(--surface);
+  color: var(--text); font-size: 11px; padding: 0 6px; max-width: 170px;
+}
+.week-table tbody th .spin { margin-left: 6px; }
+.week-table td.today, .week-table th.today { background: var(--soft); }
+.week-table td.closed .week-hours { color: var(--tone-red); }
+.week-hours { display: block; font-variant-numeric: tabular-nums; color: var(--text); font-weight: 500; }
+.week-bar { display: block; height: 4px; border-radius: 3px; background: var(--soft); margin-top: 6px; overflow: hidden; }
+.week-bar > span { display: block; height: 100%; background: #809bb7; border-radius: 3px; }
+.week-table .holiday { display: block; font-size: 10px; color: var(--tone-red); margin-top: 4px; max-width: 110px; }
+.week-total { font-weight: 600; color: var(--heading); white-space: nowrap; }
+.calendar-columns { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 20px; align-items: start; }
+.calendar-list { padding: 4px 20px 16px; }
+.calendar-row { display: flex; align-items: center; gap: 10px; padding: 12px 0; border-top: 1px solid var(--border); }
+.calendar-row:first-child { border-top: 0; }
+.calendar-row > div { flex: 1; min-width: 0; }
+.calendar-row strong { display: block; font-size: 13px; font-weight: 550; color: var(--text); }
+.calendar-row > div > span { display: block; font-size: 11px; color: var(--muted); margin-top: 4px; line-height: 1.5; }
+.calendar-icon {
+  width: 32px; height: 32px; border-radius: 6px; background: var(--soft); border: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: center; color: var(--tone-blue);
+}
+.weekday-picker .check-row { gap: 8px 14px; }
+.exception-form { border-top: 1px solid var(--border); margin-top: 18px; padding-top: 16px; }
+.exception-form > h3 { display: flex; align-items: center; gap: 7px; margin-bottom: 12px; }
+.exception-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-bottom: 12px; }
+.exception-grid .wide { grid-column: 1 / -1; }
+
+/* Skills */
+.skill-matrix { margin-top: 20px; }
+.skill-matrix .week-scroll { padding-top: 12px; }
+.matrix-table { min-width: 0; }
+.matrix-table td { padding: 5px; text-align: center; }
+.matrix-table thead th { text-align: center; }
+.matrix-table thead th:first-child { text-align: left; }
+.skill-cell {
+  width: 100%; min-width: 76px; min-height: 40px; border-radius: 5px; border: 1px dashed var(--border);
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; font-size: 11px;
+}
+.skill-cell:hover { background: var(--soft); }
+.skill-cell.held { border-style: solid; background: var(--soft); }
+.skill-cell.held strong { color: var(--tone-green); }
+.skill-cell.expired { border-style: solid; }
+.skill-cell.expired strong, .skill-cell.expired small { color: var(--tone-red); }
+.skill-cell small { font-size: 10px; color: var(--muted); }
+
+/* Operation cards (shop floor) */
+.skill-hint { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 500; }
+.skill-hint.ok { color: var(--tone-green); }
+.skill-hint.warn { color: var(--tone-red); }
+.skill-hint .skill-reason { font-weight: 400; }
+.planned-actual { display: inline-flex; gap: 4px; align-items: baseline; }
+.planned-actual strong { font-weight: 600; color: var(--text); }
+.planned-actual strong.over { color: var(--tone-amber); }
+.op-card .job-top > span { flex-wrap: wrap; }
+.op-status { display: inline-flex; align-items: center; gap: 6px; }
+.op-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; font-size: 12px; color: var(--muted); margin: -10px 0 16px; }
+.op-meta > span:first-child { display: inline-flex; align-items: center; gap: 5px; }
+.op-instructions {
+  font-size: 12px; color: var(--secondary); background: var(--soft); border: 1px solid var(--border);
+  border-radius: 6px; padding: 8px 10px; margin: -4px 0 16px; line-height: 1.5;
+}
+.op-card .job-actions { flex-wrap: wrap; }
+.op-card .job-actions .button.secondary { flex: 0 0 auto; }
+.wc-picker { display: flex; gap: 10px; overflow-x: auto; padding: 2px 2px 6px; margin-bottom: 20px; scrollbar-width: thin; }
+.wc-option {
+  flex: 0 0 auto; min-width: 190px; text-align: left; background: var(--surface); border: 1px solid var(--border);
+  border-radius: 7px; padding: 12px 14px; display: flex; flex-direction: column; gap: 6px; box-shadow: var(--shadow);
+}
+.wc-option:hover { background: var(--soft); }
+.wc-option.active { border-color: #d72638; box-shadow: 0 0 0 1px #d72638 inset; }
+.wc-option-top { display: flex; align-items: center; gap: 7px; color: var(--secondary); }
+.wc-option-top strong { color: var(--heading); font-size: 14px; flex: 1; }
+.wc-option-counts { font-size: 12px; color: var(--text); }
+.wc-option small { font-size: 11px; color: var(--muted); }
+.floor-heading { display: flex; align-items: baseline; flex-wrap: wrap; gap: 6px 12px; margin: 4px 0 14px; }
+.floor-heading h2 { font-size: 15px; }
+section + section .floor-heading, .job-grid + .floor-heading { margin-top: 28px; }
+
+@media (max-width: 1100px) {
+  .calendar-columns { grid-template-columns: 1fr; }
+  .routing-op-grid { grid-template-columns: 90px minmax(0, 1fr) minmax(0, 1fr); }
+  .routing-op-grid .field.wide { grid-column: span 2; }
+}
+@media (max-width: 650px) {
+  .routing-facts { grid-template-columns: 1fr 1fr; }
+  .routing-facts > div:nth-child(2) { border-right: 0; }
+  .routing-facts > div:nth-child(-n + 2) { border-bottom: 1px solid var(--border); }
+  .routing-editor-ops { padding: 0 16px 18px; }
+  .routing-op-editor { padding: 12px 12px 12px; }
+  .routing-op-grid { grid-template-columns: 1fr 1fr; }
+  .routing-op-grid .field.wide, .routing-op-grid .alternates { grid-column: 1 / -1; }
+  .routing-op-remove { top: -4px; right: 6px; }
+  .exception-grid { grid-template-columns: 1fr 1fr; }
+  .week-scroll { padding: 0 12px 16px; }
+  .wc-option { min-width: 160px; }
+  .calendar-row { flex-wrap: wrap; }
+  .op-card .job-actions .button { height: 42px; }
+}
+[data-theme=dark] .wc-option.active { border-color: #ef4456; box-shadow: 0 0 0 1px #ef4456 inset; }
+[data-theme=dark] .week-bar > span { background: #8ba3c6; }

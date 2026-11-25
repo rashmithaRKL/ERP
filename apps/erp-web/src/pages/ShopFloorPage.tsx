@@ -1,105 +1,127 @@
-import { ArrowUpRight, CalendarDays, Cpu, Pause, Play, Plus } from 'lucide-react';
+import { useState } from 'react';
+import { Cpu } from 'lucide-react';
 import { useWorkspace } from '../app/workspace';
-import { Badge, Empty, Panel, Progress } from '../components';
-import { PageFooter, PageState, useCursorPage } from '../features/lists/cursorPage';
-import { recordOutput } from '../features/manufacturing/forms';
-import { date, fmt, num, text } from '../lib/format';
+import { Badge, Empty, Panel } from '../components';
+import { hoursText, useWorkCenterSummary } from '../features/routings/api';
+import { FloorOrderCards } from '../features/routings/FloorOrderCards';
+import { OperationQueue } from '../features/routings/OperationQueue';
+import type { Row } from '../lib/api';
+import { fmt, num, text } from '../lib/format';
 
-const PAGE = 24;
+const STORAGE = 'dex-shopfloor-work-center';
+
+function remembered() {
+  try {
+    return localStorage.getItem(STORAGE) || '';
+  } catch {
+    return '';
+  }
+}
 
 /**
- * Route `/shopfloor`: operator job cards for released, running, paused and quality-review orders, server-paged
- * (`GET /api/manufacturing/orders?status=floor`).
+ * Route `/shopfloor` (V10: operation-centric): pick a work center, then work its queue of ready, running and paused
+ * routing operations (`GET /api/operations/queue`). Orders without a routing keep their order cards below.
  */
 export default function ShopFloorPage() {
-  const workspace = useWorkspace();
-  const { busy, can, mutate, openOrder, user } = workspace;
-  const paged = useCursorPage(['manufacturing', 'floor'], '/manufacturing/orders', { status: 'floor' }, PAGE);
-  const jobs = paged.rows;
+  const { user } = useWorkspace();
+  const centers = useWorkCenterSummary();
+  const [picked, setPicked] = useState(remembered);
+  const items = centers.data?.items || [];
+  const busy = (m: Row) => num(m.running) + num(m.paused) + num(m.ready) > 0;
+  const machine =
+    items.find((m) => m.id === picked) ||
+    items.find((m) => num(m.running) > 0) ||
+    items.find(busy) ||
+    items[0];
+
+  function pick(id: string) {
+    setPicked(id);
+    try {
+      localStorage.setItem(STORAGE, id);
+    } catch {
+      /* Storage can be disabled. */
+    }
+  }
+
   return (
     <>
       <div className="shopfloor-header">
         <div>
           <span className="green-dot" />
           <strong>Operator workspace</strong>
-          <span>Large controls. Clear next steps.</span>
+          <span>Pick your work center. Work the next operation.</span>
         </div>
         <Badge value={user.role} />
       </div>
-      <PageState paged={paged}>
-        <div className="job-grid">
-          {jobs.map((r) => (
-            <Panel key={r.id} className="job-card">
-              <div className="job-top">
-                <span>
-                  <Cpu size={16} />
-                  {text(r.machine)}
-                </span>
-                <Badge value={r.status} />
-              </div>
-              <h2>{text(r.product)}</h2>
-              <button className="text-button" onClick={() => openOrder(r.id)}>
-                {text(r.number)}
-                <ArrowUpRight size={13} />
-              </button>
-              <div className="job-quantity">
-                <strong>{fmt(r.good_qty)}</strong>
-                <span>/ {fmt(r.quantity)} pcs</span>
-              </div>
-              <Progress value={((num(r.good_qty) + num(r.scrap_qty)) / num(r.quantity)) * 100} />
-              <div className="job-footer">
-                <span>
-                  <CalendarDays size={14} />
-                  Due {date(r.due_date)}
-                </span>
-                <span>{fmt(r.scrap_qty)} scrap</span>
-              </div>
-              <div className="job-actions">
-                {r.status === 'RELEASED' && can('OPERATOR', 'PLANNER') ? (
-                  <button
-                    className="button primary"
-                    disabled={busy}
-                    onClick={() => mutate(`/manufacturing/${r.id}/actions/start`)}
-                  >
-                    <Play size={17} />
-                    Start operation
-                  </button>
-                ) : r.status === 'ON_HOLD' && can('OPERATOR', 'PLANNER') ? (
-                  <button
-                    className="button primary"
-                    disabled={busy}
-                    onClick={() => mutate(`/manufacturing/${r.id}/actions/resume`)}
-                  >
-                    <Play size={17} />
-                    Resume work
-                  </button>
-                ) : ['IN_PROGRESS', 'PARTIALLY_COMPLETED'].includes(text(r.status)) && can('OPERATOR') ? (
-                  <>
-                    <button className="button primary" onClick={() => recordOutput(workspace, r)}>
-                      <Plus size={17} />
-                      Record output
-                    </button>
-                    <button
-                      className="button secondary"
-                      aria-label={`Pause ${r.number}`}
-                      disabled={busy}
-                      onClick={() => mutate(`/manufacturing/${r.id}/actions/pause`)}
-                    >
-                      <Pause size={17} />
-                    </button>
-                  </>
-                ) : (
-                  <span className="muted">
-                    {r.status === 'QUALITY_REVIEW' ? 'Awaiting quality release' : 'View-only for your role'}
-                  </span>
-                )}
-              </div>
-            </Panel>
-          ))}
+      {centers.isPending ? (
+        <div className="server-loading">
+          <div className="skeleton" />
         </div>
-        {!jobs.length && <Empty title="No jobs on the floor" />}
-      </PageState>
-      {(paged.hasNext || paged.hasPrevious) && <PageFooter paged={paged} label="jobs" />}
+      ) : centers.isError ? (
+        <div className="form-error server-error" role="alert">
+          {(centers.error as Error).message}
+          <div>
+            <button className="button secondary small" onClick={() => centers.refetch()}>
+              Retry
+            </button>
+          </div>
+        </div>
+      ) : !items.length ? (
+        <Panel>
+          <Empty title="No work centers yet" body="Register work centers to plan operations on them." />
+        </Panel>
+      ) : (
+        <>
+          <div className="wc-picker" role="group" aria-label="Work centers">
+            {items.map((m) => (
+              <button
+                key={m.id}
+                className={`wc-option ${machine?.id === m.id ? 'active' : ''}`}
+                aria-pressed={machine?.id === m.id}
+                onClick={() => pick(m.id)}
+              >
+                <span className="wc-option-top">
+                  <Cpu size={15} />
+                  <strong>{text(m.code)}</strong>
+                  <Badge value={m.status} />
+                </span>
+                <span className="wc-option-counts">
+                  {fmt(m.running)} running · {fmt(m.paused)} paused · {fmt(m.ready)} ready
+                </span>
+                <small>
+                  {num(m.available_minutes_today)
+                    ? `${hoursText(num(m.available_minutes_today))} today`
+                    : 'Not working today'}
+                  {m.calendar_code ? ` · ${text(m.calendar_code)}` : ''}
+                </small>
+              </button>
+            ))}
+          </div>
+          {machine && (
+            <section aria-label={`Operation queue of ${text(machine.code)}`}>
+              <div className="floor-heading">
+                <h2>
+                  {text(machine.code)} · {text(machine.name)}
+                </h2>
+                <span className="muted">
+                  {text(machine.kind)}
+                  {machine.status === 'MAINTENANCE'
+                    ? ' · under maintenance: operations cannot start here'
+                    : ''}
+                </span>
+              </div>
+              <OperationQueue key={machine.id} machine={machine} />
+            </section>
+          )}
+        </>
+      )}
+      <section aria-label="Orders without a routing">
+        <div className="floor-heading">
+          <h2>Orders without a routing</h2>
+          <span className="muted">One implicit operation per order, as before routings.</span>
+        </div>
+        <FloorOrderCards />
+      </section>
     </>
   );
 }

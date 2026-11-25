@@ -11,8 +11,13 @@ import type { Row, Value } from '../../lib/api';
 
 export type MachineRef = { id: string; code: string; name: string; status?: string };
 
-/** A routing operation (`routing_operations` row with work center, skill and alternates). */
-export type RoutingOperation = Row & { alternates: MachineRef[] };
+/** A routing operation (`routing_operations` row with work center and skill); read `alternates` with {@link listOf}. */
+export type RoutingOperation = Row;
+
+/** An array-valued field of a row (`alternates`, `weekday_list`, `days`, `skills`), or an empty list. */
+export function listOf<T>(row: Row | null | undefined, key: string): T[] {
+  return (row?.[key] as unknown as T[] | undefined) ?? [];
+}
 
 export type RoutingDetail = {
   routing: Row;
@@ -37,7 +42,8 @@ export type RoutingComparison = {
 
 export type CalendarOverview = {
   calendars: Row[];
-  patterns: (Row & { weekday_list: number[] })[];
+  /** Rows carry `weekday_list` (ISO numbers, read with {@link listOf}), `paid_minutes`, `overnight`. */
+  patterns: Row[];
   workCenters: Row[];
 };
 
@@ -51,10 +57,12 @@ export type AvailabilityDay = {
   closedReason: string | null;
   intervals: Interval[];
 };
-export type WorkCenterAvailability = Row & { days: AvailabilityDay[] };
+/** A work-center row with `days` ({@link AvailabilityDay}, read with {@link listOf}). */
+export type WorkCenterAvailability = Row;
 export type Availability = { from: string; to: string; workCenters: WorkCenterAvailability[] };
 
-export type UserSkills = Row & { skills: Row[] };
+/** A user row with `skills` (read with {@link listOf}). */
+export type UserSkills = Row;
 
 export type OrderOperations = { routing: Row | null; operations: Row[]; logs: Row[] };
 
@@ -151,7 +159,8 @@ export const hhmm = (value: Value | undefined) => (value ? String(value).slice(0
 /** Minutes as "1 h 20 min" / "45 min". */
 export function minutesText(value: Value | number | undefined, digits = 0) {
   const minutes = Number(value || 0);
-  if (Math.abs(minutes) < 60) return `${minutes.toLocaleString('en-LK', { maximumFractionDigits: digits })} min`;
+  if (Math.abs(minutes) < 60)
+    return `${minutes.toLocaleString('en-LK', { maximumFractionDigits: digits })} min`;
   const hours = Math.floor(minutes / 60);
   const rest = Math.round(minutes - hours * 60);
   return rest ? `${hours} h ${rest} min` : `${hours} h`;

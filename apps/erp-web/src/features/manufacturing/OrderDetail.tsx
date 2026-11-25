@@ -6,6 +6,7 @@ import { codeLabel, date, fmt, humanizeText, labelState, money, num, text } from
 import { approversText, useApprovalPolicy } from '../approvals/policies';
 import { auditLabel } from '../audit/auditLabel';
 import { ProductMark } from '../products/ProductMark';
+import { OperationsSection } from './OperationsSection';
 import { OrderStructure } from './OrderStructure';
 
 /** Response of `GET /api/manufacturing/{id}`. */
@@ -50,7 +51,9 @@ export function OrderDetail({
     ON_HOLD: { action: 'resume', label: 'Resume production', roles: ['OPERATOR', 'PLANNER'] },
     COMPLETED: { action: 'close', label: 'Close reconciled order', roles: ['PLANNER'] },
   };
-  const action = next[text(o.status)];
+  // V10: a routed order starts with its first operation on the Shop floor.
+  const routed = !!o.routing_id;
+  const action = routed && o.status === 'RELEASED' ? undefined : next[text(o.status)];
   return (
     <>
       <div className="drawer-body">
@@ -59,7 +62,8 @@ export function OrderDetail({
           <div>
             <h2>{text(o.product)}</h2>
             <p>
-              BOM {text(o.bom_revision)} · Due {date(o.due_date)}
+              BOM {text(o.bom_revision)}
+              {o.routing_revision ? ` · routing ${text(o.routing_revision)}` : ''} · Due {date(o.due_date)}
               {o.parent_order_id ? ' · child order' : ''}
             </p>
           </div>
@@ -108,6 +112,7 @@ export function OrderDetail({
           ]}
           compact
         />
+        <OperationsSection order={o} />
         <OrderStructure order={o} />
         <h3>Cost reconciliation</h3>
         <div className="reconciliation">
@@ -165,6 +170,9 @@ export function OrderDetail({
             <Plus size={16} />
             Record output
           </button>
+        )}
+        {routed && o.status === 'RELEASED' && (
+          <span className="muted">Start the first operation on the Shop floor.</span>
         )}
         {o.status === 'QUALITY_REVIEW' && (
           <span className="muted">Complete pending inspections in Quality control.</span>

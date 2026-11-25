@@ -7,6 +7,7 @@ import './features/inventory/inventory.css';
 import './features/sales/sales.css';
 import './features/purchasing/purchasing.css';
 import './components/LineItemsEditor.css';
+import './features/routings/routings.css';
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
