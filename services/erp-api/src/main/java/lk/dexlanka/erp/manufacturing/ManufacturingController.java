@@ -33,9 +33,10 @@ class ManufacturingController {
             Authentication a,
             @RequestParam(defaultValue = "all") String status,
             @RequestParam(required = false) String q,
+            @RequestParam(required = false) String routing,
             @RequestParam(defaultValue = "25") int limit,
             @RequestParam(required = false) String before) {
-        return query.page(Actor.of(a), status, q, limit, before);
+        return query.page(Actor.of(a), status, q, routing, limit, before);
     }
 
     @PostMapping("/manufacturing")

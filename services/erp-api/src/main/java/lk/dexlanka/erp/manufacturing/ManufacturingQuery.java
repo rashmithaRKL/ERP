@@ -56,6 +56,8 @@ public class ManufacturingQuery {
               AND (?::text IS NULL OR o.status=ANY(string_to_array(?,',')))
               AND (?::text IS NULL OR o.number ILIKE ? OR i.name ILIKE ? OR i.sku ILIKE ? OR m.code ILIKE ?
                    OR p.name ILIKE ?)
+              AND (?::text IS NULL OR (?::text = 'routed') =
+                   EXISTS (SELECT 1 FROM mo_operations x WHERE x.tenant_id=o.tenant_id AND x.order_id=o.id))
             """;
 
     private final Store s;
@@ -73,13 +75,26 @@ public class ManufacturingQuery {
      * @param before cursor: the {@code next} value of the previous page
      */
     public Map<String, Object> page(Actor a, String status, String q, int limit, String before) {
+        return page(a, status, q, null, limit, before);
+    }
+
+    /**
+     * V10: {@code routing} {@code none} lists only orders without operations (the shop floor's order cards), {@code
+     * routed} only orders with operations; rows carry {@code operation_count}.
+     */
+    public Map<String, Object> page(Actor a, String status, String q, String routing, int limit, String before) {
         require(limit >= 1 && limit <= 200, "Choose a page size between 1 and 200");
         String statuses = statuses(status);
         String like = like(q);
         String cursor = before == null || before.isBlank() ? null : before;
-        Object[] filter = {a.tenant(), statuses, statuses, like, like, like, like, like, like};
+        String routed = routing == null || routing.isBlank() || routing.equalsIgnoreCase("any")
+                ? null
+                : routing.toLowerCase(Locale.ROOT);
+        require(routed == null || routed.equals("none") || routed.equals("routed"), "Unknown routing filter");
+        Object[] filter = {a.tenant(), statuses, statuses, like, like, like, like, like, like, routed, routed};
         var rows = s.list(
                 "SELECT o.*,i.name AS product,i.sku,i.uom,m.code AS machine,p.name AS customer,po.number AS parent_number"
+                        + ",(SELECT COUNT(*) FROM mo_operations x WHERE x.tenant_id=o.tenant_id AND x.order_id=o.id) AS operation_count"
                         + FROM
                         + """
                   AND (?::text IS NULL OR (o.created_at,o.id) <

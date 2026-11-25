@@ -27,15 +27,21 @@ import org.springframework.web.server.ResponseStatusException;
  * order whose estimated cost needs no second person is approved on creation ("auto-approved by policy"); otherwise it
  * stays a draft until an approver role of the policy other than its creator approves it. The default policy (every
  * order, PLANNER or ADMIN) is the behaviour before policies existed.
+ *
+ * <p>V10: an order whose product has a current routing snapshots it into operations at creation ({@link
+ * OperationPlanner}); issue makes the first operation ready, pause pauses running operations, cancel cancels them and
+ * output posting respects the operations' reported quantities. Orders without a routing are unchanged.
  */
 @Service
 public class ManufacturingService {
     private final Store s;
     private final ApprovalPolicyService policies;
+    private final OperationPlanner operations;
 
-    ManufacturingService(Store s, ApprovalPolicyService policies) {
+    ManufacturingService(Store s, ApprovalPolicyService policies, OperationPlanner operations) {
         this.s = s;
         this.policies = policies;
+        this.operations = operations;
     }
 
     public Map<String, Object> order(Actor a, String id) {
@@ -124,12 +130,17 @@ public class ManufacturingService {
                                 id,
                                 l.get("item_id"),
                                 requirement(l, c.quantity(), outputBase));
+            var routing = operations.snapshot(a, id, str(b, "product_id"), c.quantity(), c.machineId());
             s.audit(
                     a,
                     "MO_CREATED",
                     num,
                     "BOM " + b.get("revision") + " snapshotted; " + c.quantity() + " units"
-                            + (parent == null ? "" : "; child of " + parent.get("number")));
+                            + (parent == null ? "" : "; child of " + parent.get("number"))
+                            + (routing == null
+                                    ? ""
+                                    : "; routing " + routing.get("revision") + " (" + routing.get("operations")
+                                            + " operations)"));
             var decision =
                     policies.evaluate(a.tenant(), ApprovalPolicyService.MANUFACTURING_ORDER, money(estimate), a.id());
             if (!decision.approvalRequired()) {
@@ -173,7 +184,15 @@ public class ManufacturingService {
 
     @Transactional
     public Map<String, Object> transition(Actor a, String id, String action, String key) {
-        return s.once(a, key, "mo:" + id + ":" + action, Map.of(), () -> {
+        return s.once(a, key, "mo:" + id + ":" + action, Map.of(), () -> apply(a, id, action));
+    }
+
+    /**
+     * One lifecycle transition inside the caller's command (tenant locked, idempotency handled by the caller): {@link
+     * #transition}, and V10 {@link OperationService} when the first operation of a released order starts.
+     */
+    Map<String, Object> apply(Actor a, String id, String action) {
+        {
             var o = order(a, id);
             String state = str(o, "status");
             String num = str(o, "number");
@@ -268,6 +287,7 @@ public class ManufacturingService {
                                     a.tenant(),
                                     id);
                     s.journal(a, num, "Materials issued to production", "WIP", "RAW_INVENTORY", cost);
+                    operations.release(a.tenant(), id);
                     next = "RELEASED";
                 }
                 case "start" -> {
@@ -292,6 +312,7 @@ public class ManufacturingService {
                     require(
                             state.equals("IN_PROGRESS") || state.equals("PARTIALLY_COMPLETED"),
                             "Only active work can be paused");
+                    operations.pauseRunning(a, o);
                     next = "ON_HOLD";
                 }
                 case "resume" -> {
@@ -323,6 +344,7 @@ public class ManufacturingService {
                                     "UPDATE reservations SET status='RELEASED' WHERE tenant_id=? AND order_id=? AND status='RESERVED'",
                                     a.tenant(),
                                     id);
+                    operations.cancel(a.tenant(), id);
                     next = "CANCELLED";
                 }
                 default -> throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Unknown manufacturing action");
@@ -330,7 +352,7 @@ public class ManufacturingService {
             s.db().update("UPDATE manufacturing_orders SET status=? WHERE tenant_id=? AND id=?", next, a.tenant(), id);
             s.audit(a, "MO_" + action.toUpperCase(Locale.ROOT), num, state + " → " + next);
             return order(a, id);
-        });
+        }
     }
 
     @Transactional
@@ -357,6 +379,7 @@ public class ManufacturingService {
                     total.signum() > 0 && total.compareTo(remaining) <= 0,
                     "Output must be positive and cannot exceed remaining planned quantity");
             require(c.scrapQty().signum() == 0 || !c.notes().isBlank(), "Provide a reason for scrap");
+            operations.checkOutput(a.tenant(), o, c.goodQty(), total.compareTo(remaining) == 0);
             BigDecimal added = c.labourCost().add(c.machineCost());
             BigDecimal wip = dec(o.get("wip_cost")).add(added);
             BigDecimal allocated = total.compareTo(remaining) == 0
