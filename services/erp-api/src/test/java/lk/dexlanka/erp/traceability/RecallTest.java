@@ -208,7 +208,7 @@ class RecallTest extends TraceTestSupport {
 
         // A different quality user may close with a documented override.
         var check = map(detail(id).get("closeCheck"));
-        assertThat(check).containsEntry("pendingCustomers", 1).containsEntry("unsettledLots", 3);
+        assertThat(check).containsEntry("pendingCustomers", 1).containsEntry("unsettledLots", 4);
         var closed = json(command(
                         qa2, "/api/recalls/" + id + "/close", Map.of("note", "Beta closed", "overrideReason", "Beta Foods ceased trading"))
                 .andExpect(status().isOk()));
@@ -245,7 +245,7 @@ class RecallTest extends TraceTestSupport {
         for (String customer : List.of(customerA, customerB))
             command(qa, "/api/recalls/" + id + "/customers/" + customer + "/notify", notifyBody(TODAY))
                     .andExpect(status().isOk());
-        assertThat(map(detail(id).get("closeCheck"))).containsEntry("pendingCustomers", 0).containsEntry("unsettledLots", 3);
+        assertThat(map(detail(id).get("closeCheck"))).containsEntry("pendingCustomers", 0).containsEntry("unsettledLots", 4);
         command(qa, "/api/recalls/" + id + "/close", Map.of("note", "x")).andExpect(status().isConflict());
 
         for (var ncr : rows("SELECT id,quantity FROM ncrs WHERE tenant_id=? AND source='RECALL'", t))

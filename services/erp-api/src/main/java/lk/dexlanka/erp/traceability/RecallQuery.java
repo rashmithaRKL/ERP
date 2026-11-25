@@ -53,8 +53,9 @@ public class RecallQuery {
                 ? null
                 : "%" + q.strip().replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%";
         String cursor = before == null || before.isBlank() ? null : before;
-        String from =
-                """
+        // Leading and trailing spaces are explicit: text blocks strip incidental whitespace.
+        String from = " "
+                + """
                  FROM recalls r WHERE r.tenant_id=?
                   AND (?::text IS NULL OR (?='ACTIVE' AND r.status IN ('OPEN','CONTAINED')) OR r.status=?)
                   AND (?::text IS NULL OR r.severity=?)

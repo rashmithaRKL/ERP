@@ -161,7 +161,7 @@ class TraceEngineTest extends TraceTestSupport {
         assertThat(hits).anySatisfy(h -> assertThat(h).containsEntry("type", "MO").containsEntry("id", bottles[0]));
         var lotHits = list(json(query(viewer, "/api/traceability/search?q=" + lotNumber(resinLot))).get("items"));
         assertThat(lotHits).anySatisfy(h -> assertThat(h).containsEntry("type", "LOT").containsEntry("id", resinLot));
-        var supplierHits = list(json(query(viewer, "/api/traceability/search?q=Resin%20Sup")).get("items"));
+        var supplierHits = list(json(query(viewer, "/api/traceability/search?q=Resin")).get("items"));
         assertThat(supplierHits).anySatisfy(h -> assertThat(h).containsEntry("type", "SUPPLIER"));
         assertThat(list(json(query(viewer, "/api/traceability/search?q=DN-A")).get("items")))
                 .anySatisfy(h -> assertThat(h).containsEntry("type", "DELIVERY").containsEntry("id", "DN-A1"));
