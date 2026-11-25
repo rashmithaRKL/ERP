@@ -19,7 +19,9 @@ class QualityStateSections implements StateContributor {
 
     @Override
     public List<StateSection> sections() {
-        return List.of(StateSection.of("inspections", 230, this::inspections));
+        return List.of(
+                StateSection.of("inspections", 230, this::inspections),
+                StateSection.of("qualityAlerts", 2200, this::alerts));
     }
 
     private List<Map<String, Object>> inspections(StateRequest r) {
@@ -32,5 +34,28 @@ class QualityStateSections implements StateContributor {
                 WHERE q.tenant_id=?
                 ORDER BY q.created_at DESC
                 LIMIT 250""", r.tenant());
+    }
+
+    /**
+     * V12 attention counts (one small object): open NCRs, open critical NCRs, concessions awaiting approval, supplier
+     * returns awaiting the warehouse, open rework orders and overdue CAPA actions (all, and the caller's own).
+     */
+    private Map<String, Object> alerts(StateRequest r) {
+        return s.one("""
+                SELECT (SELECT COUNT(*) FROM ncrs WHERE tenant_id=t.id AND status='OPEN') AS open_ncrs,
+                       (SELECT COUNT(*) FROM ncrs WHERE tenant_id=t.id AND status='OPEN' AND severity='CRITICAL')
+                         AS open_critical_ncrs,
+                       (SELECT COUNT(*) FROM ncr_dispositions WHERE tenant_id=t.id AND status='PENDING_APPROVAL')
+                         AS pending_concessions,
+                       (SELECT COUNT(*) FROM ncr_dispositions WHERE tenant_id=t.id AND status='AWAITING_RETURN')
+                         AS awaiting_returns,
+                       (SELECT COUNT(*) FROM rework_orders WHERE tenant_id=t.id AND status='OPEN') AS open_rework,
+                       (SELECT COUNT(*) FROM capa_actions x JOIN capas c ON c.tenant_id=x.tenant_id AND c.id=x.capa_id
+                        WHERE x.tenant_id=t.id AND x.status='OPEN' AND x.due_date<CURRENT_DATE
+                          AND c.status NOT IN ('CLOSED','CANCELLED')) AS overdue_capa_actions,
+                       (SELECT COUNT(*) FROM capa_actions x JOIN capas c ON c.tenant_id=x.tenant_id AND c.id=x.capa_id
+                        WHERE x.tenant_id=t.id AND x.status='OPEN' AND x.due_date<CURRENT_DATE AND x.owner_id=?
+                          AND c.status NOT IN ('CLOSED','CANCELLED')) AS my_overdue_capa_actions
+                FROM tenants t WHERE t.id=?""", r.actor().id(), r.tenant());
     }
 }
