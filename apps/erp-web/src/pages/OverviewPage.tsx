@@ -16,6 +16,7 @@ import {
   ShoppingCart,
   SlidersHorizontal,
   Timer,
+  Wrench,
 } from 'lucide-react';
 import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { useStateData, useWorkspace } from '../app/workspace';
@@ -94,6 +95,10 @@ export default function OverviewPage() {
     (p) => ['APPROVED', 'PARTIAL'].includes(text(p.status)) && text(p.due_date).substring(0, 10) < today(),
   );
   const purchaseAttention = awaitingApproval.length + lateDeliveries.length;
+  // Maintenance (V11): open breakdowns and overdue preventive plans from the `maintenance` state key.
+  const breakdowns = num(data.maintenance?.open_breakdowns);
+  const overduePlans = num(data.maintenance?.overdue_plans);
+  const maintenanceAttention = breakdowns + overduePlans;
   return (
     <>
       <motion.div className="stats-grid" variants={stagger} initial="hidden" animate="visible">
@@ -411,12 +416,48 @@ export default function OverviewPage() {
           title="Needs your attention"
           action={
             <span className="attention-count">
-              {shortages.length + pendingQc.length + overdue + (purchaseAttention ? 1 : 0)}
+              {shortages.length +
+                pendingQc.length +
+                overdue +
+                (purchaseAttention ? 1 : 0) +
+                (maintenanceAttention ? 1 : 0)}
             </span>
           }
           className="attention-panel"
         >
           <div className="attention-list">
+            {maintenanceAttention > 0 && (
+              <button
+                className="attention-item"
+                onClick={() => navigate(breakdowns ? '/maintenance?tab=downtime' : '/maintenance?tab=plans')}
+              >
+                <span className={`attention-symbol ${breakdowns ? 'red' : 'amber'}`}>
+                  <Wrench size={16} />
+                </span>
+                <div>
+                  <strong>
+                    {breakdowns
+                      ? plural(
+                          breakdowns,
+                          'machine is down with a breakdown',
+                          'machines are down with breakdowns',
+                        )
+                      : plural(overduePlans, 'preventive plan is overdue', 'preventive plans are overdue')}
+                  </strong>
+                  <p>
+                    {breakdowns && overduePlans
+                      ? `${plural(overduePlans, 'preventive plan is', 'preventive plans are')} also overdue.`
+                      : breakdowns
+                        ? 'Approve and start the repair to get production running again.'
+                        : 'Generate the due work orders and schedule the maintenance windows.'}
+                  </p>
+                  <span>
+                    Open maintenance
+                    <ArrowRight size={11} />
+                  </span>
+                </div>
+              </button>
+            )}
             {shortages.slice(0, 2).map((r) => (
               <button key={r.id} className="attention-item" onClick={() => navigate('/planning')}>
                 <span className="attention-symbol amber">

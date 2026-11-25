@@ -25,7 +25,13 @@ import type { ChecklistItem, WorkOrderDetail } from './api';
 import { PriorityText, ReasonChip, StatusChip, TypeChip } from './shared';
 
 const STEPS = ['Requested', 'Approved', 'Scheduled', 'In progress', 'Completed'];
-const STEP: Record<string, number> = { REQUESTED: 0, APPROVED: 1, SCHEDULED: 2, IN_PROGRESS: 3, COMPLETED: 4 };
+const STEP: Record<string, number> = {
+  REQUESTED: 0,
+  APPROVED: 1,
+  SCHEDULED: 2,
+  IN_PROGRESS: 3,
+  COMPLETED: 4,
+};
 const ISSUABLE = ['APPROVED', 'SCHEDULED', 'IN_PROGRESS'];
 const RESULTS = [
   { value: 'PASS', label: 'Pass' },
@@ -273,7 +279,9 @@ export function WorkOrderDrawer({ id, onClose }: { id: string; onClose: () => vo
                 <div>
                   <dt>Maintenance window</dt>
                   <dd>
-                    {d.scheduled_start ? `${when(d.scheduled_start)} – ${when(d.scheduled_end)}` : 'Not scheduled'}
+                    {d.scheduled_start
+                      ? `${when(d.scheduled_start)} – ${when(d.scheduled_end)}`
+                      : 'Not scheduled'}
                   </dd>
                 </div>
                 <div>
@@ -293,15 +301,14 @@ export function WorkOrderDrawer({ id, onClose }: { id: string; onClose: () => vo
                     <StatusChip value={d.machine_status} />
                     {openDowntime && (
                       <span className="mnt-down">
-                        down {duration((Date.now() - new Date(text(openDowntime.started_at)).getTime()) / 60000)}
+                        down{' '}
+                        {duration((Date.now() - new Date(text(openDowntime.started_at)).getTime()) / 60000)}
                       </span>
                     )}
                   </dd>
                 </div>
               </dl>
-              {status === 'CANCELLED' && (
-                <p className="inv-notes">Cancelled: {text(d.cancel_reason)}</p>
-              )}
+              {status === 'CANCELLED' && <p className="inv-notes">Cancelled: {text(d.cancel_reason)}</p>}
               {text(d.description) && <p className="inv-notes">{text(d.description)}</p>}
 
               {checklist.length > 0 && (
@@ -318,7 +325,11 @@ export function WorkOrderDrawer({ id, onClose }: { id: string; onClose: () => vo
                         <span className="mnt-task">{item.task}</span>
                         {executing ? (
                           <div className="mnt-check-edit">
-                            <div className="inv-segmented" role="radiogroup" aria-label={`Result: ${item.task}`}>
+                            <div
+                              className="inv-segmented"
+                              role="radiogroup"
+                              aria-label={`Result: ${item.task}`}
+                            >
                               {RESULTS.map((r) => (
                                 <button
                                   key={r.value}
@@ -365,11 +376,21 @@ export function WorkOrderDrawer({ id, onClose }: { id: string; onClose: () => vo
                 <div className="mnt-notes-edit">
                   <label className="field">
                     <span>Findings</span>
-                    <textarea rows={3} maxLength={4000} value={findings} onChange={(e) => setFindings(e.target.value)} />
+                    <textarea
+                      rows={3}
+                      maxLength={4000}
+                      value={findings}
+                      onChange={(e) => setFindings(e.target.value)}
+                    />
                   </label>
                   <label className="field">
                     <span>Actions taken</span>
-                    <textarea rows={3} maxLength={4000} value={actions} onChange={(e) => setActions(e.target.value)} />
+                    <textarea
+                      rows={3}
+                      maxLength={4000}
+                      value={actions}
+                      onChange={(e) => setActions(e.target.value)}
+                    />
                   </label>
                   <div>
                     <button
@@ -403,7 +424,13 @@ export function WorkOrderDrawer({ id, onClose }: { id: string; onClose: () => vo
                 <p className="muted inv-small">Recorded by the technician while the work is in progress.</p>
               )}
 
-              <PartsSection detail={detail.data} issuable={issuable} parts={spareParts.data?.items} act={act} busy={busy} />
+              <PartsSection
+                detail={detail.data}
+                issuable={issuable}
+                parts={spareParts.data?.items}
+                act={act}
+                busy={busy}
+              />
               <LabourSection
                 detail={detail.data}
                 executing={executing}
@@ -424,7 +451,10 @@ export function WorkOrderDrawer({ id, onClose }: { id: string; onClose: () => vo
                     rows={detail.data.downtime}
                     columns={[
                       { label: 'Event', key: 'number' },
-                      { label: 'Reason', render: (r) => <ReasonChip reason={r.reason} planned={r.planned} /> },
+                      {
+                        label: 'Reason',
+                        render: (r) => <ReasonChip reason={r.reason} planned={r.planned} />,
+                      },
                       { label: 'From', render: (r) => when(r.started_at) },
                       { label: 'To', render: (r) => (r.ended_at ? when(r.ended_at) : 'Open') },
                       { label: 'Duration', render: (r) => duration(r.minutes) },
@@ -482,7 +512,9 @@ export function WorkOrderDrawer({ id, onClose }: { id: string; onClose: () => vo
                   <button
                     className="button primary"
                     disabled={busy}
-                    onClick={() => act('/start', {}, `${number} started; ${text(d.machine)} is under maintenance.`)}
+                    onClick={() =>
+                      act('/start', {}, `${number} started; ${text(d.machine)} is under maintenance.`)
+                    }
                   >
                     {busy ? <LoaderCircle size={15} className="spin" /> : <CirclePlay size={15} />}
                     Start work
@@ -532,7 +564,9 @@ function PartsSection({
   const number = text(detail.order.number);
   async function issue(e: FormEvent) {
     e.preventDefault();
-    if (await act('/parts', { itemId, quantity, notes: '' }, `Spare parts issued to ${number} successfully.`)) {
+    if (
+      await act('/parts', { itemId, quantity, notes: '' }, `Spare parts issued to ${number} successfully.`)
+    ) {
       setQuantity('1');
     }
   }
@@ -743,7 +777,9 @@ function LabourSection({
         </form>
       )}
       {executing && (
-        <p className="muted inv-small">Negative hours reverse an earlier entry. Labour is costed at the maintenance labour rate.</p>
+        <p className="muted inv-small">
+          Negative hours reverse an earlier entry. Labour is costed at the maintenance labour rate.
+        </p>
       )}
     </>
   );

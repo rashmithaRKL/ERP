@@ -151,7 +151,12 @@ export default function BomDialog({
                 line={line}
                 index={index}
                 materials={data.items.filter(
-                  (i) => i.type !== 'FINISHED_GOOD' && i.active && i.id !== draft?.product_id,
+                  // Spare parts (V11) are maintenance stock, never BOM components.
+                  (i) =>
+                    i.type !== 'FINISHED_GOOD' &&
+                    i.type !== 'SPARE_PART' &&
+                    i.active &&
+                    i.id !== draft?.product_id,
                 )}
                 reduced={reduced}
                 removable={lines.length > 1}

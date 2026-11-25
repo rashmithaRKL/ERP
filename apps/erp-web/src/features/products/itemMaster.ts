@@ -4,8 +4,14 @@ import { useWorkspace } from '../../app/workspace';
 import { request } from '../../lib/api';
 import type { Row } from '../../lib/api';
 
-/** Item type codes in display order (V4 adds `SEMI_FINISHED`). */
-export const itemTypes = ['RAW_MATERIAL', 'SEMI_FINISHED', 'FINISHED_GOOD', 'PACKAGING'] as const;
+/** Item type codes in display order (V4 adds `SEMI_FINISHED`; V11 `SPARE_PART`: maintenance stock, never a BOM component). */
+export const itemTypes = [
+  'RAW_MATERIAL',
+  'SEMI_FINISHED',
+  'FINISHED_GOOD',
+  'PACKAGING',
+  'SPARE_PART',
+] as const;
 export type ItemType = (typeof itemTypes)[number];
 
 export const itemTypeLabels: Record<string, string> = {
@@ -13,12 +19,14 @@ export const itemTypeLabels: Record<string, string> = {
   SEMI_FINISHED: 'Semi-finished',
   FINISHED_GOOD: 'Finished good',
   PACKAGING: 'Packaging',
+  SPARE_PART: 'Spare part',
 };
 export const itemTypePlural: Record<string, string> = {
   RAW_MATERIAL: 'Raw materials',
   SEMI_FINISHED: 'Semi-finished',
   FINISHED_GOOD: 'Finished goods',
   PACKAGING: 'Packaging',
+  SPARE_PART: 'Spare parts',
 };
 
 export const unitKinds = ['COUNT', 'MASS', 'VOLUME', 'LENGTH', 'AREA', 'PACKAGE'] as const;

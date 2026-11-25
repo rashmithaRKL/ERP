@@ -238,7 +238,12 @@ function PlanDrawer({
   const p = detail.data?.plan;
   const tasks = (p && Array.isArray(p.checklist) ? p.checklist : []) as string[];
   return (
-    <Overlay title={text(p?.number) || 'Maintenance plan'} subtitle="Preventive maintenance plan" onClose={onClose} drawer>
+    <Overlay
+      title={text(p?.number) || 'Maintenance plan'}
+      subtitle="Preventive maintenance plan"
+      onClose={onClose}
+      drawer
+    >
       <QueryState pending={detail.isPending} error={detail.error} retry={() => detail.refetch()}>
         {detail.data && p && (
           <>

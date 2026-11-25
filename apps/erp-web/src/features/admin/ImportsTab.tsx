@@ -27,7 +27,7 @@ const KINDS: { value: Kind; label: string; description: string; required: string
     value: 'items',
     label: 'Items',
     description:
-      'Creates item master records through the same rules as New item (unique SKU, active unit, category by name). Types: RAW_MATERIAL, PACKAGING, SEMI_FINISHED, FINISHED_GOOD.',
+      'Creates item master records through the same rules as New item (unique SKU, active unit, category by name). Types: RAW_MATERIAL, PACKAGING, SEMI_FINISHED, FINISHED_GOOD, SPARE_PART.',
     required: ['sku', 'name', 'type', 'uom', 'standard_cost'],
     optional: ['reorder_level', 'reorder_quantity', 'lead_time_days', 'category', 'description'],
   },

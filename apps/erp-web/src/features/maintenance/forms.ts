@@ -14,23 +14,26 @@ const machineOptions = (machines: Row[]) =>
   }));
 
 /**
- * "Request maintenance" / "Report breakdown": a corrective work order; with "Machine stopped" it also opens a
- * BREAKDOWN downtime event (from now, or from the time entered).
+ * "Request maintenance" / "Report breakdown": a corrective work order. With "Machine stopped" it also opens a BREAKDOWN
+ * downtime event (from now, or from the time entered); with `downtime` (the machine's open event) the request is linked
+ * to that event instead.
  */
-export function requestMaintenance(workspace: Workspace, machineId?: string, breakdown = false) {
+export function requestMaintenance(
+  workspace: Workspace,
+  machineId?: string,
+  breakdown = false,
+  downtime?: Row,
+) {
   const { data, openForm } = workspace;
   if (!data) return;
-  openForm({
-    title: breakdown ? 'Report breakdown' : 'Request maintenance',
-    description: breakdown
-      ? 'Records the stop as open breakdown downtime and asks a planner to approve the repair.'
-      : 'A planner other than you approves the request before a technician starts the work.',
-    submit: breakdown ? 'Report breakdown' : 'Send request',
-    fields: [
-      selectField('machineId', 'Work center', machineOptions(data.machines), machineId),
-      { name: 'title', label: 'Problem', hint: 'For example “Hydraulic leak at the clamp unit”.' },
-      { name: 'description', label: 'Details', type: 'textarea', optional: true },
-      selectField('priority', 'Priority', priorityOptions, breakdown ? 'HIGH' : 'NORMAL'),
+  const fields: Field[] = [
+    selectField('machineId', 'Work center', machineOptions(data.machines), machineId),
+    { name: 'title', label: 'Problem', hint: 'For example “Hydraulic leak at the clamp unit”.' },
+    { name: 'description', label: 'Details', type: 'textarea', optional: true },
+    selectField('priority', 'Priority', priorityOptions, breakdown || downtime ? 'HIGH' : 'NORMAL'),
+  ];
+  if (!downtime)
+    fields.push(
       selectField(
         'breakdown',
         'Machine stopped?',
@@ -47,7 +50,16 @@ export function requestMaintenance(workspace: Workspace, machineId?: string, bre
         optional: true,
         hint: 'Leave empty for now. Only used when the machine stopped.',
       },
-    ],
+    );
+  openForm({
+    title: breakdown ? 'Report breakdown' : downtime ? 'Request repair' : 'Request maintenance',
+    description: downtime
+      ? `Linked to the open downtime ${text(downtime.number)}. A planner other than you approves the repair.`
+      : breakdown
+        ? 'Records the stop as open breakdown downtime and asks a planner to approve the repair.'
+        : 'A planner other than you approves the request before a technician starts the work.',
+    submit: breakdown ? 'Report breakdown' : 'Send request',
+    fields,
     run: async (v, key) => {
       const result = await request<Row>(
         '/maintenance/work-orders',
@@ -58,6 +70,7 @@ export function requestMaintenance(workspace: Workspace, machineId?: string, bre
           priority: v.priority,
           breakdown: v.breakdown === 'yes',
           downtimeStartedAt: v.breakdown === 'yes' ? isoFromLocal(v.downtimeStartedAt) : undefined,
+          downtimeEventId: downtime?.id,
         },
         key,
       );
@@ -176,8 +189,18 @@ export function correctDowntime(workspace: Workspace, event: Row) {
         REASONS.map((r) => ({ value: r, label: REASON_LABELS[r] })),
         text(event.reason),
       ),
-      { name: 'startedAt', label: 'Started', type: 'datetime-local', defaultValue: localInput(text(event.started_at)) },
-      { name: 'endedAt', label: 'Ended', type: 'datetime-local', defaultValue: localInput(text(event.ended_at)) },
+      {
+        name: 'startedAt',
+        label: 'Started',
+        type: 'datetime-local',
+        defaultValue: localInput(text(event.started_at)),
+      },
+      {
+        name: 'endedAt',
+        label: 'Ended',
+        type: 'datetime-local',
+        defaultValue: localInput(text(event.ended_at)),
+      },
       { name: 'correctionReason', label: 'Why is it corrected?' },
     ],
     run: async (v, key) => {

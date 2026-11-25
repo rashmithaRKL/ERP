@@ -4,11 +4,13 @@ import { Empty, Overlay } from '../components';
 import { fmt, num, text, today } from '../lib/format';
 import { useWorkspace } from './workspace';
 
-/** Bell-icon notifications: material shortages, pending inspections and overdue orders. */
+/** Bell-icon notifications: shortages, pending inspections, overdue orders, open breakdowns and overdue preventive work. */
 export function AttentionCenter({ onClose }: { onClose: () => void }) {
   const navigate = useNavigate();
   const { data, summary } = useWorkspace();
   const { active, shortages, pendingQc } = summary;
+  const breakdowns = data?.maintenance?.breakdowns || [];
+  const overduePlans = data?.maintenance?.overdue || [];
   return (
     <Overlay
       title="Attention center"
@@ -17,6 +19,18 @@ export function AttentionCenter({ onClose }: { onClose: () => void }) {
     >
       <div className="notification-list">
         {[
+          ...breakdowns.map((b) => ({
+            title: `${text(b.machine)} is down (breakdown)`,
+            body: b.work_order
+              ? `${text(b.number)} · repair ${text(b.work_order)}`
+              : `${text(b.number)} · no repair requested yet`,
+            path: '/maintenance?tab=downtime',
+          })),
+          ...overduePlans.map((p) => ({
+            title: `${text(p.title)} overdue on ${text(p.machine)}`,
+            body: `Preventive plan ${text(p.number)} was due ${text(p.next_due_date).substring(0, 10)}`,
+            path: '/maintenance?tab=plans',
+          })),
           ...shortages.map((m) => ({
             title: `${m.name} needs replenishment`,
             body: `${fmt(m.shortage, 3)} ${m.uom} net shortage`,
@@ -52,9 +66,11 @@ export function AttentionCenter({ onClose }: { onClose: () => void }) {
             <ChevronRight size={15} />
           </button>
         ))}
-        {!shortages.length && !pendingQc.length && !num(data?.metrics.overdue) && (
-          <Empty title="You’re all caught up" />
-        )}
+        {!shortages.length &&
+          !pendingQc.length &&
+          !num(data?.metrics.overdue) &&
+          !breakdowns.length &&
+          !overduePlans.length && <Empty title="You’re all caught up" />}
       </div>
     </Overlay>
   );

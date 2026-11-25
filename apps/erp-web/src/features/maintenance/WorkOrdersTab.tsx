@@ -75,7 +75,10 @@ export function WorkOrdersTab({ onOpen }: { onOpen: (id: string) => void }) {
         </div>
         {workspace.can(...REPORTERS) && (
           <div className="inv-actions">
-            <button className="button primary small" onClick={() => requestMaintenance(workspace, machine || undefined)}>
+            <button
+              className="button primary small"
+              onClick={() => requestMaintenance(workspace, machine || undefined)}
+            >
               <Plus size={14} />
               Request maintenance
             </button>

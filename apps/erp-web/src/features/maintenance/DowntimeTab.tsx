@@ -80,7 +80,8 @@ export function DowntimeTab({ onOpenOrder }: { onOpenOrder: (id: string) => void
             <header>
               <h3 id="mnt-pareto-title">Downtime by reason</h3>
               <p>
-                {fmt(totals?.downtimeMinutes)} minutes · {fmt(totals?.events)} events · {date(from)} – {date(to)}
+                {fmt(totals?.downtimeMinutes)} minutes · {fmt(totals?.events)} events · {date(from)} –{' '}
+                {date(to)}
               </p>
             </header>
             {pareto.length ? (
@@ -91,7 +92,10 @@ export function DowntimeTab({ onOpenOrder }: { onOpenOrder: (id: string) => void
                       <ReasonChip reason={p.reason} />
                     </span>
                     <span className="mnt-bar" aria-hidden="true">
-                      <i className={text(p.reason).toLowerCase()} style={{ width: `${(num(p.minutes) / top) * 100}%` }} />
+                      <i
+                        className={text(p.reason).toLowerCase()}
+                        style={{ width: `${(num(p.minutes) / top) * 100}%` }}
+                      />
                     </span>
                     <span className="mnt-pareto-value">
                       {duration(p.minutes)}
@@ -111,7 +115,8 @@ export function DowntimeTab({ onOpenOrder }: { onOpenOrder: (id: string) => void
               <h3 id="mnt-reliability-title">Reliability</h3>
               <p>
                 MTBF {totals?.mtbfHours == null ? '—' : `${fmt(totals.mtbfHours, 1)} h`} · MTTR{' '}
-                {totals?.mttrMinutes == null ? '—' : duration(totals.mttrMinutes)} · {fmt(totals?.failures)} failures
+                {totals?.mttrMinutes == null ? '—' : duration(totals.mttrMinutes)} · {fmt(totals?.failures)}{' '}
+                failures
               </p>
             </header>
             <Table
@@ -129,17 +134,15 @@ export function DowntimeTab({ onOpenOrder }: { onOpenOrder: (id: string) => void
                   render: (r) => (
                     <div className="cell-stack">
                       <strong>{duration(r.downtimeMinutes)}</strong>
-                      <span>
-                        {duration(r.unplannedMinutes)} unplanned
-                      </span>
+                      <span>{duration(r.unplannedMinutes)} unplanned</span>
                     </div>
                   ),
                 },
               ]}
             />
             <p className="muted inv-small mnt-pad">
-              Failures are breakdowns that started in the period. MTBF uses calendar time less recorded downtime (no
-              shift calendar yet); MTTR is the mean length of closed breakdowns.
+              Failures are breakdowns that started in the period. MTBF uses calendar time less recorded
+              downtime (no shift calendar yet); MTTR is the mean length of closed breakdowns.
             </p>
           </section>
         </div>
@@ -166,7 +169,10 @@ export function DowntimeTab({ onOpenOrder }: { onOpenOrder: (id: string) => void
         </div>
         {workspace.can(...REPORTERS) && (
           <div className="inv-actions">
-            <button className="button primary small" onClick={() => reportDowntime(workspace, machine || undefined)}>
+            <button
+              className="button primary small"
+              onClick={() => reportDowntime(workspace, machine || undefined)}
+            >
               <Plus size={14} />
               Report downtime
             </button>
@@ -229,7 +235,9 @@ export function DowntimeTab({ onOpenOrder }: { onOpenOrder: (id: string) => void
             {
               label: '',
               render: (r) =>
-                r.status === 'OPEN' && workspace.can(...REPORTERS) && r.work_order_status !== 'IN_PROGRESS' ? (
+                r.status === 'OPEN' &&
+                workspace.can(...REPORTERS) &&
+                r.work_order_status !== 'IN_PROGRESS' ? (
                   <button className="button secondary small" onClick={() => closeDowntime(workspace, r)}>
                     Close
                   </button>

@@ -182,7 +182,8 @@ export function PlanDialog({
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') {
                       e.preventDefault();
-                      if (tasks.length < 40) setTasks((list) => [...list.slice(0, index + 1), '', ...list.slice(index + 1)]);
+                      if (tasks.length < 40)
+                        setTasks((list) => [...list.slice(0, index + 1), '', ...list.slice(index + 1)]);
                     }
                   }}
                 />
