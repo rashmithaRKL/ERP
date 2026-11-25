@@ -86,6 +86,14 @@ const LABELS: Record<string, string> = {
   CAPA_VERIFIED: 'CAPA verified effective',
   CAPA_REOPENED: 'CAPA not effective, reopened',
   CAPA_CANCELLED: 'CAPA cancelled',
+  // Finite-capacity scheduling (V13).
+  SCHEDULE_RUN_CREATED: 'Schedule run created',
+  SCHEDULE_PUBLISHED: 'Schedule published',
+  SCHEDULE_DISCARDED: 'Draft schedule discarded',
+  SCHEDULE_PINNED: 'Operation pinned',
+  SCHEDULE_UNPINNED: 'Pin removed',
+  SCHEDULE_ESTIMATE_SET: 'Duration estimate set',
+  SCHEDULE_ESTIMATE_REMOVED: 'Duration estimate removed',
   // Sales and delivery.
   SALE_CONFIRMED: 'SO confirmed',
   DISPATCH_POSTED: 'Dispatch posted',

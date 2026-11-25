@@ -112,7 +112,8 @@ public class ScheduleService {
                         unscheduled,
                         honoured,
                         conflicts,
-                        makespan == null ? null : at(makespan));
+                        makespan == null ? null : at(makespan),
+                        a.id());
         var orderRows = new ArrayList<Object[]>();
         for (var o : result.orders()) {
             var order = o.order();
