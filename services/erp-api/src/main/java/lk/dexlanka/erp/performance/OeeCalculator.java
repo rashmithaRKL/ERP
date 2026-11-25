@@ -99,7 +99,8 @@ final class OeeCalculator {
         Spans window = Spans.of(ws, we);
 
         var workingSpans = new ArrayList<long[]>();
-        for (var w : in.working()) workingSpans.add(new long[] {w.start().toEpochMilli(), w.end().toEpochMilli()});
+        for (var w : in.working())
+            workingSpans.add(new long[] {w.start().toEpochMilli(), w.end().toEpochMilli()});
         Spans scheduled = Spans.union(workingSpans).intersect(window);
 
         var plannedStops = new ArrayList<long[]>();
@@ -108,7 +109,10 @@ final class OeeCalculator {
         var others = new ArrayList<long[]>();
         boolean openDowntime = false;
         for (var stop : in.stops()) {
-            long[] span = {stop.start().toEpochMilli(), stop.end() == null ? we : stop.end().toEpochMilli()};
+            long[] span = {
+                stop.start().toEpochMilli(),
+                stop.end() == null ? we : stop.end().toEpochMilli()
+            };
             if (stop.end() == null) openDowntime = true;
             if (stop.reason().equals("BREAKDOWN")) breakdowns.add(span);
             else if (stop.reason().equals("CHANGEOVER")) changeovers.add(span);
@@ -126,7 +130,9 @@ final class OeeCalculator {
         var runSpans = new ArrayList<long[]>();
         String openLogSince = null;
         for (var log : in.logs()) {
-            long[] span = {log.start().toEpochMilli(), log.end() == null ? we : log.end().toEpochMilli()};
+            long[] span = {
+                log.start().toEpochMilli(), log.end() == null ? we : log.end().toEpochMilli()
+            };
             if (log.end() == null && (log.start().toEpochMilli() < ws || !in.partial()))
                 openLogSince = log.start().toString();
             (log.activity().equals("SETUP") ? setupSpans : runSpans).add(span);
@@ -140,7 +146,9 @@ final class OeeCalculator {
         // Run time per operation (the part of each RUN log that counts as run time) and reports per operation.
         var ops = new LinkedHashMap<String, Op>();
         for (var log : in.logs()) {
-            var op = ops.computeIfAbsent(log.operationId(), k -> new Op(log.orderId(), log.orderNumber(), log.seq(), log.name(), log.ideal()));
+            var op = ops.computeIfAbsent(
+                    log.operationId(),
+                    k -> new Op(log.orderId(), log.orderNumber(), log.seq(), log.name(), log.ideal()));
             long end = log.end() == null ? we : log.end().toEpochMilli();
             Spans part = Spans.of(log.start().toEpochMilli(), end);
             if (log.activity().equals("RUN")) op.run += part.intersect(run).millis();
@@ -149,7 +157,8 @@ final class OeeCalculator {
         BigDecimal good = BigDecimal.ZERO, scrap = BigDecimal.ZERO, coveredCount = BigDecimal.ZERO;
         double idealMinutes = 0, idealGood = 0;
         for (var r : in.reports()) {
-            var op = ops.computeIfAbsent(r.operationId(), k -> new Op(r.orderId(), r.orderNumber(), r.seq(), r.name(), r.ideal()));
+            var op = ops.computeIfAbsent(
+                    r.operationId(), k -> new Op(r.orderId(), r.orderNumber(), r.seq(), r.name(), r.ideal()));
             op.good = op.good.add(r.good());
             op.scrap = op.scrap.add(r.scrap());
             op.reports++;
@@ -157,7 +166,8 @@ final class OeeCalculator {
             scrap = scrap.add(r.scrap());
             if (r.ideal().signum() > 0) {
                 coveredCount = coveredCount.add(r.good()).add(r.scrap());
-                idealMinutes += r.ideal().doubleValue() * r.good().add(r.scrap()).doubleValue();
+                idealMinutes +=
+                        r.ideal().doubleValue() * r.good().add(r.scrap()).doubleValue();
                 idealGood += r.ideal().doubleValue() * r.good().doubleValue();
             }
         }
@@ -262,7 +272,9 @@ final class OeeCalculator {
         f.put("performanceRaw", ratio(performanceRaw));
         f.put("quality", ratio(quality));
         f.put("oee", ratio(oee));
-        f.put("utilization", scheduled.isEmpty() ? null : ratio(busy.intersect(scheduled).minutes() / scheduled.minutes()));
+        f.put(
+                "utilization",
+                scheduled.isEmpty() ? null : ratio(busy.intersect(scheduled).minutes() / scheduled.minutes()));
         f.put("capacityUtilization", window.isEmpty() ? null : ratio(busy.minutes() / window.minutes()));
         BigDecimal output = total.add(untimed);
         f.put("outputCoverage", output.signum() == 0 ? null : ratio(coveredCount.doubleValue() / output.doubleValue()));
@@ -317,7 +329,13 @@ final class OeeCalculator {
         // ---------------------------------------------------------------- data-coverage and data-quality warnings
         var warnings = new ArrayList<Map<String, Object>>();
         if ("NONE".equals(in.calendar().source()))
-            warn(warnings, "NO_CALENDAR", "info", "No shift calendar: the whole day counts as planned time", null, null);
+            warn(
+                    warnings,
+                    "NO_CALENDAR",
+                    "info",
+                    "No shift calendar: the whole day counts as planned time",
+                    null,
+                    null);
         if (untimed.signum() > 0)
             warn(
                     warnings,
@@ -384,7 +402,8 @@ final class OeeCalculator {
                     "UNRECORDED_TIME",
                     "info",
                     "Planned time with neither a running operation nor recorded downtime (logged run time is "
-                            + Math.round(runMin) + " min; planned time less stops and setup is " + Math.round(derivedRun)
+                            + Math.round(runMin) + " min; planned time less stops and setup is "
+                            + Math.round(derivedRun)
                             + " min)",
                     minutes(unrecordedMin),
                     null);

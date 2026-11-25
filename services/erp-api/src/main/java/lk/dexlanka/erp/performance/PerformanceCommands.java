@@ -19,7 +19,9 @@ public final class PerformanceCommands {
      * superseded history.
      */
     public record Close(
-            @NotBlank @Pattern(regexp = "\\d{4}-\\d{2}-\\d{2}") String date,
+            @NotBlank @Pattern(regexp = "\\d{4}-\\d{2}-\\d{2}")
+            String date,
+
             @Size(max = 200) List<@NotBlank @Size(max = 64) String> machineIds,
             Boolean recalculate,
             @Size(max = 400) String reason) {}

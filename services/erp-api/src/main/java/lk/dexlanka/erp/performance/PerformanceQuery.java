@@ -83,7 +83,8 @@ public class PerformanceQuery {
                 var p = new LinkedHashMap<String, Object>();
                 p.put("key", key);
                 LocalDate start = b.equals("week") ? max(d.with(DayOfWeek.MONDAY), r.from()) : d;
-                LocalDate end = b.equals("week") ? min(d.with(TemporalAdjusters.nextOrSame(DayOfWeek.SUNDAY)), r.to()) : d;
+                LocalDate end =
+                        b.equals("week") ? min(d.with(TemporalAdjusters.nextOrSame(DayOfWeek.SUNDAY)), r.to()) : d;
                 p.put("from", start.toString());
                 p.put("to", end.toString());
                 p.put("label", b.equals("week") ? label(start) + " – " + label(end) : label(d));
@@ -210,7 +211,8 @@ public class PerformanceQuery {
                             acc[1] += Rollup.num(cast(stop), "plannedMinutes");
                             if (stop.get("events") instanceof List<?> numbers)
                                 for (Object n : numbers)
-                                    events.computeIfAbsent(reason, k -> new LinkedHashSet<>()).add(String.valueOf(n));
+                                    events.computeIfAbsent(reason, k -> new LinkedHashSet<>())
+                                            .add(String.valueOf(n));
                         }
             }
             var t = wc.toMap();
@@ -259,12 +261,13 @@ public class PerformanceQuery {
                 "AVAILABILITY",
                 Rollup.num(t, "setupMinutes") + Rollup.num(t, "changeoverMinutes"),
                 "SETUP time logs plus Changeover downtime"));
-        six.add(loss(
-                "SMALL_STOPS_REDUCED_SPEED",
-                "Small stops and reduced speed",
-                "PERFORMANCE",
-                run - net,
-                "Run time less net run time; small stops inside a running time log are not recorded apart from slow cycles"));
+        six.add(
+                loss(
+                        "SMALL_STOPS_REDUCED_SPEED",
+                        "Small stops and reduced speed",
+                        "PERFORMANCE",
+                        run - net,
+                        "Run time less net run time; small stops inside a running time log are not recorded apart from slow cycles"));
         six.add(loss(
                 "PRODUCTION_REJECTS",
                 "Production rejects",
@@ -285,12 +288,13 @@ public class PerformanceQuery {
                 Rollup.num(t, "otherStopMinutes"),
                 "Material shortage, no operator, quality hold, utilities and other unplanned downtime (outside the classic six)");
         six.add(otherStops);
-        six.add(loss(
-                "UNRECORDED_IDLE",
-                "Unrecorded idle time",
-                "AVAILABILITY",
-                Rollup.num(t, "unrecordedMinutes"),
-                "Planned production time with neither a running operation nor recorded downtime (outside the classic six)"));
+        six.add(
+                loss(
+                        "UNRECORDED_IDLE",
+                        "Unrecorded idle time",
+                        "AVAILABILITY",
+                        Rollup.num(t, "unrecordedMinutes"),
+                        "Planned production time with neither a running operation nor recorded downtime (outside the classic six)"));
 
         double paretoTotal = reasons.values().stream().mapToDouble(x -> x[0]).sum();
         var sorted = new ArrayList<>(reasons.entrySet());
@@ -303,7 +307,9 @@ public class PerformanceQuery {
             row.put("reason", e.getKey());
             row.put("minutes", minutes(e.getValue()[0]));
             row.put("plannedMinutes", minutes(e.getValue()[1]));
-            row.put("events", events.getOrDefault(e.getKey(), new LinkedHashSet<>()).size());
+            row.put(
+                    "events",
+                    events.getOrDefault(e.getKey(), new LinkedHashSet<>()).size());
             row.put("share", paretoTotal > 0 ? ratio(e.getValue()[0] / paretoTotal) : null);
             row.put("cumulative", paretoTotal > 0 ? ratio(cumulative / paretoTotal) : null);
             pareto.add(row);
@@ -331,12 +337,10 @@ public class PerformanceQuery {
         var start = OeeEngine.utc(OeeEngine.dayStart(r.from()));
         var end = OeeEngine.utc(OeeEngine.dayStart(r.to().plusDays(1)));
         // The work center that produced a lot: the last operation of its routed order, else the order's work center.
-        String producer =
-                """
+        String producer = """
                 COALESCE((SELECT op.machine_id FROM mo_operations op WHERE op.tenant_id=mo.tenant_id AND op.order_id=mo.id
                           ORDER BY op.seq DESC LIMIT 1), mo.machine_id)""";
-        var scrap = s.list(
-                """
+        var scrap = s.list("""
                 SELECT w.machine_id,COUNT(*) AS dispositions,SUM(w.quantity) AS quantity,SUM(w.value_amount) AS value FROM (
                   SELECT %s AS machine_id,d.quantity,d.value_amount
                   FROM ncr_dispositions d
@@ -344,14 +348,8 @@ public class PerformanceQuery {
                   JOIN manufacturing_orders mo ON mo.tenant_id=l.tenant_id AND mo.id=l.source_id
                   WHERE d.tenant_id=? AND d.type='SCRAP' AND d.status='POSTED' AND d.posted_at>=? AND d.posted_at<?) w
                 WHERE w.machine_id=ANY(string_to_array(?,','))
-                GROUP BY w.machine_id"""
-                        .formatted(producer),
-                a.tenant(),
-                start,
-                end,
-                in);
-        var rework = s.list(
-                """
+                GROUP BY w.machine_id""".formatted(producer), a.tenant(), start, end, in);
+        var rework = s.list("""
                 SELECT w.machine_id,COUNT(*) AS orders,COUNT(*) FILTER (WHERE w.status='COMPLETED') AS completed,
                        SUM(w.input_quantity) AS input_quantity,
                        SUM(w.input_quantity) FILTER (WHERE w.status='COMPLETED') AS completed_input,
@@ -362,19 +360,16 @@ public class PerformanceQuery {
                   JOIN manufacturing_orders mo ON mo.tenant_id=l.tenant_id AND mo.id=l.source_id
                   WHERE ro.tenant_id=? AND ro.created_at>=? AND ro.created_at<?) w
                 WHERE w.machine_id=ANY(string_to_array(?,','))
-                GROUP BY w.machine_id"""
-                        .formatted(producer),
-                a.tenant(),
-                start,
-                end,
-                in);
+                GROUP BY w.machine_id""".formatted(producer), a.tenant(), start, end, in);
         var scrapBy = new HashMap<String, Map<String, Object>>();
         for (var row : scrap) scrapBy.put(str(row, "machine_id"), row);
         var reworkBy = new HashMap<String, Map<String, Object>>();
         for (var row : rework) reworkBy.put(str(row, "machine_id"), row);
         BigDecimal scrapQty = BigDecimal.ZERO, scrapValue = BigDecimal.ZERO;
         long dispositions = 0, reworkOrders = 0, reworkCompleted = 0;
-        BigDecimal reworkInput = BigDecimal.ZERO, reworkCompletedInput = BigDecimal.ZERO, reworkOutput = BigDecimal.ZERO;
+        BigDecimal reworkInput = BigDecimal.ZERO,
+                reworkCompletedInput = BigDecimal.ZERO,
+                reworkOutput = BigDecimal.ZERO;
         for (var row : byMachine) {
             var sc = scrapBy.get(str(row, "id"));
             row.put("postProductionScrap", sc == null ? BigDecimal.ZERO : dec(sc.get("quantity")));
@@ -442,7 +437,8 @@ public class PerformanceQuery {
         var live = engine.live(a.tenant(), List.of(id), day, day, java.time.Instant.now())
                 .get(id)
                 .get(day);
-        var snapshot = engine.snapshots(a.tenant(), List.of(id), day, day).get(id).get(day);
+        var snapshot =
+                engine.snapshots(a.tenant(), List.of(id), day, day).get(id).get(day);
         var out = new LinkedHashMap<String, Object>();
         out.put("machine", machine);
         out.put("date", day.toString());
@@ -453,19 +449,18 @@ public class PerformanceQuery {
             out.put(
                     "calendarChanged",
                     Math.abs(Rollup.num(live, "scheduledMinutes") - Rollup.num(snapshot, "scheduledMinutes")) >= 0.01);
-            out.put("differs", !same(live.get("oee"), snapshot.get("oee"))
-                    || Math.abs(Rollup.num(live, "plannedMinutes") - Rollup.num(snapshot, "plannedMinutes")) >= 0.01);
+            out.put(
+                    "differs",
+                    !same(live.get("oee"), snapshot.get("oee"))
+                            || Math.abs(Rollup.num(live, "plannedMinutes") - Rollup.num(snapshot, "plannedMinutes"))
+                                    >= 0.01);
         }
-        out.put("history", s.list(
-                """
+        out.put("history", s.list("""
                 SELECT o.id,o.version,o.status,o.oee_status,o.availability,o.performance,o.quality,o.oee,
                        o.planned_minutes,o.run_minutes,o.reason,o.closed_at,u.name AS closed_by,o.superseded_at
                 FROM oee_day_snapshots o JOIN users u ON u.id=o.closed_by
                 WHERE o.tenant_id=? AND o.machine_id=? AND o.day=?::date
-                ORDER BY o.version DESC""",
-                a.tenant(),
-                id,
-                day.toString()));
+                ORDER BY o.version DESC""", a.tenant(), id, day.toString()));
         return out;
     }
 

@@ -91,16 +91,11 @@ public class OeeEngine {
         var out = new LinkedHashMap<String, Map<LocalDate, Map<String, Object>>>();
         for (String m : machineIds) out.put(m, new LinkedHashMap<>());
         if (machineIds.isEmpty()) return out;
-        for (var row : s.list(
-                """
+        for (var row : s.list("""
                 SELECT o.machine_id,o.day,o.version,o.figures::text AS figures,o.closed_at,o.reason,u.name AS closed_by
                 FROM oee_day_snapshots o JOIN users u ON u.id=o.closed_by
                 WHERE o.tenant_id=? AND o.status='CURRENT' AND o.machine_id=ANY(string_to_array(?,','))
-                  AND o.day BETWEEN ?::date AND ?::date""",
-                tenant,
-                String.join(",", machineIds),
-                from.toString(),
-                to.toString())) {
+                  AND o.day BETWEEN ?::date AND ?::date""", tenant, String.join(",", machineIds), from.toString(), to.toString())) {
             var figures = new LinkedHashMap<String, Object>(s.decode(str(row, "figures")));
             figures.put("closed", true);
             figures.put("version", row.get("version"));
@@ -127,17 +122,11 @@ public class OeeEngine {
         var availability = new HashMap<String, CalendarService.Availability>();
         for (var a : calendars.availability(tenant, machineIds, from, to)) availability.put(a.machineId(), a);
 
-        var stops = group(s.list(
-                """
+        var stops = group(s.list("""
                 SELECT machine_id,number,reason,planned,started_at,ended_at FROM machine_downtime
                 WHERE tenant_id=? AND machine_id=ANY(string_to_array(?,','))
-                  AND started_at<? AND COALESCE(ended_at,'infinity'::timestamptz)>?""",
-                tenant,
-                ids,
-                utc(rangeEnd),
-                utc(rangeStart)));
-        var logs = group(s.list(
-                """
+                  AND started_at<? AND COALESCE(ended_at,'infinity'::timestamptz)>?""", tenant, ids, utc(rangeEnd), utc(rangeStart)));
+        var logs = group(s.list("""
                 SELECT l.machine_id,l.operation_id,l.order_id,mo.number AS order_number,o.seq,o.name,l.activity,
                        l.started_at,l.ended_at,o.run_minutes_per_unit
                 FROM mo_operation_time_logs l
@@ -145,13 +134,8 @@ public class OeeEngine {
                 JOIN manufacturing_orders mo ON mo.tenant_id=l.tenant_id AND mo.id=l.order_id
                 WHERE l.tenant_id=? AND l.machine_id=ANY(string_to_array(?,','))
                   AND l.started_at<? AND COALESCE(l.ended_at,'infinity'::timestamptz)>?
-                ORDER BY l.started_at,l.id""",
-                tenant,
-                ids,
-                utc(rangeEnd),
-                utc(rangeStart)));
-        var reports = group(s.list(
-                """
+                ORDER BY l.started_at,l.id""", tenant, ids, utc(rangeEnd), utc(rangeStart)));
+        var reports = group(s.list("""
                 SELECT r.machine_id,r.operation_id,r.order_id,mo.number AS order_number,o.seq,o.name,r.good_qty,
                        r.scrap_qty,o.run_minutes_per_unit,r.created_at
                 FROM mo_operation_reports r
@@ -159,22 +143,13 @@ public class OeeEngine {
                 JOIN manufacturing_orders mo ON mo.tenant_id=r.tenant_id AND mo.id=r.order_id
                 WHERE r.tenant_id=? AND r.machine_id=ANY(string_to_array(?,','))
                   AND r.created_at>=? AND r.created_at<?
-                ORDER BY r.created_at,r.id""",
-                tenant,
-                ids,
-                utc(rangeStart),
-                utc(rangeEnd)));
-        var untimed = group(s.list(
-                """
+                ORDER BY r.created_at,r.id""", tenant, ids, utc(rangeStart), utc(rangeEnd)));
+        var untimed = group(s.list("""
                 SELECT mo.machine_id,p.good_qty,p.scrap_qty,p.created_at
                 FROM production_actuals p
                 JOIN manufacturing_orders mo ON mo.tenant_id=p.tenant_id AND mo.id=p.order_id
                 WHERE p.tenant_id=? AND mo.routing_id IS NULL AND mo.machine_id=ANY(string_to_array(?,','))
-                  AND p.created_at>=? AND p.created_at<?""",
-                tenant,
-                ids,
-                utc(rangeStart),
-                utc(rangeEnd)));
+                  AND p.created_at>=? AND p.created_at<?""", tenant, ids, utc(rangeStart), utc(rangeEnd)));
 
         for (String machine : machineIds) {
             var cal = availability.get(machine);
@@ -187,7 +162,8 @@ public class OeeEngine {
                 boolean partial = dayEnd.isAfter(now);
                 var working = new ArrayList<OeeCalculator.Working>();
                 for (var i : day.intervals())
-                    working.add(new OeeCalculator.Working(i.start().toInstant(), i.end().toInstant(), i.kind(), i.label()));
+                    working.add(new OeeCalculator.Working(
+                            i.start().toInstant(), i.end().toInstant(), i.kind(), i.label()));
                 var dayStops = new ArrayList<OeeCalculator.Stop>();
                 for (var r : stops.getOrDefault(machine, List.of())) {
                     Instant start = instant(r.get("started_at"));

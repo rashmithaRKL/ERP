@@ -74,7 +74,8 @@ public class PerformanceService {
                     var row = current.getFirst();
                     if (!recalculate) {
                         unchanged.add(code);
-                        snapshots.add(snapshot(machine, code, ((Number) row.get("version")).intValue(), "UNCHANGED", row.get("oee")));
+                        snapshots.add(snapshot(
+                                machine, code, ((Number) row.get("version")).intValue(), "UNCHANGED", row.get("oee")));
                         continue;
                     }
                     supersedes = str(row, "id");
@@ -86,7 +87,8 @@ public class PerformanceService {
                 }
                 insert(a, machine, day, version, supersedes, supersedes == null ? "" : reason, figures);
                 (supersedes == null ? closed : recalculated).add(code);
-                snapshots.add(snapshot(machine, code, version, supersedes == null ? "CLOSED" : "RECALCULATED", figures.get("oee")));
+                snapshots.add(snapshot(
+                        machine, code, version, supersedes == null ? "CLOSED" : "RECALCULATED", figures.get("oee")));
             }
             if (!closed.isEmpty() || recalculated.isEmpty())
                 s.audit(
@@ -96,7 +98,9 @@ public class PerformanceService {
                         closed.isEmpty()
                                 ? "OEE of " + day + " was already closed for " + String.join(", ", unchanged)
                                 : "OEE of " + day + " closed for " + String.join(", ", closed)
-                                        + (unchanged.isEmpty() ? "" : " (already closed: " + String.join(", ", unchanged) + ")"));
+                                        + (unchanged.isEmpty()
+                                                ? ""
+                                                : " (already closed: " + String.join(", ", unchanged) + ")"));
             if (!recalculated.isEmpty())
                 s.audit(
                         a,
