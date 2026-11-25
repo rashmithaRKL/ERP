@@ -814,7 +814,7 @@ public class TraceService {
                     FROM reservations r
                     JOIN manufacturing_orders m ON m.tenant_id=r.tenant_id AND m.id=r.order_id
                     JOIN items i ON i.tenant_id=r.tenant_id AND i.id=r.item_id
-                    WHERE r.tenant_id=? AND r.status='ISSUED' AND """
+                    WHERE r.tenant_id=? AND r.status='ISSUED' AND\s"""
                             + filter + " GROUP BY r.tenant_id,r.lot_id,r.order_id,m.number,i.uom",
                     tenant,
                     json);
@@ -935,7 +935,7 @@ public class TraceService {
                     JOIN partners p ON p.tenant_id=so.tenant_id AND p.id=so.customer_id
                     JOIN lots l ON l.tenant_id=d.tenant_id AND l.id=d.lot_id
                     JOIN items i ON i.tenant_id=l.tenant_id AND i.id=l.item_id
-                    WHERE d.tenant_id=? AND """
+                    WHERE d.tenant_id=? AND\s"""
                             + (byReturn
                                     ? "d.id IN (SELECT cr.delivery_id FROM customer_returns cr WHERE cr.tenant_id=d.tenant_id AND "
                                             + filter + ")"
