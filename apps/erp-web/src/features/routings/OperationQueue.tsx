@@ -229,6 +229,8 @@ function OperationCard({
           <span className="muted">View-only for your role</span>
         ) : onHold ? (
           <span className="muted">Order on hold · resume the order first</span>
+        ) : machine.status === 'MAINTENANCE' && op.status === 'READY' ? (
+          <span className="muted">{text(machine.code)} is under maintenance</span>
         ) : op.status === 'READY' ? (
           !skillOk && !supervisor ? (
             <span className="muted">A qualified operator must start this operation</span>
@@ -292,7 +294,14 @@ function OperationCard({
             <span className="muted">A qualified operator must resume this operation</span>
           ) : (
             <>
-              <button className="button primary" disabled={busy} onClick={() => begin('resume')}>
+              <button
+                className="button primary"
+                disabled={busy || machine.status === 'MAINTENANCE'}
+                title={
+                  machine.status === 'MAINTENANCE' ? `${text(machine.code)} is under maintenance` : undefined
+                }
+                onClick={() => begin('resume')}
+              >
                 <Play size={17} />
                 Resume
               </button>

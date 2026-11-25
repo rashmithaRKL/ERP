@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
 import { AnimatePresence } from 'motion/react';
 import { GraduationCap, LoaderCircle, Plus, Search } from 'lucide-react';
@@ -21,7 +21,13 @@ export function SkillsTab() {
   const save = useRoutingRequest();
   const skills = useSkills();
   const [input, setInput] = useState('');
-  const paged = useCursorPage(['skills', 'users'], '/skills/users', { q: input.trim() }, 25);
+  const [q, setQ] = useState('');
+  useEffect(() => {
+    const timeout = setTimeout(() => setQ(input.trim()), 300);
+    return () => clearTimeout(timeout);
+  }, [input]);
+  // The matrix lists people: ADMIN and PLANNER only (the API answers 403 to other roles).
+  const paged = useCursorPage(['skills', 'users'], '/skills/users', { q }, 25, can('PLANNER'));
   const [cell, setCell] = useState<Cell>();
   const planner = can('PLANNER');
   const catalogue = skills.data?.skills || [];
