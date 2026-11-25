@@ -69,7 +69,7 @@
 .gantt-label small { font-size: 10.5px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .gantt-scroll { overflow-x: auto; overflow-y: hidden; min-width: 0; }
 .gantt-scroll:focus-visible { outline-offset: -3px; }
-.gantt-svg { display: block; font-family: inherit; user-select: none; touch-action: pan-y; }
+.gantt-svg { display: block; font-family: inherit; user-select: none; }
 .gantt-svg.dragging { cursor: grabbing; }
 .gantt-head { fill: var(--surface); }
 .gantt-row { fill: var(--surface); }
@@ -93,7 +93,8 @@
 
 /* Operation bars */
 .gantt-bar { cursor: pointer; outline: none; }
-.gantt-bar.movable { cursor: grab; }
+/* Only draggable bars take over touch gestures; everywhere else a swipe scrolls the timeline. */
+.gantt-bar.movable { cursor: grab; touch-action: none; }
 .gantt-bar .gantt-seg { fill: var(--bar, var(--gantt-normal)); stroke: transparent; stroke-width: 2; }
 .gantt-bar .gantt-span { fill: var(--bar, var(--gantt-normal)); opacity: .55; }
 .gantt-bar-text { font-size: 10.5px; font-weight: 650; fill: var(--gantt-bar-text); pointer-events: none; }
