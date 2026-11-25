@@ -116,7 +116,7 @@ public class OperationQuery {
                             OR EXISTS (SELECT 1 FROM routing_operations ro WHERE ro.tenant_id=op.tenant_id AND ro.id=op.routing_operation_id AND ro.machine_id=?)
                             OR EXISTS (SELECT 1 FROM routing_operation_alternates x WHERE x.tenant_id=op.tenant_id AND x.operation_id=op.routing_operation_id AND x.machine_id=?))))
                 )
-                SELECT """ + COLUMNS + """
+                SELECT""" + " " + COLUMNS + """
                        ,(op.machine_id<>?) AS alternate,
                        o.number AS order_number,o.status AS order_status,o.priority,o.due_date,o.quantity AS order_quantity,
                        o.good_qty AS order_good_qty,i.name AS product,i.sku,i.uom,

@@ -293,8 +293,10 @@ public class ManufacturingService {
                 case "start" -> {
                     a.allow("OPERATOR", "PLANNER");
                     require(state.equals("RELEASED"), "Release the order before starting");
+                    // V10: a routed order's operations check their own work centers when they start.
                     require(
-                            !s.one(
+                            operations.routed(a.tenant(), id)
+                                    || !s.one(
                                             "SELECT status FROM machines WHERE tenant_id=? AND id=?",
                                             a.tenant(),
                                             o.get("machine_id"))
