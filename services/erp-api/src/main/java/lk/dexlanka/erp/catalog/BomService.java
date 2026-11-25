@@ -104,6 +104,9 @@ public class BomService {
                         a.tenant(),
                         l.itemId());
                 require(
+                        !"SPARE_PART".equals(material.get("type")),
+                        "Spare part " + str(material, "sku") + " is maintenance stock and cannot be a BOM component");
+                require(
                         Boolean.TRUE.equals(material.get("active")),
                         "Material " + str(material, "sku") + " is inactive and cannot be used on new BOMs");
                 s.quantity(str(material, "uom"), l.quantity());

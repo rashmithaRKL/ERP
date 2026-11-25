@@ -13,6 +13,7 @@ import {
   ShoppingBag,
   ShoppingCart,
   Workflow,
+  Wrench,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { matchPath } from 'react-router-dom';
@@ -31,6 +32,7 @@ import type { LazyPage } from './lazyPage';
 const AdministrationPage = lazyPage(() => import('../pages/AdministrationPage'));
 const BomsPage = lazyPage(() => import('../pages/BomsPage'));
 const InventoryPage = lazyPage(() => import('../pages/InventoryPage'));
+const MaintenancePage = lazyPage(() => import('../pages/MaintenancePage'));
 const ManufacturingPage = lazyPage(() => import('../pages/ManufacturingPage'));
 const OverviewPage = lazyPage(() => import('../pages/OverviewPage'));
 const PlanningPage = lazyPage(() => import('../pages/PlanningPage'));
@@ -209,6 +211,24 @@ export const routes: PageRoute[] = [
     page: WorkCentersPage,
     description: 'A shared view of your machines and work centers.',
     action: { label: 'New work center', roles: ['PLANNER'], run: (workspace) => createWorkCenter(workspace) },
+  },
+  {
+    path: '/maintenance',
+    label: 'Maintenance',
+    icon: Wrench,
+    roles: ['ADMIN', 'PLANNER', 'MAINTENANCE', 'OPERATOR'],
+    group: 'MANUFACTURING',
+    page: MaintenancePage,
+    description: 'Keep every machine ready for the next run.',
+    exportRows: (data) => [...(data.maintenance?.breakdowns || []), ...(data.maintenance?.overdue || [])],
+    action: {
+      label: 'Request maintenance',
+      roles: ['OPERATOR', 'PLANNER', 'MAINTENANCE'],
+      // Loaded on demand so the maintenance feature stays out of the entry chunk.
+      run: (workspace) => {
+        void import('../features/maintenance/forms').then((forms) => forms.requestMaintenance(workspace));
+      },
+    },
   },
   {
     path: '/products',

@@ -19,7 +19,8 @@ import org.springframework.stereotype.Component;
 /** Items through {@link ItemService#create} (the same rules, idempotency and audit as {@code POST /api/items}). */
 @Component
 class ItemImport implements ImportKind {
-    static final List<String> TYPES = List.of("RAW_MATERIAL", "PACKAGING", "SEMI_FINISHED", "FINISHED_GOOD");
+    static final List<String> TYPES =
+            List.of("RAW_MATERIAL", "PACKAGING", "SEMI_FINISHED", "FINISHED_GOOD", "SPARE_PART");
     private static final Map<String, String> COLUMNS = Map.of(
             "sku", "sku",
             "name", "name",

@@ -34,7 +34,8 @@ run by `target/surefire-reports/*.xml`.
 | `manufacturing` | Manufacturing-order lifecycle: snapshot, approval (V9: per the `MANUFACTURING_ORDER` approval policy), reservation, issue, start/pause/resume, output, close/cancel; parent/child orders (V7: `ChildPlanning` shortages, `OrderTreeService` child orders, `OrderTreeQuery` order tree); the paged order list (V9: `ManufacturingQuery`); V10 operations: `OperationPlanner` (routing snapshot at creation and the lifecycle hooks `ManufacturingService` calls: release, pause, cancel, output limits; work-center RUNNING/IDLE), `OperationService` (shop-floor start/pause/resume/setup-done/report/finish, time logs, skill check), `OperationQuery` (order operations, queue per work center, work-center summary, time logs) |
 | `routing` | V10 master data and working time: versioned routings (`RoutingService` draft/approve/copy/make-current, `RoutingQuery` list/detail/compare), shift calendars (`ShiftCalendarService` patterns/calendars/exceptions/assignment, `CalendarQuery`, and **`CalendarService`**, the public working-time service: `availableMinutes(tenant, machineId, date)`, `workingIntervals(tenant, machineId, from, to)`, `availability(...)`), skills (`SkillService`, `SkillQuery`, public `SkillRules.check`) |
 | `reporting` | `GET /api/state` (`StateQuery` + the `StateContributor` contract), `GET /api/manufacturing/{id}` (`OrderDetailsQuery`), cross-domain sections: inventory (lots, ledger), MRP, dashboard, audit/sync, finance; multi-level MRP (V7: `MrpPlanner` engine, `PlanningStateSections` with the isolated `incomingPurchaseSupply(tenant)` query, `PlanningQuery`); Costs & reports (V9: `ReportQuery` paged cost register and journal, `ReportsController`) |
-| `demo` | `DemoDatabase` (embedded PostgreSQL for the `demo`/`test` profiles), `DemoSeed` (demo tenant, or first-start bootstrap tenant outside demo), `DemoPersonas`, `IntegrationDemoSeed` (V9), `RoutingDemoSeed` (V10) |
+| `maintenance` | V11 maintenance and downtime: `DowntimeService` (report/close/correct downtime), `WorkOrderService` (corrective request, independent approval, schedule, start/progress/labour/complete, cancel, labour-rate settings), `SparePartService` (FIFO issue and returns of `SPARE_PART` items), `PlanService` (preventive plans, idempotent generation, run-hour meter), `MachineStatusService` (planner status correction), `MaintenanceRules` (shared rules: machine MAINTENANCE/IDLE transitions and their history, downtime insert/close, checklists), `MaintenanceQuery` + `MaintenanceMetrics` (paged read model, MTBF/MTTR/Pareto), `MaintenanceStateSections` |
+| `demo` | `DemoDatabase` (embedded PostgreSQL for the `demo`/`test` profiles), `DemoSeed` (demo tenant, or first-start bootstrap tenant outside demo), `DemoPersonas` (V11 adds `MAINTENANCE`), `IntegrationDemoSeed` (V9), `RoutingDemoSeed` (V10), `MaintenanceDemoSeed` (V11) |
 | `admin` | V8 administration (ADMIN only): `UserAdminService` + `UserQuery` (edit, deactivate/reactivate, temporary passwords, directory), `ApprovalPolicyService` (public `evaluate(tenant, documentType, amount, creatorId)` → `Decision`, `approverDecision`, `autoApproval`; used by `inventory` for stock adjustments and, since V9, by `manufacturing` and `procurement` for order approval) + `ApprovalPolicyController` (`GET /api/approval-policies` for every role), `ImportService` with `ImportKind`s `ItemImport`, `PartnerImport`, `OpeningStockImport` and the `CsvFile` reader, `AuditQuery` (paged trail, facets, streamed CSV export), `PeriodService` (close/reopen accounting periods), `AdminController` |
 
 A domain package contains, by convention:
@@ -51,7 +52,7 @@ A domain package contains, by convention:
 Dependency direction: domain packages → `platform` and `reporting` (contract only); `reporting` → `platform`;
 `demo` → domain services. Domains never call each other's services; cross-domain effects are SQL on the shared,
 tenant-scoped schema inside the same transaction (for example, `quality` completes a manufacturing order).
-Two deliberate exceptions: `admin` imports call the public `catalog.ItemService` / `catalog.CatalogService#partner`
+`maintenance` writes `machines.status` (only the transitions into and out of `MAINTENANCE` and planner corrections) and reads `manufacturing_orders` (refuses to start maintenance while an order is in progress on the machine) through SQL in its own transactions. Two deliberate exceptions: `admin` imports call the public `catalog.ItemService` / `catalog.CatalogService#partner`
 commands (joining the import's transaction), and domains that require approvals ask `admin.ApprovalPolicyService`
 (non-transactional reads inside the caller's transaction: `inventory` for stock adjustments, `manufacturing` for orders, `procurement` for purchase orders).
 V10 adds read-only calls from `manufacturing` to `routing.SkillRules` (operation skill check) and `routing.CalendarService`
@@ -82,6 +83,7 @@ Route ownership:
 | `reporting.ReportingController` | `GET /state`, `GET /manufacturing/{id}` |
 | `reporting.PlanningController` | `GET /planning/mrp` |
 | `reporting.ReportsController` | `GET /reports/costs`, `/reports/journal` (V9, ADMIN/PLANNER) |
+| `maintenance.MaintenanceController` | V11: `GET /maintenance/work-orders`, `/maintenance/work-orders/{id}`, `/maintenance/plans`, `/maintenance/plans/{id}`, `/maintenance/downtime`, `/maintenance/machines`, `/maintenance/machines/{id}`, `/maintenance/machines/{id}/history`, `/maintenance/metrics`, `/maintenance/spare-parts`, `/maintenance/technicians`, `/maintenance/settings`; `POST /maintenance/work-orders`, `/maintenance/work-orders/{id}/approve`, `/schedule`, `/start`, `/progress`, `/labour`, `/parts`, `/parts/{movementId}/return`, `/complete`, `/cancel`, `/maintenance/plans`, `/maintenance/plans/{id}`, `/maintenance/plans/generate`, `/maintenance/downtime`, `/maintenance/downtime/{id}/close`, `/maintenance/downtime/{id}/correct`, `/maintenance/machines/{id}/status`, `/maintenance/machines/{id}/meter`, `/maintenance/settings` |
 
 ## How to add a feature module
 
@@ -285,6 +287,7 @@ annotate contributors with `@Transactional`. Existing keys, in order:
 | 310 | `financial` (ADMIN, PLANNER) | reporting (finance) |
 | 1300 | `salesLines` (open lines of confirmed orders, for planning; `quantity` is the base quantity, V9 adds `entered_quantity` and `unit`) | sales |
 | 1700 | `bomCosts` (multi-level standard-cost roll-up per revision; V7) | catalog |
+| 2100 | `maintenance` (V11: `open_breakdowns`, `open_downtime`, `overdue_plans`, `awaiting_approval`, `in_progress` and up to five rows each of open `breakdowns` and `overdue` plans, for the overview and attention center) | maintenance |
 
 V9 removed keys no screen reads any more: `users` (110), `receipts` (240, `GET /api/purchases/receipts`), `ledger` (250, `GET /api/inventory/ledger`) and `journal` (320, `GET /api/reports/journal`). The Manufacturing orders, Shop floor, Quality control and Costs & reports screens read the V9 paged endpoints; `orders` and `inspections` stay for the dashboard and attention counts. V9 contributes no new keys (range 1900–1999 unused). V10 contributes no keys either (range 2000–2099 unused): routings,
 calendars, skills and operations are read from their own endpoints; `orders` rows gain the columns `routing_id` and
@@ -333,6 +336,10 @@ The database, not the Java code, is the last line of defence:
 | `mo_operation_snapshot` (V10) | The planned columns of a manufacturing-order operation (sequence, planned work center, quantity, setup/run minutes, crew, skill) never change; `DONE`/`CANCELLED` operations are immutable; operations are never deleted. |
 | `mo_time_log_closed_immutable` (V10) | A closed operation time log cannot change and no time log can be deleted (only an open log gets its end). Partial unique indexes allow one open log per operation and per work center. |
 | `mo_operation_reports_immutable` (V10) | Operation quantity reports are posted history (`reject_history_mutation()`). |
+| `downtime_event_guard` (V11) | `protect_downtime_event()`: downtime events are never deleted; SUPERSEDED/VOID events are frozen; a CLOSED event may only become SUPERSEDED with every other column unchanged (a correction inserts the corrected event); an OPEN event keeps its machine and start. |
+| `downtime_no_overlap` (V11) | `reject_overlapping_downtime()`: effective (OPEN/CLOSED) events of one machine never overlap (`[start, end)`, an open event runs to infinity); *"Downtime overlaps DT-… on the same machine"*. |
+| `maintenance_work_order_immutable` (V11) | Completed and cancelled maintenance work orders cannot be changed or deleted. |
+| `maintenance_labour_immutable`, `maintenance_part_movements_immutable`, `machine_meter_readings_immutable`, `machine_status_changes_immutable` (V11) | `reject_history_mutation()`: labour entries, spare-part issues/returns, meter readings and machine status history are append-only. |
 
 A new table of posted history gets the same protection by reusing the function:
 `CREATE TRIGGER <table>_immutable BEFORE UPDATE OR DELETE ON <table> FOR EACH ROW EXECUTE FUNCTION reject_history_mutation();`.
@@ -352,10 +359,14 @@ documents, `demo.ProcurementDemoSeed` (`ORDER + 60`) the V6 purchase orders (one
 variance and a supplier return, and `demo.PlanningDemoSeed` (`ORDER + 70`) the V7 two-level bottle/preform structure,
 an R02 draft copy, an approved parent order with a preform child order and a draft parent that drives planned
 production, and `demo.IntegrationDemoSeed` (`ORDER + 90`) a confirmed sales order with a bottle line entered in
-cartons (`box` = 50 pcs, V9), and `demo.RoutingDemoSeed` (`ORDER + 100`) the V10 skills, shift calendars (two-shift
+cartons (`box` = 50 pcs, V9), `demo.RoutingDemoSeed` (`ORDER + 100`) the V10 skills, shift calendars (two-shift
 plant default with a Poya holiday and Sunday overtime, three shifts on the blow moulders), approved routings for FG-001,
 SF-001 and FG-101 (plus an R02 draft) and released orders on the shop floor (FG-001 with operation 10 done and
-operation 20 running; preform and PET-bottle orders with their first operation ready). A feature that needs
+operation 20 running; preform and PET-bottle orders with their first operation ready), and
+`demo.MaintenanceDemoSeed` (`ORDER + 110`) the V11 maintenance technician persona
+(also added to an existing demo database), two spare parts with stock, a week of closed downtime of different reasons,
+preventive plans for IM-01 (scheduled order generated) and BM-01 (overdue), a completed corrective order on PK-01 with a
+spare part, labour and a closed breakdown, and a corrective order in progress on IM-03 with its breakdown open. A feature that needs
 demo data adds its own runner, ordered after the base seed and idempotent (it also runs against an existing
 `.local/postgres` demo database on the next start):
 
@@ -432,6 +443,12 @@ What the base provides:
 Cover for every command: the happy path with its ledger/journal/audit effects, role denial (403), another tenant's
 record (404), each `require` rule (409), the idempotent replay and key reuse with a different body, and rollback of
 partial work on failure.
+
+### Ledger reasons and journal accounts added by features
+
+| Feature | Stock ledger `reason` | Journal accounts |
+|---|---|---|
+| V11 maintenance | `MAINTENANCE_ISSUE` (spare parts to a work order, FIFO from released lots), `MAINTENANCE_RETURN` (unused parts back into the issuing lot at the issue's unit value) | `MAINTENANCE_EXPENSE` (Dr on issue, Cr on return, against the item's inventory account: `FG_INVENTORY` for finished goods, otherwise `RAW_INVENTORY`); `MAINTENANCE_LABOUR_CLEARING` (Cr on labour at the tenant labour rate, Dr when hours are reversed) |
 
 ## Error responses (current behaviour)
 

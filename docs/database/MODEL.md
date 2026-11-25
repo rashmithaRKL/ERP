@@ -196,6 +196,39 @@ erDiagram
 | Keyset indexes | `mo_tenant_created_id`, `inspections_tenant_created_id`, `journal_entries_tenant_created_id` on `(tenant_id, created_at DESC, id DESC)`; `journal_lines(tenant_id, entry_id)` and `(tenant_id, account)` for `GET /manufacturing/orders`, `/quality/inspections`, `/reports/costs` and `/reports/journal`. |
 | Approval policies (no schema change) | The V8 `approval_policies` rows now also govern manufacturing orders (evaluated on creation with `estimated_cost`) and purchase orders (on submission with `total`). An order the policy auto-approves is stored `APPROVED`; a purchase order then has `approved_at` set and `approved_by` empty, and the audit trail records `MO_AUTO_APPROVED` / `PO_AUTO_APPROVED`. |
 
+## Maintenance and downtime (`V11__maintenance_downtime.sql`)
+
+```mermaid
+erDiagram
+    MACHINES ||--o{ DOWNTIME_EVENTS : "stops"
+    MACHINES ||--o{ MAINTENANCE_PLANS : "preventive plans"
+    MACHINES ||--o{ MAINTENANCE_WORK_ORDERS : "maintained by"
+    MACHINES ||--o{ MACHINE_METER_READINGS : "run hours"
+    MACHINES ||--o{ MACHINE_STATUS_CHANGES : "status history"
+    MAINTENANCE_PLANS ||--o{ MAINTENANCE_WORK_ORDERS : "generates (one per due date)"
+    MAINTENANCE_WORK_ORDERS ||--o{ DOWNTIME_EVENTS : "covers"
+    MAINTENANCE_WORK_ORDERS ||--o{ MAINTENANCE_LABOUR : "labour"
+    MAINTENANCE_WORK_ORDERS ||--o{ MAINTENANCE_PART_MOVEMENTS : "spare parts"
+    LOTS ||--o{ MAINTENANCE_PART_MOVEMENTS : "issued from / returned to"
+    DOWNTIME_EVENTS ||--o| DOWNTIME_EVENTS : "corrects"
+```
+
+| Table / change | Purpose and rules |
+|---|---|
+| `users.role` | `users_role_check` adds `MAINTENANCE` (executes work orders, issues spare parts). Approver roles of `approval_policies` are unchanged. |
+| `items.type`, `item_templates.type` | `items_type_check` / `item_templates_type_check` add `SPARE_PART`: ordinary stock items (lots, ledger, receipts with incoming inspection, counts; valued in `RAW_INVENTORY`). The catalog refuses them as BOM components, so MRP only replenishes them to their reorder level (action `PURCHASE`). |
+| `downtime_events` | One stop of a machine: `number` (`DT-…`), `machine_id`, `reason` ∈ `BREAKDOWN`, `PLANNED_MAINTENANCE`, `CHANGEOVER`, `MATERIAL_SHORTAGE`, `NO_OPERATOR`, `QUALITY_HOLD`, `UTILITIES`, `OTHER`; `planned` (`BREAKDOWN` never, `PLANNED_MAINTENANCE` always: `CHECK`s); `started_at`, `ended_at timestamptz` (NULL while `OPEN`; `ended_at > started_at`); `status` ∈ `OPEN`, `CLOSED`, `SUPERSEDED`, `VOID`; optional `manufacturing_order_id`, `work_order_id`; `notes`, `reported_by`, `closed_by/at`; `corrects_id` + `correction_reason` (a correcting entry; unique per corrected event). Trigger `downtime_event_guard`: no deletes; SUPERSEDED/VOID rows are frozen; a CLOSED row may only become SUPERSEDED (all other columns unchanged); an OPEN row keeps its machine and start. Trigger `downtime_no_overlap`: effective events (OPEN/CLOSED) of one machine never overlap (`[start, end)`, open = infinity). Indexes by `(tenant, started_at, id)`, machine, reason, open events and work order. |
+| `machine_downtime` (view) | The effective downtime record: `downtime_events` with status `OPEN` or `CLOSED` (`id, tenant_id, number, machine_id, reason, planned, started_at, ended_at, status, manufacturing_order_id, work_order_id, notes, reported_by, created_at, closed_by, closed_at, corrects_id`). **Finite-capacity scheduling (V13) and OEE (V15) read this view**, never the raw table. |
+| `maintenance_work_orders` | `number` (`MWO-…`), `type` `CORRECTIVE`/`PREVENTIVE` (preventive ⇔ `plan_id` and `due_date` set), `machine_id`, `title`, `description`, `priority` (`NORMAL`/`HIGH`/`URGENT`), `status` `REQUESTED` → `APPROVED` → `SCHEDULED` → `IN_PROGRESS` → `COMPLETED`, or `CANCELLED`; `scheduled_start/scheduled_end timestamptz` (both or neither, end after start; required for SCHEDULED), `assignee_id`, `checklist jsonb` (`[{task, result: PASS/FAIL/NA/null, note}]`, a snapshot of the plan), `findings`, `actions`, `labour_hours`, `labour_cost`, `parts_cost` (net of returns), `meter_reading`, requester/approver/starter/completer/canceller with timestamps, `cancel_reason`. Unique `(tenant, plan_id, due_date)` (generation is idempotent per occurrence) and one `IN_PROGRESS` order per machine (partial unique index). Trigger `maintenance_work_order_immutable` freezes COMPLETED and CANCELLED orders. **V13 blocks capacity with `scheduled_start/scheduled_end` of APPROVED/SCHEDULED/IN_PROGRESS orders** (index `maintenance_work_orders_tenant_window`). |
+| `maintenance_plans` | `number` (`PM-…`), `machine_id`, `title`, `description`, `checklist jsonb` (`["task", …]`), `interval_days` (1–3,650, always set) and optional `interval_hours` (run hours: whichever comes first), `estimated_hours` (window length of generated orders), `priority`, `next_due_date`, `meter_at_last_service`, `last_completed_at`, `active`. Completion sets `next_due_date` = completion day (Asia/Colombo) + interval and the meter baseline to the latest reading; cancelling a generated order moves the due date on by one interval; a meter reading reaching `interval_hours` pulls `next_due_date` to today. |
+| `maintenance_labour` | Immutable labour entries: `technician_id`, `hours` (± ≤ 1,000; negatives reverse), `rate` (snapshot of the tenant rate), `cost`, `notes`. Each posts Dr `MAINTENANCE_EXPENSE` / Cr `MAINTENANCE_LABOUR_CLEARING` (reversed for negative hours). |
+| `maintenance_part_movements` | Immutable `ISSUE` / `RETURN` (`returns_id` → the issue) rows: `lot_id`, `item_id`, `quantity`, `value_amount`. Issues consume released unreserved lots oldest first through `stock_ledger` reason `MAINTENANCE_ISSUE` and post Dr `MAINTENANCE_EXPENSE` / Cr the item's inventory account; returns put the quantity back into the same lot at the issue's unit value (reason `MAINTENANCE_RETURN`) with the reversed journal. Both are refused in a closed period. |
+| `machine_meter_readings` | Immutable run-hour readings per machine (never decreasing). |
+| `machine_status_changes` | Immutable history of the status changes maintenance makes: `from_status`, `to_status`, `source` (`MAINTENANCE_ORDER`: start → MAINTENANCE, completion → IDLE; `MANUAL`: a planner's correction to IDLE/RUNNING with a reason), `reference`, `changed_by/at`. Production-driven RUNNING/IDLE changes are not recorded here. |
+| `maintenance_settings` | Per tenant `labour_rate` (LKR per hour; default 1,500 when no row exists), `updated_by/at`. |
+
+Downtime does not change `machines.status`; only maintenance work orders (start/complete) and planner corrections do. `ManufacturingService` still refuses issue/start of an MO on a MAINTENANCE machine; starting maintenance is refused while an MO is `IN_PROGRESS`/`PARTIALLY_COMPLETED` on the machine.
+
 Money/quantity precision is six decimal places (maximum 14 integer digits in the database, stricter API amount limits). UI formatting never changes stored values. SQL indexes cover owner/status/date list and allocation access. Current workspace list snapshots cap at 250 rows (BOM lines 1,000), with pagination inside that bound. This is explicitly not the large-ledger reporting solution; replace capped lists with server cursor pagination and background export before scale.
 
 Flyway validates checksums at startup and runs PostgreSQL transactional DDL. Never edit an applied migration. Add a new numbered migration and rehearse it against a restored backup. Posted financial and inventory rows have no delete/overwrite path. Retention/archive cutoffs, erasure handling and access to old records require an organization-approved policy and implementation before commercial data retention commitments.

@@ -10,7 +10,16 @@ export const ADMIN = 'admin';
 /** One server page of a keyset-paged list: pass `next` as `before` for the following page. */
 export type Page = { items: Row[]; next: string; summary?: Record<string, Value> };
 
-export const ROLES = ['ADMIN', 'PLANNER', 'WAREHOUSE', 'OPERATOR', 'QUALITY', 'SALES', 'VIEWER'] as const;
+export const ROLES = [
+  'ADMIN',
+  'PLANNER',
+  'WAREHOUSE',
+  'OPERATOR',
+  'QUALITY',
+  'SALES',
+  'VIEWER',
+  'MAINTENANCE',
+] as const;
 /** Roles that can be named approvers in an approval policy (ADMIN always approves). */
 export const APPROVER_ROLES = ['PLANNER', 'WAREHOUSE', 'QUALITY', 'SALES', 'OPERATOR'] as const;
 export const ROLE_LABELS: Record<string, string> = {
@@ -21,6 +30,7 @@ export const ROLE_LABELS: Record<string, string> = {
   QUALITY: 'Quality',
   SALES: 'Sales',
   VIEWER: 'Viewer',
+  MAINTENANCE: 'Maintenance',
 };
 export const PASSWORD_MIN = 16;
 export const PASSWORD_MAX = 128;

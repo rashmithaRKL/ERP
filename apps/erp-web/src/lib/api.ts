@@ -28,6 +28,18 @@ export type State = {
   // `ledger` (GET /inventory/ledger) and `journal` (GET /reports/journal).
   /** V7: standard-cost roll-up of every BOM revision through all levels (BOM cards). */
   bomCosts?: BomCost[];
+  /** V11: maintenance attention counts; screens read `GET /maintenance/**`. */
+  maintenance?: MaintenanceSummary;
+};
+/** `maintenance` state key (V11): counts plus up to five open breakdowns and overdue preventive plans. */
+export type MaintenanceSummary = {
+  open_breakdowns: number;
+  open_downtime: number;
+  overdue_plans: number;
+  awaiting_approval: number;
+  in_progress: number;
+  breakdowns: Row[];
+  overdue: Row[];
 };
 /** One `bomCosts` row: per-unit material cost by level, total, depth and multi-level warnings. */
 export type BomCost = {

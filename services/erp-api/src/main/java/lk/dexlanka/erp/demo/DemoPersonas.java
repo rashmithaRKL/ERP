@@ -19,6 +19,9 @@ public final class DemoPersonas {
             new Actor("demo-warehouse", TENANT, "demo.warehouse@dexlanka.test", "Amal Jayasinghe", "WAREHOUSE");
     public static final Actor QUALITY =
             new Actor("demo-quality", TENANT, "demo.quality@dexlanka.test", "Tharushi Senanayake", "QUALITY");
+    /** V11: created by {@code maintenance.MaintenanceDemoSeed} (also in an existing demo database). */
+    public static final Actor MAINTENANCE = new Actor(
+            "demo-maintenance", TENANT, "demo.maintenance@dexlanka.test", "Ruwan Wickramasinghe", "MAINTENANCE");
 
     private DemoPersonas() {}
 }

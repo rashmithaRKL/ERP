@@ -24,8 +24,11 @@ import java.util.Map;
 public final class ItemCommands {
     private ItemCommands() {}
 
-    /** Item type codes. {@code SEMI_FINISHED}: an intermediate (sub-assembly) that is produced and consumed again. */
-    public static final String ITEM_TYPES = "RAW_MATERIAL|SEMI_FINISHED|FINISHED_GOOD|PACKAGING";
+    /**
+     * Item type codes. {@code SEMI_FINISHED}: an intermediate (sub-assembly) that is produced and consumed again;
+     * {@code SPARE_PART} (V11): maintenance stock, never a BOM component (replenished to its reorder level only).
+     */
+    public static final String ITEM_TYPES = "RAW_MATERIAL|SEMI_FINISHED|FINISHED_GOOD|PACKAGING|SPARE_PART";
 
     public static final String UNIT_CODE = "[A-Za-z0-9]{1,12}";
     public static final String UNIT_KINDS = "MASS|VOLUME|LENGTH|AREA|COUNT|PACKAGE";

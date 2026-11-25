@@ -16,7 +16,7 @@ import java.util.List;
  * serialized in declaration order, the idempotency payload hash: never rename or reorder them.
  */
 public final class AdminCommands {
-    public static final String ROLES = "ADMIN|PLANNER|WAREHOUSE|OPERATOR|QUALITY|SALES|VIEWER";
+    public static final String ROLES = "ADMIN|PLANNER|WAREHOUSE|OPERATOR|QUALITY|SALES|VIEWER|MAINTENANCE";
     public static final String APPROVER_ROLES = "PLANNER|WAREHOUSE|QUALITY|SALES|OPERATOR";
     public static final String DOCUMENT_TYPES = "MANUFACTURING_ORDER|PURCHASE_ORDER|STOCK_ADJUSTMENT";
     public static final String IMPORT_KINDS = "ITEMS|PARTNERS|OPENING_STOCK";

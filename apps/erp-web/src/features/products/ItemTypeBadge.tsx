@@ -7,9 +7,10 @@ const tones: Record<string, string> = {
   SEMI_FINISHED: 'violet',
   FINISHED_GOOD: 'blue',
   PACKAGING: 'teal',
+  SPARE_PART: 'gray',
 };
 
-/** Item type chip with one stable colour per type (raw, semi-finished, finished, packaging). */
+/** Item type chip with one stable colour per type (raw, semi-finished, finished, packaging, spare part). */
 export function ItemTypeBadge({ type }: { type: unknown }) {
   const code = text(type);
   return (

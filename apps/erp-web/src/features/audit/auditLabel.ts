@@ -126,6 +126,28 @@ const LABELS: Record<string, string> = {
   AUDIT_EXPORTED: 'Audit trail exported',
   PERIOD_CLOSED: 'Accounting period closed',
   PERIOD_REOPENED: 'Accounting period reopened',
+  // Maintenance and downtime (V11).
+  DOWNTIME_REPORTED: 'Downtime reported',
+  DOWNTIME_CLOSED: 'Downtime closed',
+  DOWNTIME_CORRECTED: 'Downtime corrected',
+  DOWNTIME_VOIDED: 'Downtime withdrawn',
+  MWO_REQUESTED: 'Maintenance requested',
+  MWO_APPROVED: 'Maintenance approved',
+  MWO_SCHEDULED: 'Maintenance scheduled',
+  MWO_GENERATED: 'Preventive order generated',
+  MWO_STARTED: 'Maintenance started',
+  MWO_PROGRESS_RECORDED: 'Maintenance progress recorded',
+  MWO_LABOUR_LOGGED: 'Maintenance labour logged',
+  MWO_PARTS_ISSUED: 'Spare parts issued',
+  MWO_PARTS_RETURNED: 'Spare parts returned',
+  MWO_COMPLETED: 'Maintenance completed',
+  MWO_CANCELLED: 'Maintenance cancelled',
+  PM_PLAN_CREATED: 'Maintenance plan created',
+  PM_PLAN_UPDATED: 'Maintenance plan updated',
+  PM_ORDERS_GENERATED: 'Preventive orders generated',
+  MACHINE_METER_RECORDED: 'Run-hour meter recorded',
+  MACHINE_STATUS_CORRECTED: 'Machine status corrected',
+  MAINTENANCE_SETTINGS_UPDATED: 'Maintenance labour rate updated',
 };
 
 /** Fallback: a trailing bare verb (e.g. the `CANCEL` in `PO_CANCEL`) is shown in the past tense. */

@@ -1049,7 +1049,8 @@
                 "planner",
                 "warehouse",
                 "operator",
-                "quality"
+                "quality",
+                "maintenance"
               ],
               "default": "admin"
             }
@@ -7120,6 +7121,1318 @@
           }
         }
       }
+    },
+    "/maintenance/work-orders": {
+      "get": {
+        "summary": "Maintenance work orders, newest first; `{items, next, counts}` (all roles)",
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "description": "OPEN (REQUESTED…IN_PROGRESS) or REQUESTED, APPROVED, SCHEDULED, IN_PROGRESS, COMPLETED, CANCELLED",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "type",
+            "in": "query",
+            "required": false,
+            "description": "CORRECTIVE or PREVENTIVE",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "machine",
+            "in": "query",
+            "required": false,
+            "description": "Machine id",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "description": "Search number, title or machine code",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Page size 1-200 (default 25)",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200,
+              "default": 25
+            }
+          },
+          {
+            "name": "before",
+            "in": "query",
+            "required": false,
+            "description": "Cursor: the `next` value of the previous page",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "JSON object; lists are `{items, next}` (keyset pagination)"
+          },
+          "404": {
+            "description": "Missing or unowned"
+          }
+        }
+      },
+      "post": {
+        "summary": "Request corrective maintenance, optionally with an open BREAKDOWN (OPERATOR/PLANNER/MAINTENANCE)",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Committed result; retry with same key returns prior result"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Role/CSRF denied"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "State/overlap/stock/period/self-approval/idempotency conflict"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MaintenanceRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/maintenance/work-orders/{id}": {
+      "get": {
+        "summary": "Work order with checklist, parts, labour, downtime, journal and activity",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "JSON object; lists are `{items, next}` (keyset pagination)"
+          },
+          "404": {
+            "description": "Missing or unowned"
+          }
+        }
+      }
+    },
+    "/maintenance/work-orders/{id}/approve": {
+      "post": {
+        "summary": "Approve (a different person than the requester), optionally scheduled (PLANNER)",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Committed result; retry with same key returns prior result"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Role/CSRF denied"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "State/overlap/stock/period/self-approval/idempotency conflict"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MaintenanceApproval"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/maintenance/work-orders/{id}/schedule": {
+      "post": {
+        "summary": "Set or move the maintenance window and assignee (PLANNER)",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Committed result; retry with same key returns prior result"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Role/CSRF denied"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "State/overlap/stock/period/self-approval/idempotency conflict"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MaintenanceSchedule"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/maintenance/work-orders/{id}/start": {
+      "post": {
+        "summary": "Start work: machine to MAINTENANCE, covered by open downtime; refused while an MO runs on the machine (MAINTENANCE)",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Committed result; retry with same key returns prior result"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Role/CSRF denied"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "State/overlap/stock/period/self-approval/idempotency conflict"
+          }
+        }
+      }
+    },
+    "/maintenance/work-orders/{id}/progress": {
+      "post": {
+        "summary": "Checklist results, findings and actions while in progress (MAINTENANCE)",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Committed result; retry with same key returns prior result"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Role/CSRF denied"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "State/overlap/stock/period/self-approval/idempotency conflict"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MaintenanceProgress"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/maintenance/work-orders/{id}/labour": {
+      "post": {
+        "summary": "Labour hours at the maintenance labour rate, journalized (MAINTENANCE)",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Committed result; retry with same key returns prior result"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Role/CSRF denied"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "State/overlap/stock/period/self-approval/idempotency conflict"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MaintenanceLabour"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/maintenance/work-orders/{id}/parts": {
+      "post": {
+        "summary": "Issue a spare part from released lots, FIFO (ledger MAINTENANCE_ISSUE) (MAINTENANCE)",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Committed result; retry with same key returns prior result"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Role/CSRF denied"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "State/overlap/stock/period/self-approval/idempotency conflict"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IssueSparePart"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/maintenance/work-orders/{id}/parts/{movementId}/return": {
+      "post": {
+        "summary": "Return unused parts of one issue (ledger MAINTENANCE_RETURN) (MAINTENANCE)",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "movementId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Committed result; retry with same key returns prior result"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Role/CSRF denied"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "State/overlap/stock/period/self-approval/idempotency conflict"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReturnSparePart"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/maintenance/work-orders/{id}/complete": {
+      "post": {
+        "summary": "Complete: machine to IDLE, downtime closed, preventive plan rescheduled (MAINTENANCE)",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Committed result; retry with same key returns prior result"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Role/CSRF denied"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "State/overlap/stock/period/self-approval/idempotency conflict"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CompleteMaintenance"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/maintenance/work-orders/{id}/cancel": {
+      "post": {
+        "summary": "Cancel before work starts; parts must be returned; preventive: skip the occurrence (PLANNER)",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Committed result; retry with same key returns prior result"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Role/CSRF denied"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "State/overlap/stock/period/self-approval/idempotency conflict"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CancelMaintenance"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/maintenance/plans": {
+      "get": {
+        "summary": "Preventive plans by next due date; `{items, next, counts, today}` (all roles)",
+        "parameters": [
+          {
+            "name": "machine",
+            "in": "query",
+            "required": false,
+            "description": "Machine id",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "due",
+            "in": "query",
+            "required": false,
+            "description": "`overdue` or `due` (within `horizon` days)",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "horizon",
+            "in": "query",
+            "required": false,
+            "description": "Days for `due=due` (default 7)",
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 365
+            }
+          },
+          {
+            "name": "active",
+            "in": "query",
+            "required": false,
+            "description": "`true` (default), `false` or `all`",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Page size 1-200 (default 25)",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200,
+              "default": 25
+            }
+          },
+          {
+            "name": "before",
+            "in": "query",
+            "required": false,
+            "description": "Cursor: the `next` value of the previous page",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "JSON object; lists are `{items, next}` (keyset pagination)"
+          },
+          "404": {
+            "description": "Missing or unowned"
+          }
+        }
+      },
+      "post": {
+        "summary": "Create a preventive plan (PLANNER)",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Committed result; retry with same key returns prior result"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Role/CSRF denied"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "State/overlap/stock/period/self-approval/idempotency conflict"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MaintenancePlan"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/maintenance/plans/generate": {
+      "post": {
+        "summary": "Generate preventive work orders for due plans; idempotent per plan and due date (PLANNER)",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Committed result; retry with same key returns prior result"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Role/CSRF denied"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "State/overlap/stock/period/self-approval/idempotency conflict"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GeneratePreventive"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/maintenance/plans/{id}": {
+      "get": {
+        "summary": "Plan with its last 20 work orders and activity",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "JSON object; lists are `{items, next}` (keyset pagination)"
+          },
+          "404": {
+            "description": "Missing or unowned"
+          }
+        }
+      },
+      "post": {
+        "summary": "Update a plan (PLANNER)",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Committed result; retry with same key returns prior result"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Role/CSRF denied"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "State/overlap/stock/period/self-approval/idempotency conflict"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MaintenancePlanUpdate"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/maintenance/downtime": {
+      "get": {
+        "summary": "Downtime events, newest start first (effective events unless `history=true`)",
+        "parameters": [
+          {
+            "name": "machine",
+            "in": "query",
+            "required": false,
+            "description": "Machine id",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "reason",
+            "in": "query",
+            "required": false,
+            "description": "BREAKDOWN, PLANNED_MAINTENANCE, CHANGEOVER, MATERIAL_SHORTAGE, NO_OPERATOR, QUALITY_HOLD, UTILITIES, OTHER",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "description": "Inclusive Asia/Colombo date of the start",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "description": "Inclusive Asia/Colombo date of the start",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "description": "OPEN or CLOSED",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "history",
+            "in": "query",
+            "required": false,
+            "description": "Include SUPERSEDED and VOID events",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Page size 1-200 (default 25)",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200,
+              "default": 25
+            }
+          },
+          {
+            "name": "before",
+            "in": "query",
+            "required": false,
+            "description": "Cursor: the `next` value of the previous page",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "JSON object; lists are `{items, next}` (keyset pagination)"
+          },
+          "404": {
+            "description": "Missing or unowned"
+          }
+        }
+      },
+      "post": {
+        "summary": "Report downtime; overlapping downtime of the same machine is refused (OPERATOR/PLANNER/MAINTENANCE)",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Committed result; retry with same key returns prior result"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Role/CSRF denied"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "State/overlap/stock/period/self-approval/idempotency conflict"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReportDowntime"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/maintenance/downtime/{id}/close": {
+      "post": {
+        "summary": "Close an open downtime event (OPERATOR/PLANNER/MAINTENANCE)",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Committed result; retry with same key returns prior result"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Role/CSRF denied"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "State/overlap/stock/period/self-approval/idempotency conflict"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CloseDowntime"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/maintenance/downtime/{id}/correct": {
+      "post": {
+        "summary": "Correct or withdraw a closed event through a correcting entry (PLANNER)",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Committed result; retry with same key returns prior result"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Role/CSRF denied"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "State/overlap/stock/period/self-approval/idempotency conflict"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CorrectDowntime"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/maintenance/machines": {
+      "get": {
+        "summary": "Every machine with open downtime, open orders and next preventive due date",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "JSON object; lists are `{items, next}` (keyset pagination)"
+          },
+          "404": {
+            "description": "Missing or unowned"
+          }
+        }
+      }
+    },
+    "/maintenance/machines/{id}": {
+      "get": {
+        "summary": "Machine with open downtime, orders, plans, meter, 30-day MTBF/MTTR and recent history",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "JSON object; lists are `{items, next}` (keyset pagination)"
+          },
+          "404": {
+            "description": "Missing or unowned"
+          }
+        }
+      }
+    },
+    "/maintenance/machines/{id}/history": {
+      "get": {
+        "summary": "Downtime, work orders, status changes and meter readings of a machine, newest first",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Page size 1-200 (default 25)",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200,
+              "default": 25
+            }
+          },
+          {
+            "name": "before",
+            "in": "query",
+            "required": false,
+            "description": "Cursor: the `next` value of the previous page",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "JSON object; lists are `{items, next}` (keyset pagination)"
+          },
+          "404": {
+            "description": "Missing or unowned"
+          }
+        }
+      }
+    },
+    "/maintenance/machines/{id}/status": {
+      "post": {
+        "summary": "Correct a wrong machine status to IDLE or RUNNING; never out of active maintenance (PLANNER)",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Committed result; retry with same key returns prior result"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Role/CSRF denied"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "State/overlap/stock/period/self-approval/idempotency conflict"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MachineStatusCorrection"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/maintenance/machines/{id}/meter": {
+      "post": {
+        "summary": "Record a run-hour meter reading (MAINTENANCE/PLANNER/OPERATOR)",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Committed result; retry with same key returns prior result"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Role/CSRF denied"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "State/overlap/stock/period/self-approval/idempotency conflict"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MeterReading"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/maintenance/metrics": {
+      "get": {
+        "summary": "MTBF, MTTR, downtime minutes per machine and the reason Pareto for a period",
+        "parameters": [
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "description": "Inclusive Asia/Colombo date (default 29 days ago)",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "description": "Inclusive Asia/Colombo date (default today; period at most 366 days)",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "machine",
+            "in": "query",
+            "required": false,
+            "description": "Machine id",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "JSON object; lists are `{items, next}` (keyset pagination)"
+          },
+          "404": {
+            "description": "Missing or unowned"
+          }
+        }
+      }
+    },
+    "/maintenance/spare-parts": {
+      "get": {
+        "summary": "Active spare-part items with released available stock",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "JSON object; lists are `{items, next}` (keyset pagination)"
+          },
+          "404": {
+            "description": "Missing or unowned"
+          }
+        }
+      }
+    },
+    "/maintenance/technicians": {
+      "get": {
+        "summary": "Active MAINTENANCE and ADMIN users (assignees)",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "JSON object; lists are `{items, next}` (keyset pagination)"
+          },
+          "404": {
+            "description": "Missing or unowned"
+          }
+        }
+      }
+    },
+    "/maintenance/settings": {
+      "get": {
+        "summary": "Maintenance labour rate (default 1,500 LKR per hour)",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "JSON object; lists are `{items, next}` (keyset pagination)"
+          },
+          "404": {
+            "description": "Missing or unowned"
+          }
+        }
+      },
+      "post": {
+        "summary": "Set the maintenance labour rate (ADMIN)",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Committed result; retry with same key returns prior result"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Role/CSRF denied"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "State/overlap/stock/period/self-approval/idempotency conflict"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MaintenanceSettings"
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -7485,7 +8798,8 @@
               "RAW_MATERIAL",
               "SEMI_FINISHED",
               "FINISHED_GOOD",
-              "PACKAGING"
+              "PACKAGING",
+              "SPARE_PART"
             ]
           },
           "uom": {
@@ -7776,7 +9090,8 @@
               "OPERATOR",
               "QUALITY",
               "SALES",
-              "VIEWER"
+              "VIEWER",
+              "MAINTENANCE"
             ]
           }
         }
@@ -8326,7 +9641,8 @@
               "RAW_MATERIAL",
               "SEMI_FINISHED",
               "FINISHED_GOOD",
-              "PACKAGING"
+              "PACKAGING",
+              "SPARE_PART"
             ]
           },
           "uom": {
@@ -9211,7 +10527,8 @@
               "OPERATOR",
               "QUALITY",
               "SALES",
-              "VIEWER"
+              "VIEWER",
+              "MAINTENANCE"
             ]
           }
         }
@@ -9858,6 +11175,635 @@
             "maxLength": 2000,
             "nullable": true,
             "description": "Required with scrap"
+          }
+        }
+      },
+      "ReportDowntime": {
+        "type": "object",
+        "required": [
+          "machineId",
+          "reason"
+        ],
+        "properties": {
+          "machineId": {
+            "type": "string",
+            "maxLength": 64
+          },
+          "reason": {
+            "type": "string",
+            "enum": [
+              "BREAKDOWN",
+              "PLANNED_MAINTENANCE",
+              "CHANGEOVER",
+              "MATERIAL_SHORTAGE",
+              "NO_OPERATOR",
+              "QUALITY_HOLD",
+              "UTILITIES",
+              "OTHER"
+            ]
+          },
+          "planned": {
+            "type": "boolean",
+            "nullable": true,
+            "description": "Default by reason; BREAKDOWN is always unplanned, PLANNED_MAINTENANCE always planned"
+          },
+          "startedAt": {
+            "type": "string",
+            "maxLength": 40,
+            "description": "Default now; never in the future"
+          },
+          "endedAt": {
+            "type": "string",
+            "maxLength": 40,
+            "description": "Omit for an open event"
+          },
+          "manufacturingOrderId": {
+            "type": "string",
+            "maxLength": 64,
+            "nullable": true
+          },
+          "notes": {
+            "type": "string",
+            "maxLength": 1000
+          }
+        }
+      },
+      "CloseDowntime": {
+        "type": "object",
+        "properties": {
+          "endedAt": {
+            "type": "string",
+            "maxLength": 40,
+            "description": "Default now"
+          },
+          "notes": {
+            "type": "string",
+            "maxLength": 1000
+          }
+        }
+      },
+      "CorrectDowntime": {
+        "type": "object",
+        "required": [
+          "reason",
+          "startedAt",
+          "endedAt",
+          "correctionReason",
+          "withdraw"
+        ],
+        "properties": {
+          "reason": {
+            "type": "string",
+            "enum": [
+              "BREAKDOWN",
+              "PLANNED_MAINTENANCE",
+              "CHANGEOVER",
+              "MATERIAL_SHORTAGE",
+              "NO_OPERATOR",
+              "QUALITY_HOLD",
+              "UTILITIES",
+              "OTHER"
+            ]
+          },
+          "planned": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "startedAt": {
+            "type": "string",
+            "maxLength": 40,
+            "description": "ISO-8601 date-time with offset; without an offset Asia/Colombo local time"
+          },
+          "endedAt": {
+            "type": "string",
+            "maxLength": 40,
+            "description": "ISO-8601 date-time with offset; without an offset Asia/Colombo local time"
+          },
+          "notes": {
+            "type": "string",
+            "maxLength": 1000,
+            "nullable": true
+          },
+          "correctionReason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 400
+          },
+          "withdraw": {
+            "type": "boolean",
+            "description": "Record the event as VOID (it never happened)"
+          }
+        }
+      },
+      "MaintenanceRequest": {
+        "type": "object",
+        "required": [
+          "machineId",
+          "title"
+        ],
+        "properties": {
+          "machineId": {
+            "type": "string",
+            "maxLength": 64
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 160
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 2000
+          },
+          "priority": {
+            "type": "string",
+            "enum": [
+              "NORMAL",
+              "HIGH",
+              "URGENT"
+            ]
+          },
+          "breakdown": {
+            "type": "boolean",
+            "description": "Also open a BREAKDOWN downtime event"
+          },
+          "downtimeStartedAt": {
+            "type": "string",
+            "maxLength": 40,
+            "description": "Start of the breakdown (default now)"
+          },
+          "downtimeEventId": {
+            "type": "string",
+            "maxLength": 64,
+            "nullable": true,
+            "description": "Link an already reported open downtime event"
+          },
+          "manufacturingOrderId": {
+            "type": "string",
+            "maxLength": 64,
+            "nullable": true
+          }
+        }
+      },
+      "MaintenanceApproval": {
+        "type": "object",
+        "properties": {
+          "scheduledStart": {
+            "type": "string",
+            "maxLength": 40,
+            "description": "Optional window start (with scheduledEnd: the order becomes SCHEDULED)"
+          },
+          "scheduledEnd": {
+            "type": "string",
+            "maxLength": 40,
+            "description": "Optional window end"
+          },
+          "assigneeId": {
+            "type": "string",
+            "maxLength": 64,
+            "nullable": true,
+            "description": "An active MAINTENANCE or ADMIN user"
+          }
+        }
+      },
+      "MaintenanceSchedule": {
+        "type": "object",
+        "required": [
+          "scheduledStart",
+          "scheduledEnd"
+        ],
+        "properties": {
+          "scheduledStart": {
+            "type": "string",
+            "maxLength": 40,
+            "description": "ISO-8601 date-time with offset; without an offset Asia/Colombo local time"
+          },
+          "scheduledEnd": {
+            "type": "string",
+            "maxLength": 40,
+            "description": "After the start; at most 31 days later"
+          },
+          "assigneeId": {
+            "type": "string",
+            "maxLength": 64,
+            "nullable": true
+          }
+        }
+      },
+      "ChecklistResult": {
+        "type": "object",
+        "required": [
+          "index"
+        ],
+        "properties": {
+          "index": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 99
+          },
+          "result": {
+            "type": "string",
+            "enum": [
+              "PASS",
+              "FAIL",
+              "NA"
+            ],
+            "nullable": true
+          },
+          "note": {
+            "type": "string",
+            "maxLength": 400
+          }
+        }
+      },
+      "MaintenanceProgress": {
+        "type": "object",
+        "properties": {
+          "checklist": {
+            "type": "array",
+            "maxItems": 100,
+            "items": {
+              "$ref": "#/components/schemas/ChecklistResult"
+            }
+          },
+          "findings": {
+            "type": "string",
+            "maxLength": 4000,
+            "nullable": true
+          },
+          "actions": {
+            "type": "string",
+            "maxLength": 4000,
+            "nullable": true
+          }
+        }
+      },
+      "MaintenanceLabour": {
+        "type": "object",
+        "required": [
+          "hours"
+        ],
+        "properties": {
+          "hours": {
+            "oneOf": [
+              {
+                "type": "string",
+                "pattern": "^-?\\d+(\\.\\d{1,6})?$"
+              },
+              {
+                "type": "number",
+                "minimum": -1000
+              }
+            ],
+            "description": "Hours (2 decimals, -1000 to 1000); negative reverses an earlier entry"
+          },
+          "technicianId": {
+            "type": "string",
+            "maxLength": 64,
+            "nullable": true,
+            "description": "Default: the signed-in user"
+          },
+          "notes": {
+            "type": "string",
+            "maxLength": 400
+          }
+        }
+      },
+      "IssueSparePart": {
+        "type": "object",
+        "required": [
+          "itemId",
+          "quantity"
+        ],
+        "properties": {
+          "itemId": {
+            "type": "string",
+            "maxLength": 64
+          },
+          "quantity": {
+            "oneOf": [
+              {
+                "type": "string",
+                "pattern": "^-?\\d+(\\.\\d{1,6})?$"
+              },
+              {
+                "type": "number",
+                "minimum": 0
+              }
+            ]
+          },
+          "notes": {
+            "type": "string",
+            "maxLength": 400
+          }
+        }
+      },
+      "ReturnSparePart": {
+        "type": "object",
+        "required": [
+          "quantity"
+        ],
+        "properties": {
+          "quantity": {
+            "oneOf": [
+              {
+                "type": "string",
+                "pattern": "^-?\\d+(\\.\\d{1,6})?$"
+              },
+              {
+                "type": "number",
+                "minimum": 0
+              }
+            ]
+          },
+          "notes": {
+            "type": "string",
+            "maxLength": 400
+          }
+        }
+      },
+      "CompleteMaintenance": {
+        "type": "object",
+        "required": [
+          "findings"
+        ],
+        "properties": {
+          "findings": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4000
+          },
+          "actions": {
+            "type": "string",
+            "maxLength": 4000,
+            "nullable": true
+          },
+          "checklist": {
+            "type": "array",
+            "maxItems": 100,
+            "items": {
+              "$ref": "#/components/schemas/ChecklistResult"
+            }
+          },
+          "meterReading": {
+            "oneOf": [
+              {
+                "type": "string",
+                "pattern": "^-?\\d+(\\.\\d{1,6})?$"
+              },
+              {
+                "type": "number",
+                "minimum": 0
+              }
+            ],
+            "nullable": true
+          }
+        }
+      },
+      "CancelMaintenance": {
+        "type": "object",
+        "required": [
+          "reason"
+        ],
+        "properties": {
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 400
+          }
+        }
+      },
+      "MaintenancePlan": {
+        "type": "object",
+        "required": [
+          "machineId",
+          "title",
+          "checklist",
+          "intervalDays",
+          "nextDueDate"
+        ],
+        "properties": {
+          "machineId": {
+            "type": "string",
+            "maxLength": 64
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 160
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 2000
+          },
+          "checklist": {
+            "type": "array",
+            "maxItems": 40,
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          "intervalDays": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 3650
+          },
+          "intervalHours": {
+            "oneOf": [
+              {
+                "type": "string",
+                "pattern": "^-?\\d+(\\.\\d{1,6})?$"
+              },
+              {
+                "type": "number",
+                "minimum": 0
+              }
+            ],
+            "nullable": true,
+            "description": "Optional run-hour interval (whichever comes first)"
+          },
+          "nextDueDate": {
+            "type": "string",
+            "format": "date"
+          },
+          "estimatedHours": {
+            "oneOf": [
+              {
+                "type": "string",
+                "pattern": "^-?\\d+(\\.\\d{1,6})?$"
+              },
+              {
+                "type": "number",
+                "minimum": 0
+              }
+            ],
+            "nullable": true,
+            "description": "Default 2; at most 720"
+          },
+          "priority": {
+            "type": "string",
+            "enum": [
+              "NORMAL",
+              "HIGH",
+              "URGENT"
+            ]
+          }
+        }
+      },
+      "MaintenancePlanUpdate": {
+        "type": "object",
+        "required": [
+          "title",
+          "checklist",
+          "intervalDays",
+          "nextDueDate",
+          "active"
+        ],
+        "properties": {
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 160
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 2000
+          },
+          "checklist": {
+            "type": "array",
+            "maxItems": 40,
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          "intervalDays": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 3650
+          },
+          "intervalHours": {
+            "oneOf": [
+              {
+                "type": "string",
+                "pattern": "^-?\\d+(\\.\\d{1,6})?$"
+              },
+              {
+                "type": "number",
+                "minimum": 0
+              }
+            ],
+            "nullable": true
+          },
+          "nextDueDate": {
+            "type": "string",
+            "format": "date"
+          },
+          "estimatedHours": {
+            "oneOf": [
+              {
+                "type": "string",
+                "pattern": "^-?\\d+(\\.\\d{1,6})?$"
+              },
+              {
+                "type": "number",
+                "minimum": 0
+              }
+            ],
+            "nullable": true
+          },
+          "priority": {
+            "type": "string",
+            "enum": [
+              "NORMAL",
+              "HIGH",
+              "URGENT"
+            ]
+          },
+          "active": {
+            "type": "boolean"
+          }
+        }
+      },
+      "GeneratePreventive": {
+        "type": "object",
+        "required": [
+          "horizonDays"
+        ],
+        "properties": {
+          "horizonDays": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 31
+          }
+        }
+      },
+      "MeterReading": {
+        "type": "object",
+        "required": [
+          "reading"
+        ],
+        "properties": {
+          "reading": {
+            "oneOf": [
+              {
+                "type": "string",
+                "pattern": "^-?\\d+(\\.\\d{1,6})?$"
+              },
+              {
+                "type": "number",
+                "minimum": 0
+              }
+            ]
+          },
+          "notes": {
+            "type": "string",
+            "maxLength": 400
+          }
+        }
+      },
+      "MachineStatusCorrection": {
+        "type": "object",
+        "required": [
+          "status",
+          "reason"
+        ],
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "IDLE",
+              "RUNNING"
+            ]
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 400
+          }
+        }
+      },
+      "MaintenanceSettings": {
+        "type": "object",
+        "required": [
+          "labourRate"
+        ],
+        "properties": {
+          "labourRate": {
+            "oneOf": [
+              {
+                "type": "string",
+                "pattern": "^-?\\d+(\\.\\d{1,6})?$"
+              },
+              {
+                "type": "number",
+                "minimum": 0
+              }
+            ],
+            "description": "LKR per labour hour"
           }
         }
       }

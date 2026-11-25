@@ -45,13 +45,15 @@ export function HelpDialog({ onClose }: { onClose: () => void }) {
         <h3>What’s available in this release</h3>
         <p>
           Authenticated sessions, tenant-scoped records, the manufacturing lifecycle, basic MRP, purchases and
-          incoming QC, lot inventory, production costs, audit records and CSV exports.
+          incoming QC, lot inventory, production costs, audit records and CSV exports. Maintenance tracks
+          machine downtime by reason, corrective and preventive work orders with checklists, spare parts and
+          labour, and MTBF/MTTR per work center.
         </p>
         <h3>What remains on the roadmap</h3>
         <p>
-          Multi-level formulas, advanced planning, full finance and tax localization, personnel and
-          maintenance workflows, extended onboarding, MFA, cloud synchronization, signed Windows installation,
-          SaaS billing and AI services. The repository documents acceptance criteria and readiness gaps.
+          Finite-capacity scheduling, validated OEE, full finance and tax localization, personnel workflows,
+          extended onboarding, MFA, cloud synchronization, signed Windows installation, SaaS billing and AI
+          services. The repository documents acceptance criteria and readiness gaps.
         </p>
         <div className="help-callout">
           <ShieldCheck size={18} />
