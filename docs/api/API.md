@@ -189,6 +189,59 @@ Import columns (header names are matched case-insensitively; spaces and hyphens 
 
 Accounting periods: a period ends on `end_date` and starts the day after the previous period's end. Posting semantics are unchanged: every posting is dated now, and `Store.openPeriod` rejects postings while a closed period covers the current date, so closing a past period locks it and closing a period that ends today stops all postings for the rest of the day.
 
+### Routings, shift calendars, skills and operations (V10)
+
+Every role reads these endpoints (the user skill matrix is ADMIN/PLANNER); writes are PLANNER (ADMIN also allowed) except the operation commands (OPERATOR/PLANNER). All writes take an `Idempotency-Key`. Times are local Asia/Colombo `HH:mm`; weekdays are ISO numbers (1 = Monday).
+
+| Method | Path | Purpose / allowed roles (ADMIN also allowed) |
+|---|---|---|
+| GET | `/routings?status=&productId=&q=&limit=&before=` | Routing revisions, newest first, keyset-paged. `status` `all` (default), `DRAFT`, `APPROVED` or `current`; `q` matches number, revision, product SKU/name. `{items, next, total, counts:{total, draft, approved, current}}`; rows add `sku`, `product`, `uom`, `current`, `operation_count`, summed `setup_minutes` and `run_minutes_per_unit`, author/approver names |
+| GET | `/routings/{id}` | `{routing, operations, revisions, orders, events}`: operations in sequence with work center (`machine_code`, `machine_kind`), skill (`skill_code`, `skill_level`) and `alternates:[{id, code, name, status}]`; `revisions` of the same product; `orders` = manufacturing orders that snapshotted it |
+| GET | `/routings/compare?from=&to=` | Operations of two revisions of one product matched by sequence: `{from, to, operations:[{seq, status: ADDED/REMOVED/CHANGED/SAME, from, to, changes}], summary}` |
+| POST | `/routings` | Draft `{productId, revision, notes?, operations:[{seq, name, machineId, alternateMachineIds?, setupMinutes, runMinutesPerUnit, crewSize, skillId?, skillLevel?, inspectionPoint?, instructions?}]}` for an active FINISHED_GOOD/SEMI_FINISHED product; revision unique per product (case-insensitive); sequences unique; alternates of the same machine kind as the primary; required skills active; PLANNER |
+| POST | `/routings/{id}` | Replace a DRAFT's `{revision, notes, operations}` (approved revisions → 409); PLANNER |
+| POST | `/routings/{id}/approve` | DRAFT → APPROVED by a person other than its creator and last editor (ADMIN included; 409 otherwise); at least one operation, active product and skills; the revision becomes the product's current routing; PLANNER |
+| POST | `/routings/{id}/copy` | `{revision}`: an APPROVED revision copied into a new DRAFT (operations and alternates, `source_routing_id`); PLANNER |
+| POST | `/routings/{id}/make-current` | An APPROVED revision becomes the product's current routing (what new manufacturing orders snapshot); PLANNER |
+| GET | `/calendars` | `{calendars, patterns, workCenters}`: calendars with `pattern_ids`/`pattern_codes`, `assigned`, `upcoming_exceptions`; patterns with `weekday_list`, `paid_minutes`, `overnight`; every work center with its assigned and effective calendar and `source` (ASSIGNED, PLANT_DEFAULT, NONE) |
+| GET | `/calendars/{id}?from=&to=` | `{calendar, patterns, exceptions, workCenters}`; exceptions dated `from`..`to` (default today − 30 days .. today + 365) |
+| GET | `/calendars/available-minutes?machineId=&from=&to=` | Available minutes per day `from`..`to` (inclusive, at most 62 days) of one work center or (without `machineId`) all: `{from, to, workCenters:[{machine_id, code, calendar_id, calendar_code, source, minutes, days:[{date, minutes, closed, closedReason, intervals:[{start, end, kind, label}]}]}]}`; same rules as `routing.CalendarService` |
+| POST | `/calendars/patterns`, `/calendars/patterns/{id}` | Create `{code, name, startTime, endTime, breakStart?, breakMinutes, weekdays}` / update (code fixed). `endTime <= startTime` = overnight; the break must lie inside the shift (409); `breakStart` empty = centred; PLANNER |
+| POST | `/calendars`, `/calendars/{id}` | Create `{code, name, patternIds, plantDefault}` / update `{name, patternIds, plantDefault}`; `plantDefault` replaces the tenant's current plant default; PLANNER |
+| POST | `/calendars/{id}/exceptions` | `{date, kind: CLOSED/OVERTIME, startTime?, endTime?, reason}`: a holiday (one per date) or overtime (start and end required, end ≤ start = next day); PLANNER |
+| POST | `/calendars/{id}/exceptions/{exceptionId}/remove` | Remove a holiday or overtime; PLANNER |
+| POST | `/calendars/assignments` | `{machineId, calendarId?}`: the work center's calendar; empty `calendarId` returns it to the plant default; PLANNER |
+| GET | `/skills` | Catalogue `{skills}` with `holders`, `expired`, `expiring` (within 30 days), `routings` requiring it |
+| GET | `/skills/users?q=&limit=&before=` | Active users by name (keyset) with `skills:[{skill_id, code, level, certified_until, expired}]`; ADMIN/PLANNER (403 otherwise) |
+| GET | `/skills/mine` | The signed-in user's skills |
+| POST | `/skills`, `/skills/{id}` | Create `{code, name, description?}` (code unique, upper-cased) / update `{name, description, active}`; PLANNER |
+| POST | `/skills/assignments` | `{userId, skillId, level (1–5), certifiedUntil?, notes?}`: creates or replaces a user's skill (active user and skill); `certifiedUntil` is the last valid day; PLANNER |
+| POST | `/skills/assignments/remove` | `{userId, skillId}`; 409 when the user does not hold it; PLANNER |
+| GET | `/manufacturing/{id}/operations` | `{routing, operations, logs}` of an order (`routing` null and no operations for an order without a routing). Operation rows: plan (`seq`, `name`, `machine_id`, `planned_machine_id`, `planned_quantity`, `setup_minutes`, `run_minutes_per_unit`, `planned_run_minutes`, `planned_minutes`, `crew_size`, skill, `inspection_point`, `instructions`), execution (`status`, `activity`, `good_qty`, `scrap_qty`, `operator_id`, `ready_at`, `started_at`, `finished_at`) and `actual_setup_minutes`, `actual_run_minutes`, `actual_labour_minutes` (closed time logs), `open_since` |
+| GET | `/manufacturing/orders?…&routing=` | V10 addition to the V9 list: `routing` `none` (orders without operations: the shop floor's order cards) or `routed`; rows add `operation_count` |
+| GET | `/operations/work-centers` | Every work center with `ready`, `running`, `paused` operation counts, `legacy_orders` (open orders without a routing), `available_minutes_today`, `calendar_code`, `calendar_source` |
+| GET | `/operations/queue?machineId=&limit=&before=` | The work center's IN_PROGRESS, PAUSED and READY operations plus READY operations it may run as the routing work center or an alternate (`alternate: true`); order: running → paused → ready, then priority (URGENT, HIGH, NORMAL), due date, order age, sequence; keyset-paged (default 24). Rows add the order (`order_number`, `order_status`, `priority`, `due_date`, `product`, `uom`), `input_qty` (previous operation's good quantity, or the order quantity), `operation_count` and the caller's `skill_check` (QUALIFIED, MISSING, EXPIRED, LEVEL_TOO_LOW, NOT_REQUIRED) |
+| GET | `/operations/{id}` | `{operation, order, logs, reports, machines}`; `machines` = the work centers the operation may start on |
+| GET | `/operations/time-logs?machineId=&orderId=&operationId=&limit=&before=` | Time log rows newest first (keyset on `started_at, id`): `activity` (SETUP/RUN), `started_at`, `ended_at`, `end_reason`, `minutes` (machine), `labour_minutes`, `crew_size`, `user_name`, `skill_override_reason` |
+| POST | `/operations/{id}/start` | `{machineId?, activity?, overrideReason?}`: READY → IN_PROGRESS on the planned work center or an alternate; refused while the work center is MAINTENANCE or already runs an operation, while the order is not RELEASED/IN_PROGRESS/PARTIALLY_COMPLETED (ON_HOLD: resume it first), or when the user lacks the required skill (PLANNER/ADMIN may override with `overrideReason`, recorded and audited `OP_SKILL_OVERRIDDEN`). Default `activity`: SETUP when setup minutes are planned and none were logged, else RUN. The first operation of a RELEASED order starts the order (MO_START). Opens a time log; IDLE work center → RUNNING; OPERATOR/PLANNER |
+| POST | `/operations/{id}/pause` | `{reason?}`: IN_PROGRESS → PAUSED; closes the time log; the work center becomes IDLE when nothing else runs there; OPERATOR/PLANNER |
+| POST | `/operations/{id}/resume` | `{activity?, overrideReason?}`: PAUSED → IN_PROGRESS (same checks as start; default activity = the paused one); OPERATOR/PLANNER |
+| POST | `/operations/{id}/setup-done` | IN_PROGRESS in SETUP: closes the SETUP log, opens a RUN log; OPERATOR/PLANNER |
+| POST | `/operations/{id}/report` | `{goodQty, scrapQty, notes?}` on a running or paused operation: whole pieces for `pcs`, scrap needs notes, cumulative good + scrap ≤ input; OPERATOR/PLANNER |
+| POST | `/operations/{id}/finish` | `{goodQty, scrapQty, notes?}` (zero when already reported; the operation needs some reported quantity): → DONE, closes the time log, the next operation becomes READY, the work center IDLE when free; OPERATOR/PLANNER |
+
+Operations lifecycle: an order created for a product with a current approved routing snapshots it (`routing_id`, `routing_revision`, PENDING operations with planned minutes for the order quantity; the order's work center replaces the routing's work center where it is that work center or an alternate). Issue (RELEASED) makes the first operation READY; finishing one makes the next READY (strictly sequential, no overlap). Pausing the order (ON_HOLD) pauses its running operations; cancelling it cancels them. Output (`POST /manufacturing/{id}/complete`) stays the stock and cost posting: for a routed order the cumulative good output cannot exceed the last operation's good quantity and the final output needs every operation DONE (409). Orders without a routing behave exactly as before V10. Operations never post stock or journals.
+
+```json
+{"productId":"opaque-bottle","revision":"R01","notes":"","operations":[
+ {"seq":10,"name":"Extrusion blow moulding","machineId":"bm01","alternateMachineIds":["bm02"],"setupMinutes":"45","runMinutesPerUnit":"0.05","crewSize":"1","skillId":"opaque-skill","skillLevel":2,"inspectionPoint":false,"instructions":"Check wall thickness"},
+ {"seq":20,"name":"Label, inspect & pack","machineId":"pk01","alternateMachineIds":[],"setupMinutes":"15","runMinutesPerUnit":"0.02","crewSize":"2","skillId":null,"skillLevel":null,"inspectionPoint":true,"instructions":""}]}
+```
+
+```json
+{"code":"NIGHT","name":"Night shift","startTime":"22:00","endTime":"06:00","breakStart":"02:00","breakMinutes":30,"weekdays":[1,2,3,4,5]}
+```
+
 Lifecycle actions: `approve` (an approver role of the `MANUFACTURING_ORDER` policy — default PLANNER, ADMIN always — distinct from the creator; orders the policy auto-approves are created APPROVED); `reserve` (PLANNER/WAREHOUSE); `issue` (WAREHOUSE); `start`, `pause`, `resume` (OPERATOR/PLANNER); `close`, `cancel` (PLANNER). Cancellation is available only before material issue, with reservations safely released. Issued order cancellation is blocked until a controlled return/variance procedure exists.
 
 Examples:

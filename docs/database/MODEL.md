@@ -199,3 +199,50 @@ erDiagram
 Money/quantity precision is six decimal places (maximum 14 integer digits in the database, stricter API amount limits). UI formatting never changes stored values. SQL indexes cover owner/status/date list and allocation access. Current workspace list snapshots cap at 250 rows (BOM lines 1,000), with pagination inside that bound. This is explicitly not the large-ledger reporting solution; replace capped lists with server cursor pagination and background export before scale.
 
 Flyway validates checksums at startup and runs PostgreSQL transactional DDL. Never edit an applied migration. Add a new numbered migration and rehearse it against a restored backup. Posted financial and inventory rows have no delete/overwrite path. Retention/archive cutoffs, erasure handling and access to old records require an organization-approved policy and implementation before commercial data retention commitments.
+
+## Routings, shift calendars, skills and operations (`V10__routings_shifts_skills_operations.sql`)
+
+```mermaid
+erDiagram
+    ITEMS ||--o{ ROUTINGS : "made by"
+    ROUTINGS ||--|{ ROUTING_OPERATIONS : sequences
+    ROUTINGS ||--o{ ROUTINGS : "copied into (source_routing_id)"
+    ITEMS ||--o| ROUTING_DEFAULTS : "current revision"
+    ROUTING_DEFAULTS }o--|| ROUTINGS : points
+    MACHINES ||--o{ ROUTING_OPERATIONS : "work center"
+    ROUTING_OPERATIONS ||--o{ ROUTING_OPERATION_ALTERNATES : "may also run on"
+    SKILLS ||--o{ ROUTING_OPERATIONS : requires
+    USERS ||--o{ USER_SKILLS : holds
+    SKILLS ||--o{ USER_SKILLS : "held as"
+    SHIFT_CALENDARS ||--o{ SHIFT_CALENDAR_PATTERNS : contains
+    SHIFT_PATTERNS ||--o{ SHIFT_CALENDAR_PATTERNS : "used by"
+    SHIFT_CALENDARS ||--o{ SHIFT_CALENDAR_EXCEPTIONS : "holidays / overtime"
+    MACHINES ||--o| WORK_CENTER_CALENDARS : "works to"
+    ROUTINGS ||--o{ MANUFACTURING_ORDERS : "snapshotted by"
+    MANUFACTURING_ORDERS ||--o{ MO_OPERATIONS : "plans"
+    ROUTING_OPERATIONS ||--o{ MO_OPERATIONS : "frozen into"
+    MO_OPERATIONS ||--o{ MO_OPERATION_TIME_LOGS : "timed by"
+    MO_OPERATIONS ||--o{ MO_OPERATION_REPORTS : "quantities"
+```
+
+| Table / change | Purpose and rules |
+|---|---|
+| `users_tenant_id_unique` (index) | `UNIQUE (tenant_id, id)` on `users` (`IF NOT EXISTS`), so V10 rows reference a user of the same tenant through a composite key. |
+| `skills` | Catalogue: `code` (`^[A-Z0-9][A-Z0-9-]{0,19}$`, unique per tenant), `name`, `description`, `active`, `created_by`. Inactive skills cannot be required by new routings or recorded for users. |
+| `user_skills` | PK `(tenant_id, user_id, skill_id)`: `level` 1 (trainee) … 5 (expert), `certified_until` (last valid day, Asia/Colombo; NULL = no expiry), `notes`, `updated_by/at`. A user qualifies for an operation when level ≥ the required level and the certification has not expired (`routing.SkillRules`). |
+| `routings` | Revision of how a FINISHED_GOOD or SEMI_FINISHED product is made: `number` (`RT-…`, the audit reference), `revision` (unique per product, case-insensitive), `status` `DRAFT`/`APPROVED`, `notes`, `source_routing_id` (copied from), `created_by`, `updated_by` (last editor), `approved_by/at` (`CHECK`: set exactly when approved). Approval needs a person other than `created_by` and `updated_by`. Keyset index `(tenant_id, created_at DESC, id DESC)`. |
+| `routing_operations` | `seq` 1–9999 (unique per routing), `name`, `machine_id` (work center), `setup_minutes` (once per order), `run_minutes_per_unit` `numeric(24,12)` (minutes per base unit of the product: 1,200 pcs/h = 0.05), `crew_size` `numeric(6,2)` > 0 (labour minutes = machine minutes × crew), optional `skill_id` + `skill_level` 1–5, `inspection_point`, `instructions`. |
+| `routing_operation_alternates` | Other work centers an operation may run on (same machine kind as the primary, checked by the service). |
+| `routing_defaults` | PK `(tenant_id, product_id)` → `routing_id` (composite FK proves the routing belongs to the product): the **current** revision, at most one per product. Approval sets it to the new revision; `make-current` switches to an older approved revision. New manufacturing orders snapshot this revision. |
+| `shift_patterns` | One shift: `code`, `start_time`, `end_time` (≤ start = ends the next day; a shift belongs to its start date), one unpaid break (`break_minutes`, `break_start`, NULL = centred), `weekdays` bit mask (bit 0 = Monday … bit 6 = Sunday). |
+| `shift_calendars`, `shift_calendar_patterns` | A calendar is a set of patterns; `plant_default` (partial unique index: one per tenant) applies to every work center without its own calendar. |
+| `shift_calendar_exceptions` | `exception_date`, `kind` `CLOSED` (holiday: no shift starts that day; one per date, partial unique index) or `OVERTIME` (`start_time`–`end_time`, required, different; ends the next day when not after the start), `reason`, `created_by`. Overtime counts even on a closed date; overlaps with shifts count once. |
+| `work_center_calendars` | PK `(tenant_id, machine_id)` → `calendar_id`; no row = plant default; no plant default = available around the clock. |
+| `manufacturing_orders` + `routing_id`, `routing_revision` | The routing revision an order snapshotted at creation (NULL = no routing: the single implicit operation of earlier releases). Composite FK to `routings`; partial index `mo_routing`. |
+| `mo_operations` | One row per routing operation, frozen at order creation: `routing_operation_id`, `seq`, `name`, `planned_machine_id` and `machine_id` (the work center that runs it: planned, or an alternate chosen at start), `planned_quantity` (the order quantity), `setup_minutes`, `run_minutes_per_unit`, `planned_run_minutes` (= quantity × run minutes per unit, 6 dp), generated `planned_minutes` (setup + run), `crew_size`, skill, `inspection_point`, `instructions`; execution: `status` `PENDING → READY → IN_PROGRESS ⇄ PAUSED → DONE` or `CANCELLED`, `activity` (`SETUP`/`RUN` exactly while IN_PROGRESS), cumulative `good_qty`/`scrap_qty`, `operator_id`, `ready_at`, `started_at` (first start), `finished_at` (exactly when DONE). Trigger `mo_operation_snapshot`: the planned columns never change, DONE/CANCELLED rows are immutable, no row is deleted. Indexes `(tenant_id, machine_id, status)` (shop-floor queue, scheduling) and `(tenant_id, status)`. |
+| `mo_operation_time_logs` | Actual machine time for OEE: one row per uninterrupted `SETUP` or `RUN` interval of an operation on a work center (`machine_id`), with `user_id`, `crew_size`, `started_at`, `ended_at` (NULL while running), `end_reason` (`PAUSED`, `FINISHED`, `SWITCHED` = setup done, `ORDER_PAUSED`), generated `minutes` (machine) and `labour_minutes` (× crew), `skill_override_reason`. Partial unique indexes: one open interval per operation **and per work center** (one running operation per machine). Trigger `mo_time_log_closed_immutable`: closed rows cannot change, rows cannot be deleted. Indexes by tenant, work center, operation and order with `started_at`. |
+| `mo_operation_reports` | Good/scrap reports per operation (`machine_id`, `notes`, `reported_by`, `created_at`; `good + scrap > 0`); posted history (`reject_history_mutation()`). Execution records only: stock and cost move through the order's output command. |
+
+Triggers: `approved_routing_immutable` (BEFORE UPDATE/DELETE on `routings`: an APPROVED row cannot change), `approved_routing_operation_immutable` and `approved_routing_alternate_immutable` (no insert/update/delete of the operations or alternates of an approved routing), `routing_default_approved` (only an approved routing can be current), `mo_operation_snapshot`, `mo_time_log_closed_immutable`, `mo_operation_reports_immutable`. All raise plain exceptions (HTTP 409 with the message).
+
+Working time is not stored: `routing.CalendarService` computes it from patterns, exceptions and assignments on every call (calendar changes apply to past and future dates; a consumer that needs frozen planned time stores its own snapshot). Operations never post stock ledger or journal rows.

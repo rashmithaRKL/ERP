@@ -5394,6 +5394,15 @@
             "description": "Order number, product name/SKU, work center code or customer"
           },
           {
+            "name": "routing",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "V10: none (orders without operations) or routed"
+          },
+          {
             "name": "limit",
             "in": "query",
             "required": false,
@@ -5619,6 +5628,1495 @@
           },
           "409": {
             "description": "End date before start date, or page size outside 1-200"
+          }
+        }
+      }
+    },
+    "/routings": {
+      "get": {
+        "summary": "V10: routing revisions, newest first, keyset-paged; all roles",
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "all"
+            },
+            "description": "all, DRAFT, APPROVED or current"
+          },
+          {
+            "name": "productId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Number, revision, product SKU or name"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200,
+              "default": 25
+            }
+          },
+          {
+            "name": "before",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Cursor: the previous page's next value"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "{items, next, total, counts:{total, draft, approved, current}}"
+          },
+          "401": {
+            "description": "Sign-in required"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "Invalid filter or range"
+          }
+        }
+      },
+      "post": {
+        "summary": "V10: new draft routing revision; PLANNER",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Routing"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Committed result; retry with same key returns prior result"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Role/CSRF denied"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "State/rule/idempotency conflict"
+          }
+        }
+      }
+    },
+    "/routings/compare": {
+      "get": {
+        "summary": "V10: operation-by-operation comparison of two revisions of one product; all roles",
+        "parameters": [
+          {
+            "name": "from",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "{from, to, operations:[{seq, status, from, to, changes}], summary}"
+          },
+          "401": {
+            "description": "Sign-in required"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "Invalid filter or range"
+          }
+        }
+      }
+    },
+    "/routings/{id}": {
+      "get": {
+        "summary": "V10: one revision with operations, alternates, revisions, order count and events; all roles",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "{routing, operations, revisions, orders, events}"
+          },
+          "401": {
+            "description": "Sign-in required"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "Invalid filter or range"
+          }
+        }
+      },
+      "post": {
+        "summary": "V10: replace a draft revision (approved revisions are immutable); PLANNER",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RoutingDraft"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Committed result; retry with same key returns prior result"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Role/CSRF denied"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "State/rule/idempotency conflict"
+          }
+        }
+      }
+    },
+    "/routings/{id}/approve": {
+      "post": {
+        "summary": "V10: approve a draft (not its creator or last editor) and make it current; PLANNER",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Committed result; retry with same key returns prior result"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Role/CSRF denied"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "State/rule/idempotency conflict"
+          }
+        }
+      }
+    },
+    "/routings/{id}/copy": {
+      "post": {
+        "summary": "V10: copy an approved revision into a new draft; PLANNER",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RoutingCopy"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Committed result; retry with same key returns prior result"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Role/CSRF denied"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "State/rule/idempotency conflict"
+          }
+        }
+      }
+    },
+    "/routings/{id}/make-current": {
+      "post": {
+        "summary": "V10: make an approved revision the current routing of its product; PLANNER",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Committed result; retry with same key returns prior result"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Role/CSRF denied"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "State/rule/idempotency conflict"
+          }
+        }
+      }
+    },
+    "/calendars": {
+      "get": {
+        "summary": "V10: calendars, shift patterns and work-center assignments; all roles",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "{calendars, patterns, workCenters}"
+          },
+          "401": {
+            "description": "Sign-in required"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "Invalid filter or range"
+          }
+        }
+      },
+      "post": {
+        "summary": "V10: new shift calendar; PLANNER",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ShiftCalendar"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Committed result; retry with same key returns prior result"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Role/CSRF denied"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "State/rule/idempotency conflict"
+          }
+        }
+      }
+    },
+    "/calendars/available-minutes": {
+      "get": {
+        "summary": "V10: available minutes per work center and day (routing.CalendarService); all roles",
+        "parameters": [
+          {
+            "name": "machineId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "One work center; all when omitted"
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date"
+            },
+            "description": "yyyy-MM-dd"
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date"
+            },
+            "description": "yyyy-MM-dd, at most 62 days after from"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "{from, to, workCenters:[{machine_id, code, calendar_id, calendar_code, source, minutes, days:[{date, minutes, closed, closedReason, intervals}]}]}"
+          },
+          "401": {
+            "description": "Sign-in required"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "Invalid filter or range"
+          }
+        }
+      }
+    },
+    "/calendars/patterns": {
+      "post": {
+        "summary": "V10: new shift pattern; PLANNER",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ShiftPattern"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Committed result; retry with same key returns prior result"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Role/CSRF denied"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "State/rule/idempotency conflict"
+          }
+        }
+      }
+    },
+    "/calendars/patterns/{id}": {
+      "post": {
+        "summary": "V10: change a shift pattern; PLANNER",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ShiftPatternUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Committed result; retry with same key returns prior result"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Role/CSRF denied"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "State/rule/idempotency conflict"
+          }
+        }
+      }
+    },
+    "/calendars/assignments": {
+      "post": {
+        "summary": "V10: a work center's calendar (empty calendarId = plant default); PLANNER",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CalendarAssignment"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Committed result; retry with same key returns prior result"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Role/CSRF denied"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "State/rule/idempotency conflict"
+          }
+        }
+      }
+    },
+    "/calendars/{id}": {
+      "get": {
+        "summary": "V10: one calendar with its patterns, exceptions and assigned work centers; all roles",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "{calendar, patterns, exceptions, workCenters}"
+          },
+          "401": {
+            "description": "Sign-in required"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "Invalid filter or range"
+          }
+        }
+      },
+      "post": {
+        "summary": "V10: change a calendar; PLANNER",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ShiftCalendarUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Committed result; retry with same key returns prior result"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Role/CSRF denied"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "State/rule/idempotency conflict"
+          }
+        }
+      }
+    },
+    "/calendars/{id}/exceptions": {
+      "post": {
+        "summary": "V10: add a holiday or overtime; PLANNER",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CalendarException"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Committed result; retry with same key returns prior result"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Role/CSRF denied"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "State/rule/idempotency conflict"
+          }
+        }
+      }
+    },
+    "/calendars/{id}/exceptions/{exceptionId}/remove": {
+      "post": {
+        "summary": "V10: remove a holiday or overtime; PLANNER",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "exceptionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Committed result; retry with same key returns prior result"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Role/CSRF denied"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "State/rule/idempotency conflict"
+          }
+        }
+      }
+    },
+    "/skills": {
+      "get": {
+        "summary": "V10: skill catalogue with holders and certification counts; all roles",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "{skills}"
+          },
+          "401": {
+            "description": "Sign-in required"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "Invalid filter or range"
+          }
+        }
+      },
+      "post": {
+        "summary": "V10: new skill; PLANNER",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Skill"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Committed result; retry with same key returns prior result"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Role/CSRF denied"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "State/rule/idempotency conflict"
+          }
+        }
+      }
+    },
+    "/skills/users": {
+      "get": {
+        "summary": "V10: user skill matrix, keyset-paged by name; ADMIN/PLANNER",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Name or role"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200,
+              "default": 25
+            }
+          },
+          {
+            "name": "before",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Cursor: the previous page's next value"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "{items:[{id, name, role, skills}], next}"
+          },
+          "401": {
+            "description": "Sign-in required"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "Invalid filter or range"
+          }
+        }
+      }
+    },
+    "/skills/mine": {
+      "get": {
+        "summary": "V10: the signed-in user's skills",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "{skills}"
+          },
+          "401": {
+            "description": "Sign-in required"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "Invalid filter or range"
+          }
+        }
+      }
+    },
+    "/skills/assignments": {
+      "post": {
+        "summary": "V10: set a user's level and certification for a skill; PLANNER",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UserSkill"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Committed result; retry with same key returns prior result"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Role/CSRF denied"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "State/rule/idempotency conflict"
+          }
+        }
+      }
+    },
+    "/skills/assignments/remove": {
+      "post": {
+        "summary": "V10: remove a user's skill; PLANNER",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RemoveUserSkill"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Committed result; retry with same key returns prior result"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Role/CSRF denied"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "State/rule/idempotency conflict"
+          }
+        }
+      }
+    },
+    "/skills/{id}": {
+      "post": {
+        "summary": "V10: change or deactivate a skill; PLANNER",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SkillUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Committed result; retry with same key returns prior result"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Role/CSRF denied"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "State/rule/idempotency conflict"
+          }
+        }
+      }
+    },
+    "/manufacturing/{id}/operations": {
+      "get": {
+        "summary": "V10: an order's routing revision, operations (planned and actual minutes) and time logs; all roles",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "{routing, operations, logs}"
+          },
+          "401": {
+            "description": "Sign-in required"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "Invalid filter or range"
+          }
+        }
+      }
+    },
+    "/operations/work-centers": {
+      "get": {
+        "summary": "V10: work centers with operation counts and today’s available minutes; all roles",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "{items, date}"
+          },
+          "401": {
+            "description": "Sign-in required"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "Invalid filter or range"
+          }
+        }
+      }
+    },
+    "/operations/queue": {
+      "get": {
+        "summary": "V10: shop-floor queue of a work center (running, paused, ready; alternates), keyset-paged; all roles",
+        "parameters": [
+          {
+            "name": "machineId",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200,
+              "default": 24
+            }
+          },
+          {
+            "name": "before",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "{machine, items, next}"
+          },
+          "401": {
+            "description": "Sign-in required"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "Invalid filter or range"
+          }
+        }
+      }
+    },
+    "/operations/time-logs": {
+      "get": {
+        "summary": "V10: operation time logs, newest first, keyset-paged; all roles",
+        "parameters": [
+          {
+            "name": "machineId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "orderId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "operationId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200,
+              "default": 50
+            }
+          },
+          {
+            "name": "before",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "{items, next}"
+          },
+          "401": {
+            "description": "Sign-in required"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "Invalid filter or range"
+          }
+        }
+      }
+    },
+    "/operations/{id}": {
+      "get": {
+        "summary": "V10: one operation with its order, time logs, quantity reports and allowed work centers; all roles",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "{operation, order, logs, reports, machines}"
+          },
+          "401": {
+            "description": "Sign-in required"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "Invalid filter or range"
+          }
+        }
+      }
+    },
+    "/operations/{id}/start": {
+      "post": {
+        "summary": "V10: start a ready operation (skills, maintenance and one running operation per work center checked); OPERATOR/PLANNER",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OperationStart"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Committed result; retry with same key returns prior result"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Role/CSRF denied"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "State/rule/idempotency conflict"
+          }
+        }
+      }
+    },
+    "/operations/{id}/pause": {
+      "post": {
+        "summary": "V10: pause a running operation; OPERATOR/PLANNER",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OperationPause"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Committed result; retry with same key returns prior result"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Role/CSRF denied"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "State/rule/idempotency conflict"
+          }
+        }
+      }
+    },
+    "/operations/{id}/resume": {
+      "post": {
+        "summary": "V10: resume a paused operation; OPERATOR/PLANNER",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OperationResume"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Committed result; retry with same key returns prior result"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Role/CSRF denied"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "State/rule/idempotency conflict"
+          }
+        }
+      }
+    },
+    "/operations/{id}/setup-done": {
+      "post": {
+        "summary": "V10: switch a running operation from setup to run; OPERATOR/PLANNER",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Committed result; retry with same key returns prior result"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Role/CSRF denied"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "State/rule/idempotency conflict"
+          }
+        }
+      }
+    },
+    "/operations/{id}/report": {
+      "post": {
+        "summary": "V10: report good and scrap quantities of an operation; OPERATOR/PLANNER",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OperationQuantities"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Committed result; retry with same key returns prior result"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Role/CSRF denied"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "State/rule/idempotency conflict"
+          }
+        }
+      }
+    },
+    "/operations/{id}/finish": {
+      "post": {
+        "summary": "V10: finish an operation (optional last quantities); the next one becomes ready; OPERATOR/PLANNER",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OperationQuantities"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Committed result; retry with same key returns prior result"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Role/CSRF denied"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "State/rule/idempotency conflict"
           }
         }
       }
@@ -7842,6 +9340,524 @@
             "type": "string",
             "minLength": 10,
             "maxLength": 400
+          }
+        }
+      },
+      "RoutingOperation": {
+        "type": "object",
+        "required": [
+          "seq",
+          "name",
+          "machineId",
+          "setupMinutes",
+          "runMinutesPerUnit",
+          "crewSize"
+        ],
+        "properties": {
+          "seq": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9999
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 120,
+            "minLength": 1
+          },
+          "machineId": {
+            "type": "string",
+            "maxLength": 64
+          },
+          "alternateMachineIds": {
+            "type": "array",
+            "maxItems": 10,
+            "nullable": true,
+            "items": {
+              "type": "string"
+            },
+            "description": "Same machine kind as machineId"
+          },
+          "setupMinutes": {
+            "type": "string",
+            "pattern": "^\\d+(\\.\\d+)?$",
+            "description": "Once per order"
+          },
+          "runMinutesPerUnit": {
+            "type": "string",
+            "pattern": "^\\d+(\\.\\d+)?$",
+            "description": "Minutes per base unit of the product (1,200 pcs/h = 0.05)"
+          },
+          "crewSize": {
+            "type": "string",
+            "pattern": "^\\d+(\\.\\d+)?$",
+            "description": "People tending the operation (> 0)"
+          },
+          "skillId": {
+            "type": "string",
+            "nullable": true
+          },
+          "skillLevel": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 5,
+            "nullable": true
+          },
+          "inspectionPoint": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "instructions": {
+            "type": "string",
+            "maxLength": 4000,
+            "nullable": true
+          }
+        }
+      },
+      "Routing": {
+        "type": "object",
+        "required": [
+          "productId",
+          "revision",
+          "operations"
+        ],
+        "properties": {
+          "productId": {
+            "type": "string",
+            "maxLength": 64
+          },
+          "revision": {
+            "type": "string",
+            "maxLength": 30,
+            "minLength": 1
+          },
+          "notes": {
+            "type": "string",
+            "maxLength": 2000,
+            "nullable": true
+          },
+          "operations": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 50,
+            "items": {
+              "$ref": "#/components/schemas/RoutingOperation"
+            }
+          }
+        }
+      },
+      "RoutingDraft": {
+        "type": "object",
+        "required": [
+          "revision",
+          "operations"
+        ],
+        "properties": {
+          "revision": {
+            "type": "string",
+            "maxLength": 30,
+            "minLength": 1
+          },
+          "notes": {
+            "type": "string",
+            "maxLength": 2000,
+            "nullable": true
+          },
+          "operations": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 50,
+            "items": {
+              "$ref": "#/components/schemas/RoutingOperation"
+            }
+          }
+        }
+      },
+      "RoutingCopy": {
+        "type": "object",
+        "required": [
+          "revision"
+        ],
+        "properties": {
+          "revision": {
+            "type": "string",
+            "maxLength": 30,
+            "minLength": 1
+          }
+        }
+      },
+      "ShiftPattern": {
+        "type": "object",
+        "required": [
+          "code",
+          "name",
+          "startTime",
+          "endTime",
+          "breakMinutes",
+          "weekdays"
+        ],
+        "properties": {
+          "code": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9-]{0,19}$"
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 120
+          },
+          "startTime": {
+            "type": "string",
+            "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$"
+          },
+          "endTime": {
+            "type": "string",
+            "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$",
+            "description": "At or before startTime: the shift ends the next day"
+          },
+          "breakStart": {
+            "type": "string",
+            "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$",
+            "nullable": true,
+            "description": "Empty: the break is centred in the shift"
+          },
+          "breakMinutes": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 720
+          },
+          "weekdays": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 7,
+            "items": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 7
+            },
+            "description": "ISO weekdays, 1 = Monday"
+          }
+        }
+      },
+      "ShiftPatternUpdate": {
+        "type": "object",
+        "required": [
+          "name",
+          "startTime",
+          "endTime",
+          "breakMinutes",
+          "weekdays"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 120
+          },
+          "startTime": {
+            "type": "string",
+            "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$"
+          },
+          "endTime": {
+            "type": "string",
+            "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$"
+          },
+          "breakStart": {
+            "type": "string",
+            "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$",
+            "nullable": true
+          },
+          "breakMinutes": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 720
+          },
+          "weekdays": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 7,
+            "items": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 7
+            }
+          }
+        }
+      },
+      "ShiftCalendar": {
+        "type": "object",
+        "required": [
+          "code",
+          "name"
+        ],
+        "properties": {
+          "code": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9-]{0,19}$"
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 120
+          },
+          "patternIds": {
+            "type": "array",
+            "maxItems": 20,
+            "nullable": true,
+            "items": {
+              "type": "string"
+            }
+          },
+          "plantDefault": {
+            "type": "boolean",
+            "nullable": true,
+            "description": "Replaces the current plant default calendar"
+          }
+        }
+      },
+      "ShiftCalendarUpdate": {
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 120
+          },
+          "patternIds": {
+            "type": "array",
+            "maxItems": 20,
+            "nullable": true,
+            "items": {
+              "type": "string"
+            }
+          },
+          "plantDefault": {
+            "type": "boolean",
+            "nullable": true
+          }
+        }
+      },
+      "CalendarException": {
+        "type": "object",
+        "required": [
+          "date",
+          "kind",
+          "reason"
+        ],
+        "properties": {
+          "date": {
+            "type": "string",
+            "format": "date"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "CLOSED",
+              "OVERTIME"
+            ]
+          },
+          "startTime": {
+            "type": "string",
+            "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$",
+            "nullable": true,
+            "description": "OVERTIME only"
+          },
+          "endTime": {
+            "type": "string",
+            "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$",
+            "nullable": true,
+            "description": "OVERTIME only; at or before startTime = next day"
+          },
+          "reason": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1
+          }
+        }
+      },
+      "CalendarAssignment": {
+        "type": "object",
+        "required": [
+          "machineId"
+        ],
+        "properties": {
+          "machineId": {
+            "type": "string",
+            "maxLength": 64
+          },
+          "calendarId": {
+            "type": "string",
+            "maxLength": 64,
+            "nullable": true,
+            "description": "Empty: plant default"
+          }
+        }
+      },
+      "Skill": {
+        "type": "object",
+        "required": [
+          "code",
+          "name"
+        ],
+        "properties": {
+          "code": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9-]{0,19}$"
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 120
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 400,
+            "nullable": true
+          }
+        }
+      },
+      "SkillUpdate": {
+        "type": "object",
+        "required": [
+          "name",
+          "active"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 120
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 400,
+            "nullable": true
+          },
+          "active": {
+            "type": "boolean"
+          }
+        }
+      },
+      "UserSkill": {
+        "type": "object",
+        "required": [
+          "userId",
+          "skillId",
+          "level"
+        ],
+        "properties": {
+          "userId": {
+            "type": "string",
+            "maxLength": 64
+          },
+          "skillId": {
+            "type": "string",
+            "maxLength": 64
+          },
+          "level": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 5
+          },
+          "certifiedUntil": {
+            "type": "string",
+            "format": "date",
+            "nullable": true,
+            "description": "Last valid day"
+          },
+          "notes": {
+            "type": "string",
+            "maxLength": 400,
+            "nullable": true
+          }
+        }
+      },
+      "RemoveUserSkill": {
+        "type": "object",
+        "required": [
+          "userId",
+          "skillId"
+        ],
+        "properties": {
+          "userId": {
+            "type": "string",
+            "maxLength": 64
+          },
+          "skillId": {
+            "type": "string",
+            "maxLength": 64
+          }
+        }
+      },
+      "OperationStart": {
+        "type": "object",
+        "properties": {
+          "machineId": {
+            "type": "string",
+            "maxLength": 64,
+            "nullable": true,
+            "description": "Planned work center (default) or an alternate"
+          },
+          "activity": {
+            "type": "string",
+            "enum": [
+              "SETUP",
+              "RUN"
+            ],
+            "nullable": true
+          },
+          "overrideReason": {
+            "type": "string",
+            "maxLength": 400,
+            "nullable": true,
+            "description": "PLANNER/ADMIN: start without the required skill"
+          }
+        }
+      },
+      "OperationResume": {
+        "type": "object",
+        "properties": {
+          "activity": {
+            "type": "string",
+            "enum": [
+              "SETUP",
+              "RUN"
+            ],
+            "nullable": true
+          },
+          "overrideReason": {
+            "type": "string",
+            "maxLength": 400,
+            "nullable": true
+          }
+        }
+      },
+      "OperationPause": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string",
+            "maxLength": 400,
+            "nullable": true
+          }
+        }
+      },
+      "OperationQuantities": {
+        "type": "object",
+        "required": [
+          "goodQty",
+          "scrapQty"
+        ],
+        "properties": {
+          "goodQty": {
+            "type": "string",
+            "pattern": "^\\d+(\\.\\d+)?$"
+          },
+          "scrapQty": {
+            "type": "string",
+            "pattern": "^\\d+(\\.\\d+)?$"
+          },
+          "notes": {
+            "type": "string",
+            "maxLength": 2000,
+            "nullable": true,
+            "description": "Required with scrap"
           }
         }
       }
