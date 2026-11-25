@@ -42,6 +42,12 @@ export function HelpDialog({ onClose }: { onClose: () => void }) {
           Authenticated sessions, tenant-scoped records, the manufacturing lifecycle, basic MRP, purchases and
           incoming QC, lot inventory, production costs, audit records and CSV exports.
         </p>
+        <p>
+          Quality management: inspection plans with measured characteristics, nonconformance reports raised by
+          failed inspections or by hand, dispositions (use as is with independent approval, scrap, return to
+          supplier, rework into a new re-inspected lot) and CAPA with root-cause analysis and independent
+          effectiveness checks.
+        </p>
         <h3>What remains on the roadmap</h3>
         <p>
           Multi-level formulas, advanced planning, full finance and tax localization, personnel and

@@ -26,8 +26,8 @@ export function MeasurementsDialog({ inspection, onClose }: { inspection: Row; o
             <>
               <p className="inv-small muted">
                 Plan {text(items[0].plan_number)} (version {text(items[0].plan_version)}) · recorded by{' '}
-                {text(inspection.inspected_by)} · {dateTime(inspection.inspected_at)}. Limits are shown as they were
-                when measured.
+                {text(inspection.inspected_by)} · {dateTime(inspection.inspected_at)}. Limits are shown as
+                they were when measured.
               </p>
               <Table
                 compact
@@ -49,12 +49,14 @@ export function MeasurementsDialog({ inspection, onClose }: { inspection: Row; o
                     render: (m) =>
                       m.kind === 'ATTRIBUTE'
                         ? `${text(m.nonconforming)} of ${text(m.sample_size)} nonconforming`
-                        : m.readings.map((v) => trim(v)).join(' · '),
+                        : ((m.readings as unknown as number[]) ?? []).map((v) => trim(v)).join(' · '),
                   },
                   {
                     label: 'Summary',
                     render: (m) =>
-                      m.kind === 'ATTRIBUTE' ? '—' : `min ${trim(m.min_value)} · max ${trim(m.max_value)} · mean ${trim(m.mean_value)}`,
+                      m.kind === 'ATTRIBUTE'
+                        ? '—'
+                        : `min ${trim(m.min_value)} · max ${trim(m.max_value)} · mean ${trim(m.mean_value)}`,
                   },
                   {
                     label: 'Status',

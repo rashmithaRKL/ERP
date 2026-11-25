@@ -59,7 +59,8 @@ export function useQualityQuery<T>(name: string, path: string | undefined) {
   });
 }
 
-export const useDefectCodes = () => useQualityQuery<{ items: Row[] }>('defect-codes', '/quality/defect-codes');
+export const useDefectCodes = () =>
+  useQualityQuery<{ items: Row[] }>('defect-codes', '/quality/defect-codes');
 export const usePeople = () => useQualityQuery<{ items: Row[] }>('people', '/quality/people');
 
 /**
@@ -92,18 +93,21 @@ export function useQualityCommand() {
 export function params(values: Record<string, string | number | boolean | undefined | null>) {
   const search = new URLSearchParams();
   for (const [key, value] of Object.entries(values))
-    if (value !== undefined && value !== null && value !== '' && value !== false) search.set(key, String(value));
+    if (value !== undefined && value !== null && value !== '' && value !== false)
+      search.set(key, String(value));
   const out = search.toString();
   return out ? `?${out}` : '';
 }
 
 /** Characteristic specification as text: `0.40–0.52 mm (nominal 0.45)`, `≤ 0.05 %`, `pass/fail · 20 units`. */
 export function specText(c: Row) {
-  if (c.kind === 'ATTRIBUTE') return `Pass/fail · ${c.sample_size} unit${Number(c.sample_size) === 1 ? '' : 's'}`;
+  if (c.kind === 'ATTRIBUTE')
+    return `Pass/fail · ${c.sample_size} unit${Number(c.sample_size) === 1 ? '' : 's'}`;
   const unit = c.unit ? ` ${c.unit}` : '';
   const lower = c.lower_limit === null || c.lower_limit === undefined ? null : trim(c.lower_limit);
   const upper = c.upper_limit === null || c.upper_limit === undefined ? null : trim(c.upper_limit);
-  const range = lower !== null && upper !== null ? `${lower}–${upper}` : lower !== null ? `≥ ${lower}` : `≤ ${upper}`;
+  const range =
+    lower !== null && upper !== null ? `${lower}–${upper}` : lower !== null ? `≥ ${lower}` : `≤ ${upper}`;
   const nominal = c.nominal === null || c.nominal === undefined ? '' : ` (nominal ${trim(c.nominal)})`;
   return `${range}${unit}${nominal}`;
 }
@@ -123,7 +127,15 @@ export function inSpec(c: Row, value: number) {
 }
 
 export const SEVERITIES = ['CRITICAL', 'MAJOR', 'MINOR'];
-export const NCR_SOURCES = ['INSPECTION', 'PRODUCTION', 'SUPPLIER', 'CUSTOMER', 'INTERNAL', 'AUDIT', 'RECALL'];
+export const NCR_SOURCES = [
+  'INSPECTION',
+  'PRODUCTION',
+  'SUPPLIER',
+  'CUSTOMER',
+  'INTERNAL',
+  'AUDIT',
+  'RECALL',
+];
 export const RAISE_SOURCES = ['PRODUCTION', 'SUPPLIER', 'CUSTOMER', 'INTERNAL', 'AUDIT'];
 export const ROOT_CAUSES = ['MAN', 'MACHINE', 'METHOD', 'MATERIAL', 'MEASUREMENT', 'ENVIRONMENT'];
 export const DISPOSITIONS: Record<string, { label: string; hint: string }> = {

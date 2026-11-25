@@ -11,7 +11,9 @@ import {
   ClipboardCheck,
   Cpu,
   Factory,
+  ListChecks,
   Package,
+  ShieldAlert,
   ShieldCheck,
   ShoppingCart,
   SlidersHorizontal,
@@ -94,6 +96,9 @@ export default function OverviewPage() {
     (p) => ['APPROVED', 'PARTIAL'].includes(text(p.status)) && text(p.due_date).substring(0, 10) < today(),
   );
   const purchaseAttention = awaitingApproval.length + lateDeliveries.length;
+  // V12 quality: open critical nonconformances and overdue CAPA actions (`qualityAlerts` state key).
+  const criticalNcrs = num(data.qualityAlerts?.open_critical_ncrs);
+  const overdueCapa = num(data.qualityAlerts?.overdue_capa_actions);
   return (
     <>
       <motion.div className="stats-grid" variants={stagger} initial="hidden" animate="visible">
@@ -411,7 +416,12 @@ export default function OverviewPage() {
           title="Needs your attention"
           action={
             <span className="attention-count">
-              {shortages.length + pendingQc.length + overdue + (purchaseAttention ? 1 : 0)}
+              {shortages.length +
+                pendingQc.length +
+                overdue +
+                (purchaseAttention ? 1 : 0) +
+                (criticalNcrs ? 1 : 0) +
+                (overdueCapa ? 1 : 0)}
             </span>
           }
           className="attention-panel"
@@ -444,6 +454,38 @@ export default function OverviewPage() {
                   <p>Quarantined stock needs a quality decision.</p>
                   <span>
                     Open quality control
+                    <ArrowRight size={11} />
+                  </span>
+                </div>
+              </button>
+            )}
+            {criticalNcrs > 0 && (
+              <button className="attention-item" onClick={() => navigate('/quality?tab=ncrs')}>
+                <span className="attention-symbol red">
+                  <ShieldAlert size={16} />
+                </span>
+                <div>
+                  <strong>
+                    {plural(criticalNcrs, 'critical nonconformance', 'critical nonconformances')} open
+                  </strong>
+                  <p>Held stock is waiting for a disposition decision.</p>
+                  <span>
+                    Review nonconformances
+                    <ArrowRight size={11} />
+                  </span>
+                </div>
+              </button>
+            )}
+            {overdueCapa > 0 && (
+              <button className="attention-item" onClick={() => navigate('/quality?tab=capa')}>
+                <span className="attention-symbol amber">
+                  <ListChecks size={16} />
+                </span>
+                <div>
+                  <strong>{plural(overdueCapa, 'CAPA action is', 'CAPA actions are')} overdue</strong>
+                  <p>Corrective and preventive actions are past their due date.</p>
+                  <span>
+                    Open CAPA
                     <ArrowRight size={11} />
                   </span>
                 </div>

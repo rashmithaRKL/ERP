@@ -66,7 +66,12 @@ export function QualitySearch({
   return (
     <div className="search-input">
       <Search size={16} />
-      <input aria-label={placeholder} placeholder={placeholder} value={value} onChange={(e) => onChange(e.target.value)} />
+      <input
+        aria-label={placeholder}
+        placeholder={placeholder}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+      />
     </div>
   );
 }

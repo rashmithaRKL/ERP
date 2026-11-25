@@ -56,7 +56,10 @@ export function InspectDialog({ inspection, onClose }: { inspection: Row; onClos
   const decision = criticalFail.length ? 'FAILED' : result;
   const missing = characteristics.filter((c) => !complete(c));
   const blocked =
-    !decision || !notes.trim() || (plan && missing.length > 0) || (decision === 'PASSED' && unexplained.length > 0);
+    !decision ||
+    !notes.trim() ||
+    (plan && missing.length > 0) ||
+    (decision === 'PASSED' && unexplained.length > 0);
 
   async function submit(e: FormEvent) {
     e.preventDefault();
@@ -80,7 +83,9 @@ export function InspectDialog({ inspection, onClose }: { inspection: Row; onClos
         key.current,
       );
       const ncr = out.ncrNumber ? ` Nonconformance ${text(out.ncrNumber)} raised.` : '';
-      notify(`${text(inspection.lot)} ${out.status === 'PASSED' ? 'released' : 'rejected'} successfully.${ncr}`);
+      notify(
+        `${text(inspection.lot)} ${out.status === 'PASSED' ? 'released' : 'rejected'} successfully.${ncr}`,
+      );
       onClose();
     } catch (err) {
       setError((err as Error).message);
@@ -95,13 +100,14 @@ export function InspectDialog({ inspection, onClose }: { inspection: Row; onClos
     >
       <QueryState pending={context.isPending} error={context.error} retry={() => context.refetch()}>
         <form onSubmit={submit}>
-          <div className="form-fields">
+          <div className="form-fields qa-stack">
             {plan ? (
               <div className="qa-plan-head">
                 <div>
                   <strong>{text(plan.name)}</strong>
                   <span>
-                    {text(plan.number)} · version {text(plan.version)} · {characteristics.length} characteristics
+                    {text(plan.number)} · version {text(plan.version)} · {characteristics.length}{' '}
+                    characteristics
                   </span>
                 </div>
                 <QualityBadge value="ACTIVE" label="Plan applies" />
@@ -186,8 +192,8 @@ export function InspectDialog({ inspection, onClose }: { inspection: Row; onClos
                 <div>
                   <strong>The inspection fails</strong>
                   <p>
-                    Critical characteristic out of specification: {criticalFail.map((c) => c.name).join(', ')}. A
-                    nonconformance report is raised automatically.
+                    Critical characteristic out of specification: {criticalFail.map((c) => c.name).join(', ')}
+                    . A nonconformance report is raised automatically.
                   </p>
                 </div>
               </div>
@@ -235,9 +241,7 @@ export function InspectDialog({ inspection, onClose }: { inspection: Row; onClos
               />
             </label>
             {plan && missing.length > 0 && (
-              <p className="inv-small muted">
-                Still to measure: {missing.map((c) => c.name).join(', ')}.
-              </p>
+              <p className="inv-small muted">Still to measure: {missing.map((c) => c.name).join(', ')}.</p>
             )}
             <ActionError message={error} />
           </div>

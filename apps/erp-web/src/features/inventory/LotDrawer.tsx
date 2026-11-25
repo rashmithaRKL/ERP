@@ -1,6 +1,7 @@
 import { Overlay, Table } from '../../components';
 import { labelState, money, num, text } from '../../lib/format';
 import { ProductMark } from '../products/ProductMark';
+import { LotQualitySection } from '../quality/LotQualitySection';
 import { useDetail } from './api';
 import type { LotDetail } from './api';
 import { dateTime, Delta, QueryState, StatusBadge, qty } from './shared';
@@ -118,6 +119,7 @@ export function LotDrawer({
                 />
               </>
             )}
+            <LotQualitySection lotId={id} onOpenLot={onOpen} />
             <h3>Movements</h3>
             <Table
               compact

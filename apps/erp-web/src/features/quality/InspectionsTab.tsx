@@ -114,7 +114,9 @@ export function InspectionsTab({
                   <div className="cell-stack">
                     <span className="notes-cell" title={text(r.notes)}>
                       {text(r.notes) ||
-                        (r.status === 'PENDING' ? 'Awaiting authorized inspector' : `By ${text(r.inspected_by)}`)}
+                        (r.status === 'PENDING'
+                          ? 'Awaiting authorized inspector'
+                          : `By ${text(r.inspected_by)}`)}
                     </span>
                     {(r.ncr_number || r.status !== 'PENDING') && (
                       <span className="qa-row-links">

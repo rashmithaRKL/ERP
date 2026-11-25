@@ -28,6 +28,9 @@ export type State = {
   // `ledger` (GET /inventory/ledger) and `journal` (GET /reports/journal).
   /** V7: standard-cost roll-up of every BOM revision through all levels (BOM cards). */
   bomCosts?: BomCost[];
+  /** V12 quality attention counts (open / open critical NCRs, pending concessions and supplier returns, open rework,
+   * overdue CAPA actions, the caller's overdue CAPA actions). */
+  qualityAlerts?: Record<string, number>;
 };
 /** One `bomCosts` row: per-unit material cost by level, total, depth and multi-level warnings. */
 export type BomCost = {
