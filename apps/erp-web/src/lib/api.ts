@@ -30,6 +30,9 @@ export type State = {
   bomCosts?: BomCost[];
   /** V11: maintenance attention counts; screens read `GET /maintenance/**`. */
   maintenance?: MaintenanceSummary;
+  /** V12 quality attention counts (open / open critical NCRs, pending concessions and supplier returns, open rework,
+   * overdue CAPA actions, the caller's overdue CAPA actions). */
+  qualityAlerts?: Record<string, number>;
 };
 /** `maintenance` state key (V11): counts plus up to five open breakdowns and overdue preventive plans. */
 export type MaintenanceSummary = {

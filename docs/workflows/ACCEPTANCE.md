@@ -11,7 +11,9 @@ A screen alone does not satisfy a business workflow. Each supported command has 
 | Customer return | Return against a delivery (≤ delivered − returned) → quarantine lot at delivered cost → reversing revenue/receivable and COGS journals → RETURN inspection → pass restocks / fail holds | Replacement shipments are new orders; credit notes as documents and cash refunds later |
 | Material consumption | FIFO reservations → authorized issue → negative raw ledger → positive WIP value | Exact snapshot issue only; unplanned consumption requires a future controlled variance workflow |
 | Partial production | Partial good/scrap output → proportional cost allocation → retained WIP → final output → zero WIP | Conversion costs entered per posting; no implicit whole-order cost allocation |
-| Quality failure | Incoming failure → supplier return reversal; final failure → enforceable finished lot hold | Final rework/release/scrap disposition not implemented; unsafe dispatch remains blocked |
+| Quality failure | Incoming failure → supplier return reversal (recorded on an automatic NCR); any failed inspection → held lot + NCR; plan-driven inspections fail on a critical characteristic out of specification | Unsafe dispatch remains blocked until a disposition releases stock |
+| Nonconformance disposition (V12) | NCR (automatic or manual; manual on a released lot holds it) → partial dispositions ≤ affected quantity: concession (independent approval) / scrap (QUALITY_SCRAP, QUALITY_LOSS) / return to supplier (warehouse posts the SR document) / rework (RW order → output lot in quarantine → re-inspection releases it) → DISPOSITIONED (hold lifted, MO may complete) → CLOSED | Recall holds across a genealogy (V14); rework orders cannot be cancelled once opened |
+| CAPA (V12) | CAPA from NCRs or standalone → root cause (6M + five whys) → corrective/preventive actions with owners and due dates → start → all actions done → verification by someone other than the owner → closed (or reopened when not effective) | Notifications for overdue actions are attention counts only |
 | Local operations | Same local API/PostgreSQL transaction boundaries | Browser offline queue and cloud reconciliation not implemented or verified |
 | Costing | Actual FIFO materials + entered labour/machine → WIP/finished/scrap → dispatch COGS | Manufacturing subledger; full finance and statutory statements later |
 | Multi-level BOM | Semi-finished BOM approved first → parent BOM approved (no cycle at any depth) → explosion/where-used/cost roll-up through all levels → copy approved revision to draft → edit → compare → approve | Alternative components, phantom BOMs, effectivity dates and engineering change orders later |
@@ -58,10 +60,16 @@ A screen alone does not satisfy a business workflow. Each supported command has 
 30. Calendar maths: breaks, overnight shifts split across days, holidays cancelling the shifts that start that day, overtime (including across midnight and on a holiday) counted once, assigned vs plant-default calendars, around-the-clock without a calendar (`routing.CalendarServiceTest`).
 31. Overlapping downtime on one machine (a second open event, or a closed event inside another): refused (409); back-to-back events are allowed (`maintenance.DowntimeTest`).
 32. Editing or deleting a closed downtime event: refused by the database; a planner's correction supersedes it and records the corrected or withdrawn event, and only effective events count in metrics.
-33. Starting maintenance while an MO is in progress or partially completed on the machine: refused with the MO number until a planner pauses it; one work order in progress per machine.
+33. Starting maintenance while an MO is in progress or partially completed on the machine (for a routed V10 order: while one of its operations is in progress there, `maintenance.RoutedOperationMaintenanceTest`): refused with the MO number until a planner pauses it; one work order in progress per machine.
 34. Self-approval of a maintenance request: refused, also for ADMIN.
 35. "Generate due work orders" twice (or retried): one preventive order per plan and due date; a retry with the same key replays the first result.
 36. Spare-part issue beyond released, unreserved stock or in a closed period: refused with no ledger or journal rows; returns put parts back into the issuing lot at the issue value and the expense journal nets to the parts actually used.
+37. Plan-driven inspection (V12): a critical characteristic out of specification fails the decision even when the inspector chose pass; a non-critical one passes only with a deviation note; inspections without a plan behave as before (`quality.InspectionPlanTest`).
+38. Scrap disposition in a closed period: refused, nothing posted (`quality.NcrDispositionTest`).
+39. Concession requested and approved by the same person (ADMIN included): refused.
+40. Dispositions above the affected quantity: refused; a rejected concession frees its quantity.
+41. Rework value conservation: output lot value = input value + material + labour, rework WIP nets to zero per order and the database `CHECK` enforces it; input → output lot links are immutable.
+42. CAPA closed by its owner: refused; a different quality user verifies effectiveness (`quality.CapaTest`).
 
 ## Multi-level browser acceptance (V7 demo data)
 
@@ -87,6 +95,15 @@ A screen alone does not satisfy a business workflow. Each supported command has 
 3. As *demo.maintenance* (Ruwan Wickramasinghe): **Work orders** → *In progress* shows the IM-03 hydraulic repair: record checklist/findings, **Log labour**, **Issue parts** (SP-001 bearing), return one, then **Complete work**: IM-03 becomes idle and its breakdown closes. Starting the BM-01 preventive order is refused while BM-01 production is in progress (pause it first as the planner).
 4. **Downtime**: the Pareto lists breakdown, changeover, material shortage, quality hold, no operator and utilities minutes for 30 days; reliability shows MTBF/MTTR per work center; as planner **Correct** a closed event and tick *Show corrected events* to see the superseded original.
 5. **Work centers**: PK-01 shows its completed repair in **Maintenance & history**; a machine drawer offers **Report breakdown**, **Report downtime**, **Meter reading** and (planner) **Correct status** (refused while a work order is in progress). The **Overview** attention panel and the bell show open breakdowns and overdue preventive work.
+
+## Quality management browser acceptance (V12 demo data)
+
+1. **Quality control → Inspection plans** (any role; quality/admin edit): *500ml bottle · final release* (4 characteristics, 2 critical) and *HDPE resin · incoming*. Open one: characteristics with limits, sample sizes, critical flags and defect codes; below, the defect-code catalogue.
+2. **Inspections** (demo.quality): filter *Passed* and type *Incoming*; the 500 kg HDPE resin receipt → **Measurements** shows three readings per variable characteristic and the CoA check. A pending final inspection of a bottle lot shows *Plan applies*: **Inspect lot** asks for 5 wall-thickness readings; entering 0.38 marks it red, disables *Pass* and explains that a nonconformance will be raised.
+3. **Nonconformances**: a CRITICAL `DIM` NCR from the failed return inspection, DISPOSITIONED: scrap 100 and rework 200 (link to the RW order, completed; its output lot released after re-inspection). A CRITICAL `LEAK` NCR is OPEN: as demo.quality **Add disposition** (e.g. use as is 20 → pending approval; scrap the rest); switch to demo.admin to **Approve** the concession (demo.quality cannot approve its own). **Open CAPA** from any NCR.
+4. **Rework**: the completed RW order shows input/output lots, labour and label material, and the lot genealogy table. **Inventory → Lots** → the rework lot drawer shows *Reworked by RW-…* under *Quality*.
+5. **CAPA**: *Bottle wall thickness below specification at the shoulder* is IN_PROGRESS with one action done and one overdue (red). The overview *Needs your attention* panel and the bell list the open critical NCR and the overdue CAPA action. As demo.quality mark the overdue action done and **Send to verification**; as demo.admin **Verify effectiveness** (the owner cannot).
+6. Roles: demo.warehouse sees all tabs read-only and posts the supplier return of a RETURN_TO_SUPPLIER disposition (**Post return**) on a purchased lot.
 
 ## Manual browser acceptance
 

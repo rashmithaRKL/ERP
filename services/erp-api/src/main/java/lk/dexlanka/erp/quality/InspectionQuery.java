@@ -21,7 +21,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
 public class InspectionQuery {
     static final List<String> STATUSES = List.of("PENDING", "PASSED", "FAILED");
-    static final List<String> TYPES = List.of("INCOMING", "FINAL", "RETURN", "OPENING");
+    static final List<String> TYPES = List.of("INCOMING", "FINAL", "RETURN", "OPENING", "REWORK");
 
     private static final String FROM = """
              FROM inspections q
@@ -45,7 +45,7 @@ public class InspectionQuery {
      * matching the filter; {@code counts} are the tenant's inspections per status (unfiltered, for summary figures).
      *
      * @param status {@code all} (or blank) or PENDING, PASSED, FAILED
-     * @param type blank or INCOMING, FINAL, RETURN, OPENING
+     * @param type blank or INCOMING, FINAL, RETURN, OPENING, REWORK
      * @param q matched against lot number, item name/SKU and inspection notes
      */
     public Map<String, Object> page(Actor a, String status, String type, String q, int limit, String before) {
@@ -76,7 +76,15 @@ public class InspectionQuery {
                                                       JOIN sales_orders so ON so.tenant_id=cr.tenant_id
                                                                           AND so.id=cr.sales_order_id
                                                       WHERE cr.tenant_id=l.tenant_id AND cr.lot_id=l.id LIMIT 1)
-                       END AS source_number""" + FROM + """
+                         WHEN 'REWORK' THEN (SELECT rw.number FROM rework_orders rw
+                                             WHERE rw.tenant_id=l.tenant_id AND rw.id=l.source_id)
+                       END AS source_number,
+                       CASE WHEN q.status='PENDING' THEN applicable_inspection_plan(q.tenant_id,l.item_id,q.type)
+                       END AS plan_id,
+                       (SELECT n.id FROM ncrs n WHERE n.tenant_id=q.tenant_id AND n.inspection_id=q.id
+                          AND n.source='INSPECTION') AS ncr_id,
+                       (SELECT n.number FROM ncrs n WHERE n.tenant_id=q.tenant_id AND n.inspection_id=q.id
+                          AND n.source='INSPECTION') AS ncr_number""" + FROM + """
                   AND (?::text IS NULL OR (q.created_at,q.id) <
                        (SELECT c.created_at,c.id FROM inspections c WHERE c.tenant_id=q.tenant_id AND c.id=?))
                 ORDER BY q.created_at DESC,q.id DESC

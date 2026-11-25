@@ -1,0 +1,108 @@
+/* Quality management (pages/QualityPage.tsx, features/quality/*, V12). Only new .qa-* / .quality-panel rules on the
+   shared tokens in styles.css, so the global cascade is unaffected when this page chunk loads. */
+
+.quality-panel .mini-tabs { border-top: 1px solid var(--border); }
+.quality-panel .mini-tabs.motion-tabs .tab-list { overflow-x: auto; scrollbar-width: none; }
+.quality-panel .server-toolbar { justify-content: flex-start; flex-wrap: wrap; gap: 10px; }
+.quality-panel .server-toolbar select {
+  height: 34px; border: 1px solid var(--border); background: var(--surface); color: var(--text);
+  border-radius: 5px; padding: 0 9px; font-size: 12px; max-width: 220px;
+}
+.qa-toolbar-action { margin-left: auto; }
+.summary-strip strong small { font-size: 12px; font-weight: 600; font-family: 'DM Sans Variable', sans-serif; }
+
+/* Rows and inline links */
+.qa-plan-chip { display: inline-flex; align-items: center; gap: 4px; color: var(--tone-blue) !important; font-size: 11px; }
+.qa-row-links { display: inline-flex; flex-wrap: wrap; gap: 10px; }
+.qa-row-links .text-button { font-size: 11px; }
+.qa-row-actions { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.qa-badges { display: inline-flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
+.qa-inline-badge { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+.qa-defect-strip {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; padding: 12px 18px 0;
+  font-size: 11px; color: var(--muted);
+}
+.qa-defect-strip > span:first-child { margin-right: 4px; }
+.qa-defect-strip .inv-chip strong { color: var(--heading); font-weight: 650; }
+.qa-pending { color: var(--tone-amber); margin-left: auto; }
+
+/* Drawer facts and lists */
+.qa-facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 24px; margin: 16px 0 4px; }
+.qa-facts > div { min-width: 0; }
+.qa-facts dt { font-size: 11px; color: var(--muted); margin-bottom: 2px; }
+.qa-facts dd { margin: 0; font-size: 13px; color: var(--text); overflow-wrap: anywhere; }
+.qa-link-list { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.qa-link-list li { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; font-size: 13px; }
+.qa-link-list li > span:not(.badge) { color: var(--secondary); flex: 1 1 160px; min-width: 0; }
+.qa-rca { border: 1px solid var(--border); background: var(--soft); border-radius: 6px; padding: 12px 14px; font-size: 13px; }
+.qa-rca ol { margin: 8px 0; padding-left: 20px; display: flex; flex-direction: column; gap: 4px; color: var(--secondary); }
+.qa-rca p { color: var(--text); }
+
+/* Inspection dialog: measurement entry */
+.qa-plan-head {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+  border: 1px solid var(--border); background: var(--soft); border-radius: 6px; padding: 10px 12px;
+}
+.qa-plan-head > div { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.qa-plan-head strong { font-size: 13px; color: var(--heading); }
+.qa-plan-head span { font-size: 11px; color: var(--muted); }
+.qa-measure-list { display: flex; flex-direction: column; gap: 10px; }
+.qa-measure { border: 1px solid var(--border); border-radius: 7px; padding: 10px 12px 12px; margin: 0; min-width: 0; }
+.qa-measure.out { border-color: color-mix(in srgb, var(--tone-red) 45%, var(--border)); }
+.qa-measure legend { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 6px; padding: 0 4px; font-size: 13px; }
+.qa-measure legend strong { color: var(--heading); }
+.qa-spec { font-size: 11px; color: var(--muted); margin: 0 0 8px; }
+.qa-readings { display: grid; grid-template-columns: repeat(auto-fill, minmax(78px, 1fr)); gap: 6px; }
+.qa-readings input,
+.qa-inline input {
+  height: 34px; border: 1px solid var(--border); border-radius: 5px; padding: 0 8px; background: var(--surface);
+  color: var(--text); font-size: 13px; width: 100%;
+}
+.qa-out { border-color: var(--tone-red) !important; background: color-mix(in srgb, var(--surface) 88%, var(--tone-red)) !important; color: var(--tone-red) !important; font-weight: 600; }
+.qa-inline { display: flex; align-items: center; gap: 10px; font-size: 12px; color: var(--secondary); }
+.qa-inline > span { flex: 0 0 auto; }
+.qa-inline input { width: 110px; }
+.qa-inline.wide { margin-top: 8px; }
+.qa-inline.wide input { width: auto; flex: 1; }
+
+/* Forms with dynamic rows */
+.qa-form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.qa-form-grid > .field,
+.qa-form-grid > div { min-width: 0; }
+.qa-span { grid-column: 1 / -1; }
+fieldset.qa-form-grid { border: 0; margin: 0; min-width: 0; }
+.form-fields.qa-stack { grid-template-columns: minmax(0, 1fr); }
+.qa-static { font-size: 13px; color: var(--heading); font-weight: 600; padding: 9px 0; }
+.qa-materials, .qa-characteristics { display: flex; flex-direction: column; gap: 10px; }
+.qa-materials-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.qa-materials-head strong { font-size: 13px; color: var(--heading); }
+.qa-material { display: grid; grid-template-columns: minmax(0, 1fr) 150px auto; gap: 10px; align-items: end; border: 1px solid var(--border); border-radius: 7px; padding: 10px; }
+.qa-characteristic .inv-line-head { gap: 10px; }
+.qa-characteristic .qa-name {
+  flex: 1 1 200px; min-width: 0; height: 34px; border: 1px solid var(--border); border-radius: 5px; padding: 0 9px;
+  background: var(--surface); color: var(--text); font-size: 13px;
+}
+.qa-spec-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.qa-spec-grid .qa-wide { grid-column: span 2; }
+
+/* Plans tab: defect-code catalogue */
+.qa-subsection { border-top: 1px solid var(--border); margin-top: 8px; }
+.qa-subsection-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding: 16px 18px 6px; }
+.qa-subsection-head p { font-size: 12px; color: var(--muted); }
+
+@media (max-width: 800px) {
+  .qa-spec-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .quality-panel .server-toolbar select { flex: 1 1 150px; max-width: none; }
+}
+
+@media (max-width: 650px) {
+  .qa-facts, .qa-form-grid { grid-template-columns: 1fr; }
+  .qa-material { grid-template-columns: 1fr auto; }
+  .qa-material > .lot-picker { grid-column: 1 / -1; }
+  .qa-spec-grid .qa-wide { grid-column: 1 / -1; }
+  .qa-toolbar-action { margin-left: 0; width: 100%; justify-content: center; }
+  .qa-defect-strip { padding: 10px 14px 0; }
+  .qa-pending { margin-left: 0; flex-basis: 100%; }
+  .qa-inline { flex-wrap: wrap; }
+  .qa-readings { grid-template-columns: repeat(auto-fill, minmax(70px, 1fr)); }
+}

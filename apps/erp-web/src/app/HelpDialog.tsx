@@ -49,6 +49,12 @@ export function HelpDialog({ onClose }: { onClose: () => void }) {
           machine downtime by reason, corrective and preventive work orders with checklists, spare parts and
           labour, and MTBF/MTTR per work center.
         </p>
+        <p>
+          Quality management: inspection plans with measured characteristics, nonconformance reports raised by
+          failed inspections or by hand, dispositions (use as is with independent approval, scrap, return to
+          supplier, rework into a new re-inspected lot) and CAPA with root-cause analysis and independent
+          effectiveness checks.
+        </p>
         <h3>What remains on the roadmap</h3>
         <p>
           Finite-capacity scheduling, validated OEE, full finance and tax localization, personnel workflows,

@@ -36,6 +36,25 @@ export function AttentionCenter({ onClose }: { onClose: () => void }) {
             body: `${fmt(m.shortage, 3)} ${m.uom} net shortage`,
             path: '/planning',
           })),
+          // V12 quality attention counts (`qualityAlerts` state key).
+          ...(num(data?.qualityAlerts?.open_critical_ncrs)
+            ? [
+                {
+                  title: `${fmt(data?.qualityAlerts?.open_critical_ncrs)} critical nonconformance(s) open`,
+                  body: 'Held stock is waiting for a disposition decision',
+                  path: '/quality?tab=ncrs',
+                },
+              ]
+            : []),
+          ...(num(data?.qualityAlerts?.overdue_capa_actions)
+            ? [
+                {
+                  title: `${fmt(data?.qualityAlerts?.overdue_capa_actions)} CAPA action(s) overdue`,
+                  body: 'Corrective and preventive actions past their due date',
+                  path: '/quality?tab=capa',
+                },
+              ]
+            : []),
           ...pendingQc.map((q) => ({
             title: `${q.item} awaiting inspection`,
             body: `Lot ${q.lot}`,
@@ -70,7 +89,9 @@ export function AttentionCenter({ onClose }: { onClose: () => void }) {
           !pendingQc.length &&
           !num(data?.metrics.overdue) &&
           !breakdowns.length &&
-          !overduePlans.length && <Empty title="You’re all caught up" />}
+          !overduePlans.length &&
+          !num(data?.qualityAlerts?.open_critical_ncrs) &&
+          !num(data?.qualityAlerts?.overdue_capa_actions) && <Empty title="You’re all caught up" />}
       </div>
     </Overlay>
   );
