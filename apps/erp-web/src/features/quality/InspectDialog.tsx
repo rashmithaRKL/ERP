@@ -70,7 +70,8 @@ export function InspectDialog({ inspection, onClose }: { inspection: Row; onClos
           const x = entry(c);
           return {
             characteristicId: c.id,
-            values: c.kind === 'VARIABLE' ? x.values.map(Number) : null,
+            // Decimal strings, so readings reach the server exactly as typed.
+            values: c.kind === 'VARIABLE' ? x.values.map((v) => v.trim()) : null,
             nonconforming: c.kind === 'ATTRIBUTE' ? Number(x.nonconforming) : null,
             note: x.note.trim() || null,
           };
