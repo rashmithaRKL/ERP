@@ -55,6 +55,8 @@
 
 /* Gantt frame */
 .sched-gantt-panel { margin-bottom: 20px; overflow: hidden; }
+.sched-gantt-panel .panel-heading { flex-wrap: wrap; padding-bottom: 14px; }
+.sched-gantt-panel .panel-heading > div:first-child { min-width: 0; flex: 1 1 260px; }
 .sched-gantt-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
 .sched-gantt-controls .mini-tabs { height: 34px; border-bottom: 0; padding: 0 4px; }
 .sched-colour select { min-width: 170px; }
