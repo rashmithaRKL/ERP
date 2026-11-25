@@ -50,9 +50,7 @@ public class DowntimeService {
                         "SELECT number,machine_id FROM manufacturing_orders WHERE tenant_id=? AND id=?",
                         a.tenant(),
                         order);
-                require(
-                        mo.get("machine_id").equals(machine.get("id")),
-                        mo.get("number") + " runs on another machine");
+                require(mo.get("machine_id").equals(machine.get("id")), mo.get("number") + " runs on another machine");
             }
             if (end == null) {
                 var open = rules.openDowntime(a, str(machine, "id"));
@@ -67,9 +65,7 @@ public class DowntimeService {
                     "DOWNTIME_REPORTED",
                     str(event, "number"),
                     machine.get("code") + " · " + reasonLabel(c.reason()) + (planned ? " (planned)" : " (unplanned)")
-                            + (end == null
-                                    ? " · open"
-                                    : " · " + MaintenanceRules.minutes(start, end) + " min"));
+                            + (end == null ? " · open" : " · " + MaintenanceRules.minutes(start, end) + " min"));
             return result(a, str(event, "id"));
         });
     }
@@ -92,8 +88,8 @@ public class DowntimeService {
             OffsetDateTime end = MaintenanceRules.timeOrNow(c.endedAt(), "downtime end");
             requireNotFuture(end, "The downtime end");
             rules.closeDowntime(a, event, end, c.notes());
-            var machine = s.one(
-                    "SELECT code FROM machines WHERE tenant_id=? AND id=?", a.tenant(), event.get("machine_id"));
+            var machine =
+                    s.one("SELECT code FROM machines WHERE tenant_id=? AND id=?", a.tenant(), event.get("machine_id"));
             s.audit(
                     a,
                     "DOWNTIME_CLOSED",
@@ -122,10 +118,7 @@ public class DowntimeService {
             boolean planned = MaintenanceRules.planned(c.reason(), c.planned());
             var machine = rules.machine(a, str(event, "machine_id"));
             // The original leaves the effective record first, so the corrected event may overlap its old times.
-            s.db().update(
-                            "UPDATE downtime_events SET status='SUPERSEDED' WHERE tenant_id=? AND id=?",
-                            a.tenant(),
-                            id);
+            s.db().update("UPDATE downtime_events SET status='SUPERSEDED' WHERE tenant_id=? AND id=?", a.tenant(), id);
             String notes = c.notes() == null ? str(event, "notes") : c.notes();
             var corrected = rules.insertDowntime(
                     a,

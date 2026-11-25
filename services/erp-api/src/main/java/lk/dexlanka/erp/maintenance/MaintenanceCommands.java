@@ -45,7 +45,9 @@ public final class MaintenanceCommands {
             @Size(max = 64) String manufacturingOrderId,
             @Size(max = 1000) String notes) {}
 
-    public record CloseDowntime(@Size(max = 40) String endedAt, @Size(max = 1000) String notes) {}
+    public record CloseDowntime(
+            @Size(max = 40) String endedAt,
+            @Size(max = 1000) String notes) {}
 
     /**
      * Corrects a closed event: the original becomes SUPERSEDED and the corrected event is recorded with these values.
@@ -104,21 +106,26 @@ public final class MaintenanceCommands {
      * Negative hours reverse an earlier entry.
      */
     public record Labour(
-            @NotNull @DecimalMin("-1000") @DecimalMax("1000") @Digits(integer = 4, fraction = 2) BigDecimal hours,
+            @NotNull @DecimalMin("-1000") @DecimalMax("1000") @Digits(integer = 4, fraction = 2)
+            BigDecimal hours,
+
             @Size(max = 64) String technicianId,
             @Size(max = 400) String notes) {}
 
     /** Issues a spare part from released stock, oldest lots first. */
     public record IssuePart(
             @NotBlank @Size(max = 64) String itemId,
+
             @NotNull @DecimalMin(value = "0", inclusive = false) @Digits(integer = 12, fraction = 6)
             BigDecimal quantity,
+
             @Size(max = 400) String notes) {}
 
     /** Returns unused parts of one issue movement to the lot they came from. */
     public record ReturnPart(
             @NotNull @DecimalMin(value = "0", inclusive = false) @Digits(integer = 12, fraction = 6)
             BigDecimal quantity,
+
             @Size(max = 400) String notes) {}
 
     /** Completes the work: findings are required; every checklist item needs a result. */
@@ -126,7 +133,9 @@ public final class MaintenanceCommands {
             @NotBlank @Size(max = 4000) String findings,
             @Size(max = 4000) String actions,
             @Valid @Size(max = 100) List<ChecklistResult> checklist,
-            @DecimalMin("0") @Digits(integer = 12, fraction = 2) BigDecimal meterReading) {}
+
+            @DecimalMin("0") @Digits(integer = 12, fraction = 2)
+            BigDecimal meterReading) {}
 
     public record Cancel(@NotBlank @Size(max = 400) String reason) {}
 
@@ -138,7 +147,10 @@ public final class MaintenanceCommands {
             @Size(max = 2000) String description,
             @NotNull @Size(max = 40) List<@NotBlank @Size(max = 200) String> checklist,
             @NotNull @Min(1) @Max(3650) Integer intervalDays,
-            @DecimalMin(value = "0", inclusive = false) @Digits(integer = 8, fraction = 2) BigDecimal intervalHours,
+
+            @DecimalMin(value = "0", inclusive = false) @Digits(integer = 8, fraction = 2)
+            BigDecimal intervalHours,
+
             @NotBlank @Size(max = 10) String nextDueDate,
 
             @DecimalMin(value = "0", inclusive = false) @DecimalMax("720") @Digits(integer = 3, fraction = 2)
@@ -151,7 +163,10 @@ public final class MaintenanceCommands {
             @Size(max = 2000) String description,
             @NotNull @Size(max = 40) List<@NotBlank @Size(max = 200) String> checklist,
             @NotNull @Min(1) @Max(3650) Integer intervalDays,
-            @DecimalMin(value = "0", inclusive = false) @Digits(integer = 8, fraction = 2) BigDecimal intervalHours,
+
+            @DecimalMin(value = "0", inclusive = false) @Digits(integer = 8, fraction = 2)
+            BigDecimal intervalHours,
+
             @NotBlank @Size(max = 10) String nextDueDate,
 
             @DecimalMin(value = "0", inclusive = false) @DecimalMax("720") @Digits(integer = 3, fraction = 2)
@@ -166,7 +181,9 @@ public final class MaintenanceCommands {
     // ------------------------------------------------------------------ machines and settings
 
     public record Meter(
-            @NotNull @DecimalMin("0") @Digits(integer = 12, fraction = 2) BigDecimal reading,
+            @NotNull @DecimalMin("0") @Digits(integer = 12, fraction = 2)
+            BigDecimal reading,
+
             @Size(max = 400) String notes) {}
 
     /** A planner's correction of a wrong machine status. MAINTENANCE is only entered by starting a work order. */
@@ -174,5 +191,7 @@ public final class MaintenanceCommands {
             @NotBlank @Pattern(regexp = "IDLE|RUNNING") String status,
             @NotBlank @Size(max = 400) String reason) {}
 
-    public record Settings(@NotNull @DecimalMin("0") @Digits(integer = 12, fraction = 2) BigDecimal labourRate) {}
+    public record Settings(
+            @NotNull @DecimalMin("0") @Digits(integer = 12, fraction = 2)
+            BigDecimal labourRate) {}
 }

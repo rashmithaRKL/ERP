@@ -30,20 +30,13 @@ class MaintenanceStateSections implements StateContributor {
 
     private Map<String, Object> maintenance(StateRequest r) {
         LocalDate today = MaintenanceRules.today();
-        var counts = s.one(
-                """
+        var counts = s.one("""
                 SELECT
                   (SELECT COUNT(*) FROM downtime_events WHERE tenant_id=? AND status='OPEN' AND reason='BREAKDOWN') AS open_breakdowns,
                   (SELECT COUNT(*) FROM downtime_events WHERE tenant_id=? AND status='OPEN') AS open_downtime,
                   (SELECT COUNT(*) FROM maintenance_plans WHERE tenant_id=? AND active AND next_due_date<?::date) AS overdue_plans,
                   (SELECT COUNT(*) FROM maintenance_work_orders WHERE tenant_id=? AND status='REQUESTED') AS awaiting_approval,
-                  (SELECT COUNT(*) FROM maintenance_work_orders WHERE tenant_id=? AND status='IN_PROGRESS') AS in_progress""",
-                r.tenant(),
-                r.tenant(),
-                r.tenant(),
-                today,
-                r.tenant(),
-                r.tenant());
+                  (SELECT COUNT(*) FROM maintenance_work_orders WHERE tenant_id=? AND status='IN_PROGRESS') AS in_progress""", r.tenant(), r.tenant(), r.tenant(), today, r.tenant(), r.tenant());
         var result = new LinkedHashMap<String, Object>(counts);
         result.put("breakdowns", s.list("""
                 SELECT d.id,d.number,d.machine_id,m.code AS machine,d.started_at,w.number AS work_order,w.status AS work_order_status

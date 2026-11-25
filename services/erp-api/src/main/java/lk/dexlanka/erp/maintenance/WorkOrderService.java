@@ -62,12 +62,20 @@ public class WorkOrderService {
                     "Either report a new breakdown or link the downtime already reported, not both");
             String id = id();
             String number = rules.number(a, "maintenance_work_orders", "MWO");
-            String priority = c.priority() == null || c.priority().isBlank()
-                    ? (c.breakdown() ? "HIGH" : "NORMAL")
-                    : c.priority();
-            s.db().update("""
+            String priority =
+                    c.priority() == null || c.priority().isBlank() ? (c.breakdown() ? "HIGH" : "NORMAL") : c.priority();
+            s.db().update(
+                            """
                             INSERT INTO maintenance_work_orders(id,tenant_id,number,type,machine_id,title,description,priority,status,requested_by)
-                            VALUES(?,?,?,'CORRECTIVE',?,?,?,?,'REQUESTED',?)""", id, a.tenant(), number, machine.get("id"), c.title().strip(), c.description() == null ? "" : c.description().strip(), priority, a.id());
+                            VALUES(?,?,?,'CORRECTIVE',?,?,?,?,'REQUESTED',?)""",
+                            id,
+                            a.tenant(),
+                            number,
+                            machine.get("id"),
+                            c.title().strip(),
+                            c.description() == null ? "" : c.description().strip(),
+                            priority,
+                            a.id());
             String downtime = null;
             if (linked != null) {
                 var event = rules.downtime(a, linked);
@@ -235,8 +243,7 @@ public class WorkOrderService {
      * The open downtime event that covers the work: the order's own, an unlinked open breakdown of the machine, or a new
      * event (any other open event of the machine is closed first). Returns its number.
      */
-    private String coverWithDowntime(
-            Actor a, Map<String, Object> wo, Map<String, Object> machine, OffsetDateTime now) {
+    private String coverWithDowntime(Actor a, Map<String, Object> wo, Map<String, Object> machine, OffsetDateTime now) {
         String id = str(wo, "id");
         var open = rules.openDowntime(a, str(machine, "id"));
         if (open != null && id.equals(open.get("work_order_id"))) return str(open, "number");
@@ -312,9 +319,8 @@ public class WorkOrderService {
             var wo = rules.workOrder(a, id);
             require(wo.get("status").equals("IN_PROGRESS"), "Labour is logged while the work order is in progress");
             require(c.hours().signum() != 0, "Enter the hours worked");
-            String technician = blankToNull(c.technicianId()) == null
-                    ? a.id()
-                    : str(rules.technician(a, c.technicianId()), "id");
+            String technician =
+                    blankToNull(c.technicianId()) == null ? a.id() : str(rules.technician(a, c.technicianId()), "id");
             BigDecimal rate = rules.labourRate(a.tenant());
             BigDecimal cost = money(c.hours().multiply(rate));
             BigDecimal hours = dec(wo.get("labour_hours")).add(c.hours());
@@ -360,8 +366,8 @@ public class WorkOrderService {
                     a,
                     "MWO_LABOUR_LOGGED",
                     number,
-                    c.hours().stripTrailingZeros().toPlainString() + " h at Rs. " + money(rate).toPlainString()
-                            + " = Rs. " + cost.toPlainString());
+                    c.hours().stripTrailingZeros().toPlainString() + " h at Rs. "
+                            + money(rate).toPlainString() + " = Rs. " + cost.toPlainString());
             return result(a, id);
         });
     }
@@ -396,7 +402,9 @@ public class WorkOrderService {
                             a.id(),
                             now,
                             c.findings().strip(),
-                            c.actions() == null ? str(wo, "actions") : c.actions().strip(),
+                            c.actions() == null
+                                    ? str(wo, "actions")
+                                    : c.actions().strip(),
                             s.encode(checklist),
                             c.meterReading(),
                             a.tenant(),
@@ -429,8 +437,7 @@ public class WorkOrderService {
                     status.equals("IN_PROGRESS")
                             ? "Work has started; complete the order with its findings instead"
                             : "This work order is already closed");
-            BigDecimal unreturned = s.db()
-                    .queryForObject(
+            BigDecimal unreturned = s.db().queryForObject(
                             "SELECT COALESCE(SUM(CASE WHEN kind='ISSUE' THEN quantity ELSE -quantity END),0) FROM maintenance_part_movements WHERE tenant_id=? AND work_order_id=?",
                             BigDecimal.class,
                             a.tenant(),

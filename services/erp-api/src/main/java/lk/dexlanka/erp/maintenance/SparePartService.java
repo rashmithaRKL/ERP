@@ -70,8 +70,8 @@ public class SparePartService {
                 if (remaining.signum() == 0) break;
                 BigDecimal qty = remaining.min(dec(lot.get("available")));
                 if (qty.signum() <= 0) continue;
-                BigDecimal value = s.ledger(a, str(lot, "id"), qty.negate(), number, ISSUE)
-                        .abs();
+                BigDecimal value =
+                        s.ledger(a, str(lot, "id"), qty.negate(), number, ISSUE).abs();
                 String movement = id();
                 s.db().update(
                                 "INSERT INTO maintenance_part_movements(id,tenant_id,work_order_id,kind,lot_id,item_id,quantity,value_amount,notes,created_by) VALUES(?,?,?,'ISSUE',?,?,?,?,?,?)",
@@ -95,8 +95,12 @@ public class SparePartService {
             }
             require(
                     remaining.signum() == 0,
-                    "Only " + c.quantity().subtract(remaining).stripTrailingZeros().toPlainString() + " "
-                            + item.get("uom") + " of " + sku + " is available in released stock");
+                    "Only "
+                            + c.quantity()
+                                    .subtract(remaining)
+                                    .stripTrailingZeros()
+                                    .toPlainString() + " " + item.get("uom") + " of " + sku
+                            + " is available in released stock");
             s.journal(
                     a,
                     number,

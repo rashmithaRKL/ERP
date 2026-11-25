@@ -86,8 +86,7 @@ class MaintenanceRules {
                         .toOffsetDateTime()
                         .withOffsetSameInstant(ZoneOffset.UTC);
             } catch (DateTimeParseException e2) {
-                throw new ResponseStatusException(
-                        HttpStatus.BAD_REQUEST, "Use a valid date and time for the " + label);
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Use a valid date and time for the " + label);
             }
         }
     }
@@ -158,8 +157,7 @@ class MaintenanceRules {
 
     /** An active user of this tenant who may carry out maintenance work (MAINTENANCE or ADMIN). */
     Map<String, Object> technician(Actor a, String userId) {
-        var u = s.one(
-                "SELECT id,name,role,active FROM users WHERE tenant_id=? AND id=?", a.tenant(), userId.strip());
+        var u = s.one("SELECT id,name,role,active FROM users WHERE tenant_id=? AND id=?", a.tenant(), userId.strip());
         require(Boolean.TRUE.equals(u.get("active")), u.get("name") + " is deactivated");
         require(
                 Set.of("MAINTENANCE", "ADMIN").contains(str(u, "role")),
@@ -249,10 +247,28 @@ class MaintenanceRules {
         if (end != null) require(end.isAfter(start), "The downtime must end after it starts");
         String id = id();
         String number = number(a, "downtime_events", "DT");
-        s.db().update("""
+        s.db().update(
+                        """
                         INSERT INTO downtime_events(id,tenant_id,number,machine_id,reason,planned,started_at,ended_at,status,
                           manufacturing_order_id,work_order_id,notes,reported_by,closed_by,closed_at,corrects_id,correction_reason)
-                        VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""", id, a.tenant(), number, machine.get("id"), reason, planned, start, end, status == null ? (end == null ? "OPEN" : "CLOSED") : status, manufacturingOrderId, workOrderId, notes == null ? "" : notes.strip(), a.id(), end == null ? null : a.id(), end == null ? null : now(), correctsId, correctionReason);
+                        VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                        id,
+                        a.tenant(),
+                        number,
+                        machine.get("id"),
+                        reason,
+                        planned,
+                        start,
+                        end,
+                        status == null ? (end == null ? "OPEN" : "CLOSED") : status,
+                        manufacturingOrderId,
+                        workOrderId,
+                        notes == null ? "" : notes.strip(),
+                        a.id(),
+                        end == null ? null : a.id(),
+                        end == null ? null : now(),
+                        correctsId,
+                        correctionReason);
         var result = new LinkedHashMap<String, Object>();
         result.put("id", id);
         result.put("number", number);
@@ -283,8 +299,7 @@ class MaintenanceRules {
             Actor a, Map<String, Object> machine, String to, String source, String reference, String reason) {
         String from = str(machine, "status");
         if (from.equals(to)) return;
-        s.db().update(
-                        "UPDATE machines SET status=? WHERE tenant_id=? AND id=?", to, a.tenant(), machine.get("id"));
+        s.db().update("UPDATE machines SET status=? WHERE tenant_id=? AND id=?", to, a.tenant(), machine.get("id"));
         s.db().update(
                         "INSERT INTO machine_status_changes(id,tenant_id,machine_id,from_status,to_status,source,reference,reason,changed_by) VALUES(?,?,?,?,?,?,?,?,?)",
                         id(),

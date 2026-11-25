@@ -130,7 +130,14 @@ class MaintenanceDemoSeed implements ApplicationRunner {
         // Closed downtime over the last week (different reasons, planned and unplanned).
         closed("bm01-breakdown", "bm01", "BREAKDOWN", today.minusDays(6), "10:20", 120, "Parison head heater failed");
         closed("im02-operator", "im02", "NO_OPERATOR", today.minusDays(5), "06:00", 55, "Night-shift operator absent");
-        closed("bm02-utilities", "bm02", "UTILITIES", today.minusDays(4), "14:05", 25, "Grid power dip, compressor trip");
+        closed(
+                "bm02-utilities",
+                "bm02",
+                "UTILITIES",
+                today.minusDays(4),
+                "14:05",
+                25,
+                "Grid power dip, compressor trip");
         closed("im01-material", "im01", "MATERIAL_SHORTAGE", today.minusDays(3), "09:30", 75, "Masterbatch not staged");
         closed("bm01-changeover", "bm01", "CHANGEOVER", today.minusDays(2), "13:00", 40, "Mould change 500 ml → 1 L");
         closed("bm01-quality", "bm01", "QUALITY_HOLD", today.minusDays(1), "11:10", 30, "Wall-thickness check failed");
@@ -154,7 +161,11 @@ class MaintenanceDemoSeed implements ApplicationRunner {
                         "NORMAL"),
                 "demo-v11-plan-im01");
         plans.generate(PLANNER, new MaintenanceCommands.Generate(7), "demo-v11-generate");
-        plans.meter(TECHNICIAN, "bm01", new MaintenanceCommands.Meter(new BigDecimal("1240"), "Hour meter"), "demo-v11-meter-1");
+        plans.meter(
+                TECHNICIAN,
+                "bm01",
+                new MaintenanceCommands.Meter(new BigDecimal("1240"), "Hour meter"),
+                "demo-v11-meter-1");
         plans.create(
                 PLANNER,
                 new MaintenanceCommands.Plan(
@@ -173,7 +184,11 @@ class MaintenanceDemoSeed implements ApplicationRunner {
                         new BigDecimal("4"),
                         "HIGH"),
                 "demo-v11-plan-bm01");
-        plans.meter(TECHNICIAN, "bm01", new MaintenanceCommands.Meter(new BigDecimal("1385"), "Hour meter"), "demo-v11-meter-2");
+        plans.meter(
+                TECHNICIAN,
+                "bm01",
+                new MaintenanceCommands.Meter(new BigDecimal("1385"), "Hour meter"),
+                "demo-v11-meter-2");
 
         // Completed corrective order on PK-01: breakdown, approval, belt replaced, labour, machine back to idle.
         var pk = orders.request(
@@ -189,10 +204,19 @@ class MaintenanceDemoSeed implements ApplicationRunner {
                         null),
                 "demo-v11-request-pk01");
         String pkId = str(pk, "id");
-        orders.approve(PLANNER, pkId, new MaintenanceCommands.Approve(null, null, TECHNICIAN.id()), "demo-v11-approve-pk01");
+        orders.approve(
+                PLANNER, pkId, new MaintenanceCommands.Approve(null, null, TECHNICIAN.id()), "demo-v11-approve-pk01");
         orders.start(TECHNICIAN, pkId, "demo-v11-start-pk01");
-        parts.issue(TECHNICIAN, pkId, new MaintenanceCommands.IssuePart(belt, BigDecimal.ONE, "Replacement belt"), "demo-v11-issue-pk01");
-        orders.labour(TECHNICIAN, pkId, new MaintenanceCommands.Labour(new BigDecimal("1.25"), null, "Belt change and tensioning"), "demo-v11-labour-pk01");
+        parts.issue(
+                TECHNICIAN,
+                pkId,
+                new MaintenanceCommands.IssuePart(belt, BigDecimal.ONE, "Replacement belt"),
+                "demo-v11-issue-pk01");
+        orders.labour(
+                TECHNICIAN,
+                pkId,
+                new MaintenanceCommands.Labour(new BigDecimal("1.25"), null, "Belt change and tensioning"),
+                "demo-v11-labour-pk01");
         orders.complete(
                 TECHNICIAN,
                 pkId,
@@ -217,9 +241,14 @@ class MaintenanceDemoSeed implements ApplicationRunner {
                         null),
                 "demo-v11-request-im03");
         String imId = str(im, "id");
-        orders.approve(PLANNER, imId, new MaintenanceCommands.Approve(null, null, TECHNICIAN.id()), "demo-v11-approve-im03");
+        orders.approve(
+                PLANNER, imId, new MaintenanceCommands.Approve(null, null, TECHNICIAN.id()), "demo-v11-approve-im03");
         orders.start(TECHNICIAN, imId, "demo-v11-start-im03");
-        orders.labour(TECHNICIAN, imId, new MaintenanceCommands.Labour(new BigDecimal("1.5"), null, "Diagnosis: pump and relief valve"), "demo-v11-labour-im03");
+        orders.labour(
+                TECHNICIAN,
+                imId,
+                new MaintenanceCommands.Labour(new BigDecimal("1.5"), null, "Diagnosis: pump and relief valve"),
+                "demo-v11-labour-im03");
         orders.progress(
                 TECHNICIAN,
                 imId,
@@ -275,7 +304,13 @@ class MaintenanceDemoSeed implements ApplicationRunner {
         downtime.report(
                 OPERATOR,
                 new MaintenanceCommands.ReportDowntime(
-                        machine, reason, null, start.toString(), start.plusMinutes(minutes).toString(), null, notes),
+                        machine,
+                        reason,
+                        null,
+                        start.toString(),
+                        start.plusMinutes(minutes).toString(),
+                        null,
+                        notes),
                 "demo-v11-downtime-" + key);
     }
 

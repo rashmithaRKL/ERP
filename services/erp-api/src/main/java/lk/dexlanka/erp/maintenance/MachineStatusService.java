@@ -34,7 +34,9 @@ public class MachineStatusService {
             var machine = rules.machine(a, machineId);
             String code = str(machine, "code");
             String from = str(machine, "status");
-            require(!from.equals(c.status()), code + " is already " + statusLabel(from).toLowerCase());
+            require(
+                    !from.equals(c.status()),
+                    code + " is already " + statusLabel(from).toLowerCase());
             var busy = s.list(
                     "SELECT number FROM maintenance_work_orders WHERE tenant_id=? AND machine_id=? AND status='IN_PROGRESS'",
                     a.tenant(),
@@ -59,7 +61,8 @@ public class MachineStatusService {
                     a,
                     "MACHINE_STATUS_CORRECTED",
                     code,
-                    statusLabel(from) + " → " + statusLabel(c.status()) + " · " + c.reason().strip());
+                    statusLabel(from) + " → " + statusLabel(c.status()) + " · "
+                            + c.reason().strip());
             var result = new LinkedHashMap<String, Object>();
             result.put("id", machineId);
             result.put("code", code);

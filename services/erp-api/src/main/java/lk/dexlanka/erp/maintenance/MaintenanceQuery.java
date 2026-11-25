@@ -70,7 +70,8 @@ public class MaintenanceQuery {
         if (ty != null && !Set.of("CORRECTIVE", "PREVENTIVE").contains(ty))
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Unknown work order type filter");
         String text = blank(q) == null ? null : "%" + q.strip().toLowerCase() + "%";
-        var rows = s.list(ORDER_COLUMNS + """
+        var rows = s.list(
+                ORDER_COLUMNS + """
                 WHERE w.tenant_id=?
                   AND (?::text IS NULL OR (?='OPEN' AND w.status IN ('REQUESTED','APPROVED','SCHEDULED','IN_PROGRESS')) OR w.status=?)
                   AND (?::text IS NULL OR w.type=?)
@@ -79,7 +80,22 @@ public class MaintenanceQuery {
                   AND (?::text IS NULL OR (w.created_at,w.id) <
                        (SELECT c.created_at,c.id FROM maintenance_work_orders c WHERE c.tenant_id=w.tenant_id AND c.id=?))
                 ORDER BY w.created_at DESC,w.id DESC
-                LIMIT ?""", a.tenant(), st, st, st, ty, ty, blank(machine), blank(machine), text, text, text, text, blank(before), blank(before), limit + 1);
+                LIMIT ?""",
+                a.tenant(),
+                st,
+                st,
+                st,
+                ty,
+                ty,
+                blank(machine),
+                blank(machine),
+                text,
+                text,
+                text,
+                text,
+                blank(before),
+                blank(before),
+                limit + 1);
         var counts = new LinkedHashMap<String, Object>();
         for (String code : WorkOrderService.statuses()) counts.put(code, 0L);
         for (var r : s.list(
@@ -166,7 +182,8 @@ public class MaintenanceQuery {
             default -> null;
         };
         String activeFilter = blank(active) == null ? "true" : active;
-        var rows = s.list(PLAN_COLUMNS + """
+        var rows = s.list(
+                PLAN_COLUMNS + """
                 WHERE p.tenant_id=?
                   AND (?::text IS NULL OR p.machine_id=?)
                   AND (?::date IS NULL OR p.next_due_date<=?::date)
@@ -174,18 +191,26 @@ public class MaintenanceQuery {
                   AND (?::text IS NULL OR (p.next_due_date,p.id) >
                        (SELECT c.next_due_date,c.id FROM maintenance_plans c WHERE c.tenant_id=p.tenant_id AND c.id=?))
                 ORDER BY p.next_due_date,p.id
-                LIMIT ?""", today, today, today, a.tenant(), blank(machine), blank(machine), limitDate, limitDate, activeFilter, activeFilter, blank(before), blank(before), limit + 1);
+                LIMIT ?""",
+                today,
+                today,
+                today,
+                a.tenant(),
+                blank(machine),
+                blank(machine),
+                limitDate,
+                limitDate,
+                activeFilter,
+                activeFilter,
+                blank(before),
+                blank(before),
+                limit + 1);
         var page = page(planRows(rows), limit);
-        var counts = s.one(
-                """
+        var counts = s.one("""
                 SELECT COUNT(*) FILTER (WHERE active AND next_due_date<?::date) AS overdue,
                        COUNT(*) FILTER (WHERE active AND next_due_date>=?::date AND next_due_date<=?::date) AS due_soon,
                        COUNT(*) FILTER (WHERE active) AS active
-                FROM maintenance_plans WHERE tenant_id=?""",
-                today,
-                today,
-                today.plusDays(days),
-                a.tenant());
+                FROM maintenance_plans WHERE tenant_id=?""", today, today, today.plusDays(days), a.tenant());
         page.put("counts", counts);
         page.put("today", today.toString());
         return page;
@@ -193,7 +218,8 @@ public class MaintenanceQuery {
 
     public Map<String, Object> plan(Actor a, String id) {
         LocalDate today = MaintenanceRules.today();
-        var plan = planRows(List.of(s.one(PLAN_COLUMNS + " WHERE p.tenant_id=? AND p.id=?", today, today, today, a.tenant(), id)))
+        var plan = planRows(List.of(
+                        s.one(PLAN_COLUMNS + " WHERE p.tenant_id=? AND p.id=?", today, today, today, a.tenant(), id)))
                 .getFirst();
         var result = new LinkedHashMap<String, Object>();
         result.put("plan", plan);
@@ -259,9 +285,11 @@ public class MaintenanceQuery {
         if (st != null && !Set.of("OPEN", "CLOSED").contains(st))
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Unknown downtime status filter");
         OffsetDateTime start = blank(from) == null ? null : dayStart(MaintenanceRules.date(from, "from date"));
-        OffsetDateTime end =
-                blank(to) == null ? null : dayStart(MaintenanceRules.date(to, "to date").plusDays(1));
-        var rows = s.list(DOWNTIME_COLUMNS + """
+        OffsetDateTime end = blank(to) == null
+                ? null
+                : dayStart(MaintenanceRules.date(to, "to date").plusDays(1));
+        var rows = s.list(
+                DOWNTIME_COLUMNS + """
                 WHERE d.tenant_id=?
                   AND (?::boolean OR d.status IN ('OPEN','CLOSED'))
                   AND (?::text IS NULL OR d.status=?)
@@ -272,7 +300,23 @@ public class MaintenanceQuery {
                   AND (?::text IS NULL OR (d.started_at,d.id) <
                        (SELECT x.started_at,x.id FROM downtime_events x WHERE x.tenant_id=d.tenant_id AND x.id=?))
                 ORDER BY d.started_at DESC,d.id DESC
-                LIMIT ?""", MaintenanceRules.now(), a.tenant(), history, st, st, blank(machine), blank(machine), r, r, start, start, end, end, blank(before), blank(before), limit + 1);
+                LIMIT ?""",
+                MaintenanceRules.now(),
+                a.tenant(),
+                history,
+                st,
+                st,
+                blank(machine),
+                blank(machine),
+                r,
+                r,
+                start,
+                start,
+                end,
+                end,
+                blank(before),
+                blank(before),
+                limit + 1);
         return page(rows, limit);
     }
 
@@ -303,12 +347,14 @@ public class MaintenanceQuery {
     public Map<String, Object> machine(Actor a, String id) {
         LocalDate today = MaintenanceRules.today();
         var machine = s.one(
-                "SELECT id,code,name,kind,status,hourly_rate FROM machines WHERE tenant_id=? AND id=?",
-                a.tenant(),
-                id);
+                "SELECT id,code,name,kind,status,hourly_rate FROM machines WHERE tenant_id=? AND id=?", a.tenant(), id);
         var result = new LinkedHashMap<String, Object>();
         result.put("machine", machine);
-        var open = s.list(DOWNTIME_COLUMNS + " WHERE d.tenant_id=? AND d.machine_id=? AND d.status='OPEN'", MaintenanceRules.now(), a.tenant(), id);
+        var open = s.list(
+                DOWNTIME_COLUMNS + " WHERE d.tenant_id=? AND d.machine_id=? AND d.status='OPEN'",
+                MaintenanceRules.now(),
+                a.tenant(),
+                id);
         result.put("openDowntime", open.isEmpty() ? null : open.getFirst());
         result.put("orders", s.list(ORDER_COLUMNS + """
                 WHERE w.tenant_id=? AND w.machine_id=? AND w.status IN ('REQUESTED','APPROVED','SCHEDULED','IN_PROGRESS')
@@ -338,7 +384,8 @@ public class MaintenanceQuery {
     public Map<String, Object> history(Actor a, String machineId, int limit, String before) {
         pageSize(limit);
         s.one("SELECT id FROM machines WHERE tenant_id=? AND id=?", a.tenant(), machineId);
-        var rows = s.list("""
+        var rows = s.list(
+                """
                 WITH h AS (
                   SELECT d.id,'DOWNTIME' AS kind,d.started_at AS at,d.number AS reference,d.reason AS code,d.status,
                          d.notes AS detail,ROUND(EXTRACT(EPOCH FROM (COALESCE(d.ended_at,?::timestamptz)-d.started_at))/60.0,1) AS value,
@@ -362,7 +409,19 @@ public class MaintenanceQuery {
                 SELECT * FROM h
                 WHERE (?::text IS NULL OR (h.at,h.id) < (SELECT x.at,x.id FROM h x WHERE x.id=?))
                 ORDER BY h.at DESC,h.id DESC
-                LIMIT ?""", MaintenanceRules.now(), a.tenant(), machineId, a.tenant(), machineId, a.tenant(), machineId, a.tenant(), machineId, blank(before), blank(before), limit + 1);
+                LIMIT ?""",
+                MaintenanceRules.now(),
+                a.tenant(),
+                machineId,
+                a.tenant(),
+                machineId,
+                a.tenant(),
+                machineId,
+                a.tenant(),
+                machineId,
+                blank(before),
+                blank(before),
+                limit + 1);
         return page(rows, limit);
     }
 
@@ -396,7 +455,11 @@ public class MaintenanceQuery {
                 "SELECT m.labour_rate,m.updated_at,u.name AS updated_by FROM maintenance_settings m LEFT JOIN users u ON u.id=m.updated_by WHERE m.tenant_id=?",
                 a.tenant());
         var result = new LinkedHashMap<String, Object>();
-        result.put("labourRate", rows.isEmpty() ? MaintenanceRules.DEFAULT_LABOUR_RATE : rows.getFirst().get("labour_rate"));
+        result.put(
+                "labourRate",
+                rows.isEmpty()
+                        ? MaintenanceRules.DEFAULT_LABOUR_RATE
+                        : rows.getFirst().get("labour_rate"));
         result.put("updatedAt", rows.isEmpty() ? null : rows.getFirst().get("updated_at"));
         result.put("updatedBy", rows.isEmpty() ? null : rows.getFirst().get("updated_by"));
         result.put("customized", !rows.isEmpty());

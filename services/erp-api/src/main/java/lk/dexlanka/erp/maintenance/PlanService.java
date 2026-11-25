@@ -53,16 +53,31 @@ public class PlanService {
             String id = id();
             String number = rules.number(a, "maintenance_plans", "PM");
             BigDecimal baseline = c.intervalHours() == null ? null : rules.lastMeterReading(a, str(machine, "id"));
-            s.db().update("""
+            s.db().update(
+                            """
                             INSERT INTO maintenance_plans(id,tenant_id,number,machine_id,title,description,checklist,interval_days,interval_hours,
                               estimated_hours,priority,next_due_date,meter_at_last_service,created_by)
-                            VALUES(?,?,?,?,?,?,?::jsonb,?,?,?,?,?,?,?)""", id, a.tenant(), number, machine.get("id"), c.title().strip(), c.description() == null ? "" : c.description().strip(), s.encode(checklist), c.intervalDays(), c.intervalHours(), c.estimatedHours() == null ? new BigDecimal("2") : c.estimatedHours(), priority(c.priority()), due, baseline, a.id());
+                            VALUES(?,?,?,?,?,?,?::jsonb,?,?,?,?,?,?,?)""",
+                            id,
+                            a.tenant(),
+                            number,
+                            machine.get("id"),
+                            c.title().strip(),
+                            c.description() == null ? "" : c.description().strip(),
+                            s.encode(checklist),
+                            c.intervalDays(),
+                            c.intervalHours(),
+                            c.estimatedHours() == null ? new BigDecimal("2") : c.estimatedHours(),
+                            priority(c.priority()),
+                            due,
+                            baseline,
+                            a.id());
             s.audit(
                     a,
                     "PM_PLAN_CREATED",
                     number,
-                    machine.get("code") + " · " + c.title().strip() + " · every " + interval(c.intervalDays(), c.intervalHours())
-                            + " · first due " + due);
+                    machine.get("code") + " · " + c.title().strip() + " · every "
+                            + interval(c.intervalDays(), c.intervalHours()) + " · first due " + due);
             return result(a, id);
         });
     }
@@ -74,16 +89,28 @@ public class PlanService {
             var plan = s.one("SELECT * FROM maintenance_plans WHERE tenant_id=? AND id=? FOR UPDATE", a.tenant(), id);
             LocalDate due = MaintenanceRules.date(c.nextDueDate(), "next due date");
             var checklist = cleanChecklist(c.checklist());
-            s.db().update("""
+            s.db().update(
+                            """
                             UPDATE maintenance_plans SET title=?,description=?,checklist=?::jsonb,interval_days=?,interval_hours=?,estimated_hours=?,
                               priority=?,next_due_date=?,active=?,updated_at=now()
-                            WHERE tenant_id=? AND id=?""", c.title().strip(), c.description() == null ? "" : c.description().strip(), s.encode(checklist), c.intervalDays(), c.intervalHours(), c.estimatedHours() == null ? plan.get("estimated_hours") : c.estimatedHours(), priority(c.priority()), due, c.active(), a.tenant(), id);
+                            WHERE tenant_id=? AND id=?""",
+                            c.title().strip(),
+                            c.description() == null ? "" : c.description().strip(),
+                            s.encode(checklist),
+                            c.intervalDays(),
+                            c.intervalHours(),
+                            c.estimatedHours() == null ? plan.get("estimated_hours") : c.estimatedHours(),
+                            priority(c.priority()),
+                            due,
+                            c.active(),
+                            a.tenant(),
+                            id);
             s.audit(
                     a,
                     "PM_PLAN_UPDATED",
                     str(plan, "number"),
-                    c.title().strip() + " · every " + interval(c.intervalDays(), c.intervalHours()) + " · next due " + due
-                            + (c.active() ? "" : " · inactive"));
+                    c.title().strip() + " · every " + interval(c.intervalDays(), c.intervalHours()) + " · next due "
+                            + due + (c.active() ? "" : " · inactive"));
             return result(a, id);
         });
     }
@@ -115,7 +142,9 @@ public class PlanService {
                 if (!open.isEmpty() || !same.isEmpty()) {
                     var skip = new LinkedHashMap<String, Object>();
                     skip.put("plan", plan.get("number"));
-                    skip.put("workOrder", (open.isEmpty() ? same : open).getFirst().get("number"));
+                    skip.put(
+                            "workOrder",
+                            (open.isEmpty() ? same : open).getFirst().get("number"));
                     skipped.add(skip);
                     continue;
                 }
@@ -128,7 +157,8 @@ public class PlanService {
                     created.size() + (created.size() == 1 ? " preventive order" : " preventive orders") + " created"
                             + (created.isEmpty()
                                     ? ""
-                                    : " (" + String.join(
+                                    : " ("
+                                            + String.join(
                                                     ", ",
                                                     created.stream()
                                                             .map(m -> str(m, "number"))
@@ -157,10 +187,25 @@ public class PlanService {
                 .longValueExact();
         OffsetDateTime end = start.plusMinutes(Math.max(minutes, 1));
         List<String> titles = rules.readTasks(plan.get("checklist"));
-        s.db().update("""
+        s.db().update(
+                        """
                         INSERT INTO maintenance_work_orders(id,tenant_id,number,type,machine_id,plan_id,due_date,title,description,priority,status,
                           scheduled_start,scheduled_end,checklist,requested_by,approved_by,approved_at)
-                        VALUES(?,?,?,'PREVENTIVE',?,?,?,?,?,?,'SCHEDULED',?,?,?::jsonb,?,?,now())""", id, a.tenant(), number, plan.get("machine_id"), plan.get("id"), due, plan.get("title"), plan.get("description"), plan.get("priority"), start, end, s.encode(MaintenanceRules.checklist(titles)), a.id(), a.id());
+                        VALUES(?,?,?,'PREVENTIVE',?,?,?,?,?,?,'SCHEDULED',?,?,?::jsonb,?,?,now())""",
+                        id,
+                        a.tenant(),
+                        number,
+                        plan.get("machine_id"),
+                        plan.get("id"),
+                        due,
+                        plan.get("title"),
+                        plan.get("description"),
+                        plan.get("priority"),
+                        start,
+                        end,
+                        s.encode(MaintenanceRules.checklist(titles)),
+                        a.id(),
+                        a.id());
         s.audit(
                 a,
                 "MWO_GENERATED",
@@ -201,10 +246,11 @@ public class PlanService {
             Store s, MaintenanceRules rules, Actor a, Map<String, Object> machine, BigDecimal reading, String note) {
         String machineId = str(machine, "id");
         BigDecimal last = rules.lastMeterReading(a, machineId);
-        require(
-                last == null || reading.compareTo(last) >= 0,
-                "The run-hour meter cannot go backwards: the last reading of " + machine.get("code") + " is "
-                        + last.stripTrailingZeros().toPlainString() + " h");
+        if (last != null)
+            require(
+                    reading.compareTo(last) >= 0,
+                    "The run-hour meter cannot go backwards: the last reading of " + machine.get("code") + " is "
+                            + last.stripTrailingZeros().toPlainString() + " h");
         s.db().update(
                         "INSERT INTO machine_meter_readings(id,tenant_id,machine_id,reading,notes,recorded_by) VALUES(?,?,?,?,?,?)",
                         id(),
@@ -299,7 +345,8 @@ public class PlanService {
     }
 
     private static String interval(Integer days, BigDecimal hours) {
-        return days + (days == 1 ? " day" : " days")
+        return days
+                + (days == 1 ? " day" : " days")
                 + (hours == null ? "" : " or " + hours.stripTrailingZeros().toPlainString() + " run hours");
     }
 
