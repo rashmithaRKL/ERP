@@ -99,7 +99,7 @@ class AuthController {
     Map<String, Object> demo(
             HttpServletRequest req, HttpServletResponse res, @RequestParam(defaultValue = "admin") String role) {
         if (!demo) throw new ResponseStatusException(HttpStatus.NOT_FOUND);
-        if (!Set.of("admin", "planner", "operator", "warehouse", "quality").contains(role))
+        if (!Set.of("admin", "planner", "operator", "warehouse", "quality", "maintenance").contains(role))
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Unknown demo role");
         UserDetails u;
         try {

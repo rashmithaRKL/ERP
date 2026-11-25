@@ -24,7 +24,7 @@ import org.springframework.web.server.ResponseStatusException;
 @Service
 @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
 public class ItemQuery {
-    private static final Set<String> TYPES = Set.of("RAW_MATERIAL", "SEMI_FINISHED", "FINISHED_GOOD", "PACKAGING");
+    private static final Set<String> TYPES = Set.of("RAW_MATERIAL", "SEMI_FINISHED", "FINISHED_GOOD", "PACKAGING", "SPARE_PART");
 
     /** Stock figures per item: on hand, reserved, released-and-unreserved, value. */
     private static final String STOCK = """
