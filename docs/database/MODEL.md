@@ -1,6 +1,6 @@
 # Implemented data model
 
-Migrations: `V1__manufacturing_core.sql`, `V2__approved_bom_integrity.sql`, `V3__sales_documents_partners_returns.sql`, `V4__item_master.sql` (item master; see below), `V5__inventory_operations.sql` (inventory operations, below), `V6__procurement_documents.sql` (procurement documents, below), `V7__multi_level_bom_planning.sql` (multi-level BOMs and parent/child orders, below), `V8__administration.sql` (administration, below), `V9__integration.sql` (integration, below), `V10__routings_shifts_skills_operations.sql` (routings, shift calendars, skills and operations, below), `V11__maintenance_downtime.sql` (maintenance and downtime, below), `V12__quality_management.sql` (quality management, below). Primary IDs are UUID strings except readable demonstration master IDs. Every tenant-owned table carries `tenant_id`; references use owner/id composites where operational records cross domains. Tenant-scoped document/SKU/lot/BOM revision uniqueness prevents duplicates.
+Migrations: `V1__manufacturing_core.sql`, `V2__approved_bom_integrity.sql`, `V3__sales_documents_partners_returns.sql`, `V4__item_master.sql` (item master; see below), `V5__inventory_operations.sql` (inventory operations, below), `V6__procurement_documents.sql` (procurement documents, below), `V7__multi_level_bom_planning.sql` (multi-level BOMs and parent/child orders, below), `V8__administration.sql` (administration, below), `V9__integration.sql` (integration, below), `V10__routings_shifts_skills_operations.sql` (routings, shift calendars, skills and operations, below), `V11__maintenance_downtime.sql` (maintenance and downtime, below), `V12__quality_management.sql` (quality management, below), `V13__finite_capacity_scheduling.sql` (finite-capacity scheduling, below). Primary IDs are UUID strings except readable demonstration master IDs. Every tenant-owned table carries `tenant_id`; references use owner/id composites where operational records cross domains. Tenant-scoped document/SKU/lot/BOM revision uniqueness prevents duplicates.
 
 ```mermaid
 erDiagram
@@ -334,3 +334,31 @@ Postings (all through `Store.ledger` / `Store.journal`, period-checked, in the c
 | Failed incoming inspection (unchanged) | `SUPPLIER_RETURN_QC` (purchase order id) | Dr `GRNI` / Cr `RAW_INVENTORY`; recorded on the NCR as an automatic RETURN_TO_SUPPLIER disposition |
 
 For genealogy/recall (V14): follow `rework_lot_links` (input lot → output lot) and `lots.source_type='REWORK'`; NCRs reference the lot, inspection, MO, supplier and customer return, and `ncrs.source` already accepts `RECALL` (raising an NCR on a released lot holds it). For OEE (V15): quality losses are `ncr_dispositions` of type SCRAP (quantity, `value_amount`, `posted_at`) and the `QUALITY_SCRAP` ledger rows; rework yield is `rework_orders.output_quantity / input_quantity`; a manufacturing order whose failed final lot is fully dispositioned now completes (V12 generalization of the Phase 1 completion rule).
+
+## Finite-capacity scheduling (`V13__finite_capacity_scheduling.sql`)
+
+```mermaid
+erDiagram
+    SCHEDULE_RUNS ||--o{ SCHEDULE_RUN_ORDERS : "orders considered"
+    SCHEDULE_RUN_ORDERS ||--o{ SCHEDULE_RUN_OPERATIONS : "placed operations"
+    SCHEDULE_RUNS ||--o{ SCHEDULE_RUN_BLOCKS : "blocked time avoided"
+    SCHEDULE_RUNS |o--o| SCHEDULE_RUNS : "base / superseded by"
+    MANUFACTURING_ORDERS ||--o{ SCHEDULE_RUN_ORDERS : "projected"
+    MO_OPERATIONS ||--o{ SCHEDULE_RUN_OPERATIONS : "scheduled as"
+    MO_OPERATIONS ||--o{ SCHEDULE_PINS : "pinned"
+    SCHEDULE_PINS ||--o{ SCHEDULE_RUN_OPERATIONS : "honoured / conflict"
+    MANUFACTURING_ORDERS ||--o| SCHEDULE_ESTIMATES : "duration estimate (no routing)"
+```
+
+A run is a frozen result of the forward finite-capacity scheduler (`scheduling.ScheduleEngine`, inputs loaded by `ScheduleInputs` from V10 operations, time logs and alternates, `routing.CalendarService` working time, V11 maintenance windows and the `machine_downtime` view). No existing table changes.
+
+| Table | Purpose and rules |
+|---|---|
+| `schedule_runs` | `number` (`SCH-…`), `status` ∈ `DRAFT, PUBLISHED, SUPERSEDED, DISCARDED`; the scheduler's "now" (`horizon_start`, whole minute) and `horizon_end`, parameters (`horizon_days` 1–90, `use_alternates`, `breakdown_hours` 1–168, `include_drafts`), `notes`, `base_run_id` (the run published when it was created), result counts (`orders_count`, `operations_count`, `late_orders`, `unscheduled_orders`, `pins_honoured`, `pin_conflicts`), `makespan_end`, `created_by/at` (`clock_timestamp()`, so runs created in one transaction keep their order), `published_by/at`, `superseded_by_run_id/at`, `discarded_by/at`. Partial unique index `schedule_runs_one_published`: one PUBLISHED run per tenant. Trigger `schedule_run_guard` (`protect_schedule_run()`): never deleted; SUPERSEDED and DISCARDED runs are immutable; only DRAFT → PUBLISHED/DISCARDED and PUBLISHED → SUPERSEDED, with every parameter and result column frozen. |
+| `schedule_run_orders` | One row per order the run considered, PK `(tenant_id, run_id, order_id)`: `sequence` (scheduling order), order status, priority and due date at run time, `due_end` (end of the due date, Asia/Colombo), `parent_order_id`, `routed`, `estimate_minutes` used, `status` ∈ `SCHEDULED, NO_ROUTING, BEYOND_HORIZON, NO_OPEN_WORK`, `projected_start/end`, `late`, `lateness_minutes` (for BEYOND_HORIZON: at least horizon end − due end), `remaining_minutes`, `warnings`. |
+| `schedule_run_operations` | One row per placed operation: `operation_id` (NULL = the estimated run of an order without a routing; FK `(tenant_id, order_id, operation_id)` → `mo_operations`), `seq`, `name`, `operation_status` at run time, `machine_id` (the chosen work center), `planned_machine_id`, `alternate`, `start_at`, `end_at`, `minutes` (whole working minutes), `remaining_minutes`, `planned_minutes`, `actual_minutes`, `segments` jsonb (the working intervals it runs in, split across breaks, shift ends, days and blocked time), `late` (ends after the order's due end), `running`, `pin_id` + `pin_status` ∈ `HONOURED, CONFLICT` + `pin_note`. Unique per `(run, order, operation)`. |
+| `schedule_run_blocks` | Blocked time the run avoided: `kind` `MAINTENANCE` (window of an APPROVED, SCHEDULED or IN_PROGRESS work order) or `DOWNTIME` (an open or future `machine_downtime` row), `reference` (MWO/DT number), `label`, `start_at`, `end_at`, `assumed_end` (open downtime without a later maintenance window end, blocked for `breakdown_hours`). |
+| `schedule_pins` | Planner input to later runs: `order_id`, `operation_id` (NULL = the estimated run of an order without a routing), `machine_id`, `start_at`, `reason`, `created_by/at`, `removed_by/at`. `schedule_pins_one_active`: one active pin per operation. Trigger `schedule_pin_guard`: never deleted, removed pins are immutable, only removal changes a pin. |
+| `schedule_estimates` | PK `(tenant_id, order_id)`: the planner's remaining-duration estimate (`minutes` 1–525,600, `notes`, `updated_by/at`) of an order without a routing. The scheduler places such an order as one operation on its own work center; without an estimate it is listed as NO_ROUTING and never scheduled. |
+
+`schedule_run_orders`, `schedule_run_operations` and `schedule_run_blocks` are written once with their run (`reject_history_mutation()` triggers). Capacity load is computed on read: scheduled minutes from the run's `segments` against the live calendar minus the run's blocks. For OEE (V15): published `schedule_run_operations` give the planned start and end per work center and operation; planned production time still comes from `routing.CalendarService`.

@@ -14,7 +14,7 @@ import { useWorkspace } from '../app/workspace';
 import { Badge, Empty, Panel } from '../components';
 import { request } from '../lib/api';
 import type { Row } from '../lib/api';
-import { fmt, num, text } from '../lib/format';
+import { fmt, num, text, today } from '../lib/format';
 import { Tabs } from '../motion/motion';
 import {
   PLANNERS,
@@ -92,6 +92,8 @@ export default function SchedulePage() {
     try {
       await request(path, {}, crypto.randomUUID());
       scheduleChanged();
+      // A discarded draft is no longer worth showing: fall back to the newest run.
+      if (label === 'discard') setPicked(undefined);
       notify(success);
       void refresh();
     } catch (err) {
@@ -268,7 +270,7 @@ export default function SchedulePage() {
               >
                 <ChevronLeft size={15} />
               </button>
-              <button className="button secondary small" onClick={() => setFrom(undefined)}>
+              <button className="button secondary small" onClick={() => setFrom(today())}>
                 <CalendarRange size={14} />
                 Now
               </button>

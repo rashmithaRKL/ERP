@@ -9990,6 +9990,609 @@
           }
         }
       }
+    },
+    "/schedule": {
+      "get": {
+        "summary": "Published run, newest draft and active pin count (planners), run defaults (V13; every role)",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "JSON object; lists are `{items, next}` (keyset pagination)"
+          },
+          "403": {
+            "description": "Role denied (drafts are ADMIN/PLANNER only)"
+          },
+          "404": {
+            "description": "Missing or unowned"
+          }
+        }
+      }
+    },
+    "/schedule/runs": {
+      "get": {
+        "summary": "Schedule runs newest first (ADMIN/PLANNER)",
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "description": "DRAFT, PUBLISHED, SUPERSEDED or DISCARDED",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Page size 1-200 (default 25)",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200,
+              "default": 25
+            }
+          },
+          {
+            "name": "before",
+            "in": "query",
+            "required": false,
+            "description": "Cursor: the `next` value of the previous page",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "JSON object; lists are `{items, next}` (keyset pagination)"
+          },
+          "403": {
+            "description": "Role denied (drafts are ADMIN/PLANNER only)"
+          },
+          "404": {
+            "description": "Missing or unowned"
+          }
+        }
+      },
+      "post": {
+        "summary": "Run the finite-capacity scheduler into a new DRAFT run (PLANNER)",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Committed result; retry with same key returns prior result"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Role/CSRF denied"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "State/precedence/capacity/pin/idempotency conflict"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ScheduleRun"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/schedule/runs/{id}": {
+      "get": {
+        "summary": "Run header, orders in scheduling sequence (projected start/end, lateness, status, warnings) and pins",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "JSON object; lists are `{items, next}` (keyset pagination)"
+          },
+          "403": {
+            "description": "Role denied (drafts are ADMIN/PLANNER only)"
+          },
+          "404": {
+            "description": "Missing or unowned"
+          }
+        }
+      }
+    },
+    "/schedule/runs/{id}/gantt": {
+      "get": {
+        "summary": "Gantt rows per work center: working intervals, closed dates, blocked time and operation bars with segments",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "description": "Inclusive Asia/Colombo date (default: the run start)",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "description": "Inclusive Asia/Colombo date; at most 42 days after from",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "JSON object; lists are `{items, next}` (keyset pagination)"
+          },
+          "403": {
+            "description": "Role denied (drafts are ADMIN/PLANNER only)"
+          },
+          "404": {
+            "description": "Missing or unowned"
+          }
+        }
+      }
+    },
+    "/schedule/runs/{id}/late": {
+      "get": {
+        "summary": "Late orders with projected completion, latest first",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "JSON object; lists are `{items, next}` (keyset pagination)"
+          },
+          "403": {
+            "description": "Role denied (drafts are ADMIN/PLANNER only)"
+          },
+          "404": {
+            "description": "Missing or unowned"
+          }
+        }
+      }
+    },
+    "/schedule/runs/{id}/capacity": {
+      "get": {
+        "summary": "Capacity load per work center and day: calendar, blocked, available and scheduled minutes, load %, overloaded",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "description": "Inclusive Asia/Colombo date (default: the run start)",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "description": "Inclusive Asia/Colombo date; at most 42 days after from",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "JSON object; lists are `{items, next}` (keyset pagination)"
+          },
+          "403": {
+            "description": "Role denied (drafts are ADMIN/PLANNER only)"
+          },
+          "404": {
+            "description": "Missing or unowned"
+          }
+        }
+      }
+    },
+    "/schedule/runs/{id}/compare": {
+      "get": {
+        "summary": "Order and operation changes against another run (default: the base or current published run; ADMIN/PLANNER)",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "with",
+            "in": "query",
+            "required": false,
+            "description": "Run id to compare with",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "JSON object; lists are `{items, next}` (keyset pagination)"
+          },
+          "403": {
+            "description": "Role denied (drafts are ADMIN/PLANNER only)"
+          },
+          "404": {
+            "description": "Missing or unowned"
+          }
+        }
+      }
+    },
+    "/schedule/runs/{id}/publish": {
+      "post": {
+        "summary": "Publish the newest DRAFT; the previous published run becomes SUPERSEDED, older drafts DISCARDED (PLANNER)",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Committed result; retry with same key returns prior result"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Role/CSRF denied"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "State/precedence/capacity/pin/idempotency conflict"
+          }
+        }
+      }
+    },
+    "/schedule/runs/{id}/discard": {
+      "post": {
+        "summary": "Discard a DRAFT run (PLANNER)",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Committed result; retry with same key returns prior result"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Role/CSRF denied"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "State/precedence/capacity/pin/idempotency conflict"
+          }
+        }
+      }
+    },
+    "/schedule/next": {
+      "get": {
+        "summary": "Next open operations of a work center by the published schedule (every role)",
+        "parameters": [
+          {
+            "name": "machineId",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "1-50 (default 10)",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50,
+              "default": 10
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "JSON object; lists are `{items, next}` (keyset pagination)"
+          },
+          "403": {
+            "description": "Role denied (drafts are ADMIN/PLANNER only)"
+          },
+          "404": {
+            "description": "Missing or unowned"
+          }
+        }
+      }
+    },
+    "/schedule/orders/{id}": {
+      "get": {
+        "summary": "An order's projection in the published run (and the newest draft for planners)",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "JSON object; lists are `{items, next}` (keyset pagination)"
+          },
+          "403": {
+            "description": "Role denied (drafts are ADMIN/PLANNER only)"
+          },
+          "404": {
+            "description": "Missing or unowned"
+          }
+        }
+      }
+    },
+    "/schedule/pins": {
+      "get": {
+        "summary": "Active pins (ADMIN/PLANNER)",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "JSON object; lists are `{items, next}` (keyset pagination)"
+          },
+          "403": {
+            "description": "Role denied (drafts are ADMIN/PLANNER only)"
+          },
+          "404": {
+            "description": "Missing or unowned"
+          }
+        }
+      },
+      "post": {
+        "summary": "Pin an operation to a work center and start; validated by scheduling with it (PLANNER)",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Committed result; retry with same key returns prior result"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Role/CSRF denied"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "State/precedence/capacity/pin/idempotency conflict"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SchedulePin"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/schedule/pins/{id}/remove": {
+      "post": {
+        "summary": "Remove an active pin, optionally re-running the scheduler (PLANNER)",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Committed result; retry with same key returns prior result"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Role/CSRF denied"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "State/precedence/capacity/pin/idempotency conflict"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ScheduleUnpin"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/schedule/estimates": {
+      "post": {
+        "summary": "Remaining-duration estimate of an order without a routing (PLANNER)",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Committed result; retry with same key returns prior result"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Role/CSRF denied"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "State/precedence/capacity/pin/idempotency conflict"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ScheduleEstimate"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/schedule/estimates/{orderId}/remove": {
+      "post": {
+        "summary": "Remove the duration estimate (and the order pin) (PLANNER)",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          },
+          {
+            "name": "orderId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Committed result; retry with same key returns prior result"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Role/CSRF denied"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "State/precedence/capacity/pin/idempotency conflict"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -13924,6 +14527,110 @@
           },
           "note": {
             "type": "string"
+          }
+        }
+      },
+      "ScheduleRun": {
+        "type": "object",
+        "properties": {
+          "horizonDays": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 90,
+            "nullable": true,
+            "description": "Default 28"
+          },
+          "useAlternates": {
+            "type": "boolean",
+            "nullable": true,
+            "description": "Default true: a not-started operation may go to the alternate work center that finishes it earliest"
+          },
+          "breakdownHours": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 168,
+            "nullable": true,
+            "description": "Default 8: how long an open downtime blocks when no later maintenance window end is known"
+          },
+          "includeDrafts": {
+            "type": "boolean",
+            "nullable": true,
+            "description": "Default false"
+          },
+          "notes": {
+            "type": "string",
+            "maxLength": 400,
+            "nullable": true
+          }
+        }
+      },
+      "SchedulePin": {
+        "type": "object",
+        "required": [
+          "machineId",
+          "start"
+        ],
+        "properties": {
+          "orderId": {
+            "type": "string",
+            "maxLength": 64,
+            "nullable": true,
+            "description": "Required without operationId (the estimated run of an order without a routing)"
+          },
+          "operationId": {
+            "type": "string",
+            "maxLength": 64,
+            "nullable": true
+          },
+          "machineId": {
+            "type": "string",
+            "maxLength": 64
+          },
+          "start": {
+            "type": "string",
+            "maxLength": 40,
+            "description": "yyyy-MM-ddTHH:mm Asia/Colombo, or ISO-8601 with offset; moved to the next free working minute"
+          },
+          "reason": {
+            "type": "string",
+            "maxLength": 400,
+            "nullable": true
+          },
+          "rerun": {
+            "type": "boolean",
+            "description": "Also run the scheduler into a new draft"
+          }
+        }
+      },
+      "ScheduleUnpin": {
+        "type": "object",
+        "properties": {
+          "rerun": {
+            "type": "boolean"
+          }
+        }
+      },
+      "ScheduleEstimate": {
+        "type": "object",
+        "required": [
+          "orderId",
+          "minutes"
+        ],
+        "properties": {
+          "orderId": {
+            "type": "string",
+            "maxLength": 64
+          },
+          "minutes": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 525600,
+            "description": "Remaining working minutes on the order work center"
+          },
+          "notes": {
+            "type": "string",
+            "maxLength": 400,
+            "nullable": true
           }
         }
       }
