@@ -108,7 +108,10 @@ abstract class TraceTestSupport extends IntegrationTestBase {
                 t,
                 customerB,
                 t);
-        update("UPDATE partners SET email='buyer@alpha.test',phone='+94 11 000 0001' WHERE tenant_id=? AND id=?", t, customerA);
+        update(
+                "UPDATE partners SET email='buyer@alpha.test',phone='+94 11 000 0001' WHERE tenant_id=? AND id=?",
+                t,
+                customerA);
         update(
                 "INSERT INTO machines(id,tenant_id,factory_id,code,name,kind,status,hourly_rate) VALUES(?,?,?,'BM-T','Blow moulder','Moulding','IDLE',10)",
                 machine,
@@ -177,14 +180,20 @@ abstract class TraceTestSupport extends IntegrationTestBase {
                 mo.create(
                         planner,
                         new ManufacturingCommands.Manufacture(
-                                bom, machine, null, bd(qty), "NORMAL", LocalDate.now().plusDays(3).toString()),
+                                bom,
+                                machine,
+                                null,
+                                bd(qty),
+                                "NORMAL",
+                                LocalDate.now().plusDays(3).toString()),
                         id()),
                 "id");
         mo.transition(planner2, order, "approve", id());
         mo.transition(warehouse, order, "reserve", id());
         mo.transition(warehouse, order, "issue", id());
         mo.transition(operator, order, "start", id());
-        mo.complete(operator, order, new ManufacturingCommands.Complete(bd(qty), bd("0"), bd("0"), bd("0"), "Run"), id());
+        mo.complete(
+                operator, order, new ManufacturingCommands.Complete(bd(qty), bd("0"), bd("0"), bd("0"), "Run"), id());
         String lot = str(
                 row("SELECT id FROM lots WHERE tenant_id=? AND source_type='MANUFACTURING' AND source_id=?", t, order),
                 "id");
@@ -213,14 +222,15 @@ abstract class TraceTestSupport extends IntegrationTestBase {
                 line,
                 new SalesCommands.DispatchLine(reference, List.of(new SalesCommands.Allocation(lot, bd(qty)))),
                 id());
-        String delivery =
-                str(row("SELECT id FROM deliveries WHERE tenant_id=? AND sales_order_id=? AND lot_id=?", t, so, lot), "id");
+        String delivery = str(
+                row("SELECT id FROM deliveries WHERE tenant_id=? AND sales_order_id=? AND lot_id=?", t, so, lot), "id");
         return new String[] {so, delivery};
     }
 
     /** A customer return of {@code qty} from a delivery; returns the quarantine lot. */
     String customerReturn(String delivery, String qty) {
-        var result = returns.customerReturn(salesRep, delivery, new SalesCommands.Return(bd(qty), "Leaking caps"), id());
+        var result =
+                returns.customerReturn(salesRep, delivery, new SalesCommands.Return(bd(qty), "Leaking caps"), id());
         return str(result, "lotId");
     }
 
@@ -290,8 +300,8 @@ abstract class TraceTestSupport extends IntegrationTestBase {
         return list(trace.get("edges")).stream()
                 .filter(e -> from.equals(e.get("from")) && to.equals(e.get("to")) && kind.equals(e.get("kind")))
                 .findFirst()
-                .orElseThrow(() -> new AssertionError(
-                        "No " + kind + " edge " + from + " -> " + to + " in " + trace.get("edges")));
+                .orElseThrow(() ->
+                        new AssertionError("No " + kind + " edge " + from + " -> " + to + " in " + trace.get("edges")));
     }
 
     static List<Map<String, Object>> edges(Map<String, Object> trace, String kind) {

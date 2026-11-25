@@ -34,23 +34,19 @@ public final class RecallCommands {
             @NotBlank @Pattern(regexp = "FORWARD|FORWARD_AND_SIBLINGS")
             String scope,
 
-            @NotBlank @Pattern(regexp = "LOTS|SUPPLIER")
-            String basis,
+            @NotBlank @Pattern(regexp = "LOTS|SUPPLIER") String basis,
 
             @Size(max = 200) List<@NotBlank @Size(max = 64) String> lotIds,
             @Size(max = 64) String supplierId,
             @Size(max = 64) String itemId,
 
-            @Pattern(regexp = DATE)
-            String receivedFrom,
+            @Pattern(regexp = DATE) String receivedFrom,
 
-            @Pattern(regexp = DATE)
-            String receivedTo,
+            @Pattern(regexp = DATE) String receivedTo,
 
             @NotBlank @Size(max = 20) String defectCode,
 
-            @Min(1) @Max(TraceService.MAX_DEPTH)
-            Integer depth) {}
+            @Min(1) @Max(TraceService.MAX_DEPTH) Integer depth) {}
 
     /** A customer told about the recall: on which day, whom (name, phone or email) and what was agreed. */
     public record Notify(
@@ -62,7 +58,8 @@ public final class RecallCommands {
      * Closes a contained recall. {@code overrideReason} is required (and must come from a different QUALITY/ADMIN user
      * than the one who opened the recall) while customers are still to be notified or held lots are not dispositioned.
      */
-    public record Close(@Size(max = 2000) String note, @Size(max = 2000) String overrideReason) {}
+    public record Close(
+            @Size(max = 2000) String note, @Size(max = 2000) String overrideReason) {}
 
     /** Cancels an open recall (opened by mistake); nothing was held yet. */
     public record Cancel(@NotBlank @Size(max = 2000) String reason) {}

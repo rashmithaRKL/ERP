@@ -77,40 +77,26 @@ public class TraceService {
      */
     public List<String> origins(String tenant, Collection<String> lots) {
         if (lots.isEmpty()) return List.of();
-        return s
-                .list(
-                        """
+        return s.list("""
                         SELECT l.id FROM lots l
                         WHERE l.tenant_id=? AND l.id IN (SELECT jsonb_array_elements_text(?::jsonb))
                           AND NOT EXISTS (SELECT 1 FROM lot_genealogy_links g
                                           WHERE g.tenant_id=l.tenant_id AND g.to_lot_id=l.id)
-                        ORDER BY l.created_at,l.id""",
-                        tenant,
-                        s.encode(lots))
-                .stream()
+                        ORDER BY l.created_at,l.id""", tenant, s.encode(lots)).stream()
                 .map(r -> str(r, "id"))
                 .toList();
     }
 
     /** Lots received from {@code supplier} (optionally one item) on Asia/Colombo dates {@code from}..{@code to}. */
     public List<String> supplierLots(String tenant, String supplier, String item, LocalDate from, LocalDate to) {
-        return s
-                .list(
-                        """
+        return s.list("""
                         SELECT r.lot_id,MIN(r.created_at) AS received_at FROM receipts r
                         JOIN purchase_orders po ON po.tenant_id=r.tenant_id AND po.id=r.purchase_order_id
                         JOIN lots l ON l.tenant_id=r.tenant_id AND l.id=r.lot_id
                         WHERE r.tenant_id=? AND po.supplier_id=? AND (?::text IS NULL OR l.item_id=?)
                           AND r.created_at >= (?::date)::timestamp AT TIME ZONE 'Asia/Colombo'
                           AND r.created_at < (?::date + 1)::timestamp AT TIME ZONE 'Asia/Colombo'
-                        GROUP BY r.lot_id ORDER BY MIN(r.created_at),r.lot_id""",
-                        tenant,
-                        supplier,
-                        item,
-                        item,
-                        from.toString(),
-                        to.toString())
-                .stream()
+                        GROUP BY r.lot_id ORDER BY MIN(r.created_at),r.lot_id""", tenant, supplier, item, item, from.toString(), to.toString()).stream()
                 .map(r -> str(r, "lot_id"))
                 .toList();
     }
@@ -119,8 +105,7 @@ public class TraceService {
         if (seeds.isEmpty()) return new Closure(Map.of(), false);
         String next = forward ? "g.to_lot_id" : "g.from_lot_id";
         String join = forward ? "g.from_lot_id=w.lot_id" : "g.to_lot_id=w.lot_id";
-        var rows = s.list(
-                """
+        var rows = s.list("""
                 WITH RECURSIVE walk(lot_id,depth) AS (
                     SELECT l.id,0 FROM lots l
                     WHERE l.tenant_id=? AND l.id IN (SELECT jsonb_array_elements_text(?::jsonb))
@@ -129,13 +114,7 @@ public class TraceService {
                     JOIN lot_genealogy_links g ON g.tenant_id=? AND %s
                     WHERE w.depth < ?
                 )
-                SELECT lot_id,MIN(depth) AS depth FROM walk GROUP BY lot_id ORDER BY MIN(depth),lot_id LIMIT ?"""
-                        .formatted(next, join),
-                tenant,
-                s.encode(seeds),
-                tenant,
-                depth,
-                MAX_LOTS + 1);
+                SELECT lot_id,MIN(depth) AS depth FROM walk GROUP BY lot_id ORDER BY MIN(depth),lot_id LIMIT ?""".formatted(next, join), tenant, s.encode(seeds), tenant, depth, MAX_LOTS + 1);
         var lots = new LinkedHashMap<String, Integer>();
         for (var r : rows.subList(0, Math.min(rows.size(), MAX_LOTS)))
             lots.put(str(r, "lot_id"), ((Number) r.get("depth")).intValue());
@@ -152,68 +131,50 @@ public class TraceService {
         String like = "%" + text.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%";
         var items = new ArrayList<Map<String, Object>>();
         String t = a.tenant();
-        for (var r : s.list(
-                """
+        for (var r : s.list("""
                 SELECT l.id,l.number,l.status,i.sku,i.name AS item FROM lots l
                 JOIN items i ON i.tenant_id=l.tenant_id AND i.id=l.item_id
-                WHERE l.tenant_id=? AND l.number ILIKE ? ORDER BY l.number LIMIT 8""",
-                t,
-                like))
-            items.add(hit("LOT", str(r, "id"), str(r, "number"), r.get("sku") + " · " + r.get("item") + " · "
-                    + str(r, "status").toLowerCase(Locale.ROOT)));
-        for (var r : s.list(
-                """
+                WHERE l.tenant_id=? AND l.number ILIKE ? ORDER BY l.number LIMIT 8""", t, like))
+            items.add(hit(
+                    "LOT",
+                    str(r, "id"),
+                    str(r, "number"),
+                    r.get("sku") + " · " + r.get("item") + " · "
+                            + str(r, "status").toLowerCase(Locale.ROOT)));
+        for (var r : s.list("""
                 SELECT m.id,m.number,m.status,i.sku,i.name AS item FROM manufacturing_orders m
                 JOIN items i ON i.tenant_id=m.tenant_id AND i.id=m.product_id
-                WHERE m.tenant_id=? AND m.number ILIKE ? ORDER BY m.created_at DESC LIMIT 6""",
-                t,
-                like))
+                WHERE m.tenant_id=? AND m.number ILIKE ? ORDER BY m.created_at DESC LIMIT 6""", t, like))
             items.add(hit("MO", str(r, "id"), str(r, "number"), r.get("sku") + " · " + r.get("item")));
-        for (var r : s.list(
-                """
+        for (var r : s.list("""
                 SELECT r.number,MIN(po.number) AS po,MIN(p.name) AS supplier,COUNT(*) AS lines FROM receipts r
                 JOIN purchase_orders po ON po.tenant_id=r.tenant_id AND po.id=r.purchase_order_id
                 LEFT JOIN partners p ON p.tenant_id=po.tenant_id AND p.id=po.supplier_id
-                WHERE r.tenant_id=? AND r.number ILIKE ? GROUP BY r.number ORDER BY r.number DESC LIMIT 6""",
-                t,
-                like))
+                WHERE r.tenant_id=? AND r.number ILIKE ? GROUP BY r.number ORDER BY r.number DESC LIMIT 6""", t, like))
             items.add(hit("RECEIPT", str(r, "number"), str(r, "number"), r.get("po") + " · " + r.get("supplier")));
-        for (var r : s.list(
-                """
+        for (var r : s.list("""
                 SELECT po.id,po.number,p.name AS supplier FROM purchase_orders po
                 LEFT JOIN partners p ON p.tenant_id=po.tenant_id AND p.id=po.supplier_id
                 WHERE po.tenant_id=? AND po.number ILIKE ? AND po.status NOT IN ('DRAFT','SUBMITTED','CANCELLED')
-                ORDER BY po.created_at DESC LIMIT 6""",
-                t,
-                like))
-            items.add(hit("PO", str(r, "id"), str(r, "number"), str(r, "supplier")));
-        for (var r : s.list(
-                """
+                ORDER BY po.created_at DESC LIMIT 6""", t, like)) items.add(hit("PO", str(r, "id"), str(r, "number"), str(r, "supplier")));
+        for (var r : s.list("""
                 SELECT so.id,so.number,p.name AS customer FROM sales_orders so
                 JOIN partners p ON p.tenant_id=so.tenant_id AND p.id=so.customer_id
                 WHERE so.tenant_id=? AND (so.number ILIKE ? OR so.customer_reference ILIKE ?)
                   AND so.status NOT IN ('DRAFT','CANCELLED')
-                ORDER BY so.created_at DESC LIMIT 6""",
-                t,
-                like,
-                like))
+                ORDER BY so.created_at DESC LIMIT 6""", t, like, like))
             items.add(hit("SO", str(r, "id"), str(r, "number"), str(r, "customer")));
-        for (var r : s.list(
-                """
+        for (var r : s.list("""
                 SELECT d.reference,MIN(so.number) AS so,MIN(p.name) AS customer FROM deliveries d
                 JOIN sales_orders so ON so.tenant_id=d.tenant_id AND so.id=d.sales_order_id
                 JOIN partners p ON p.tenant_id=so.tenant_id AND p.id=so.customer_id
                 WHERE d.tenant_id=? AND d.reference ILIKE ? GROUP BY d.reference ORDER BY MAX(d.created_at) DESC
-                LIMIT 6""",
-                t,
-                like))
-            items.add(hit("DELIVERY", str(r, "reference"), str(r, "reference"), r.get("so") + " · " + r.get("customer")));
-        for (var r : s.list(
-                """
+                LIMIT 6""", t, like))
+            items.add(
+                    hit("DELIVERY", str(r, "reference"), str(r, "reference"), r.get("so") + " · " + r.get("customer")));
+        for (var r : s.list("""
                 SELECT id,name FROM partners WHERE tenant_id=? AND type='SUPPLIER' AND name ILIKE ?
-                ORDER BY name LIMIT 6""",
-                t,
-                like))
+                ORDER BY name LIMIT 6""", t, like))
             items.add(hit("SUPPLIER", str(r, "id"), str(r, "name"), "Supplier · lots received in a date range"));
         return Map.of("items", items);
     }
@@ -244,7 +205,9 @@ public class TraceService {
         String kind = type == null ? "LOT" : type.strip().toUpperCase(Locale.ROOT);
         require(ROOT_TYPES.contains(kind), "Trace from a lot, MO, receipt, PO, SO, delivery or supplier");
         require(id != null && !id.isBlank(), "Choose what to trace");
-        String dir = direction == null || direction.isBlank() ? "BOTH" : direction.strip().toUpperCase(Locale.ROOT);
+        String dir = direction == null || direction.isBlank()
+                ? "BOTH"
+                : direction.strip().toUpperCase(Locale.ROOT);
         require(List.of("BOTH", "BACKWARD", "FORWARD").contains(dir), "Direction is BOTH, BACKWARD or FORWARD");
         int hops = depth == null ? DEFAULT_DEPTH : depth;
         require(hops >= 1 && hops <= MAX_DEPTH, "Choose a depth between 1 and " + MAX_DEPTH);
@@ -295,7 +258,8 @@ public class TraceService {
                 return new Root("lot:" + lotId, Set.of(lotId), Set.of(lotId));
             }
             case "MO" -> {
-                var mo = s.one("SELECT id FROM manufacturing_orders WHERE tenant_id=? AND (id=? OR number=?)", t, id, id);
+                var mo = s.one(
+                        "SELECT id FROM manufacturing_orders WHERE tenant_id=? AND (id=? OR number=?)", t, id, id);
                 String moId = str(mo, "id");
                 g.orders(List.of(moId));
                 var back = new LinkedHashSet<String>();
@@ -322,14 +286,10 @@ public class TraceService {
                     n.put("from", first.toString());
                     n.put("to", last.toString());
                 } else if (kind.equals("PO")) {
-                    var po = s.one(
-                            """
+                    var po = s.one("""
                             SELECT po.id,po.number,po.status,p.id AS supplier_id,p.name AS supplier FROM purchase_orders po
                             LEFT JOIN partners p ON p.tenant_id=po.tenant_id AND p.id=po.supplier_id
-                            WHERE po.tenant_id=? AND (po.id=? OR po.number=?)""",
-                            t,
-                            id,
-                            id);
+                            WHERE po.tenant_id=? AND (po.id=? OR po.number=?)""", t, id, id);
                     nodeId = "po:" + po.get("id");
                     var n = g.node(nodeId, "PURCHASE_ORDER", str(po, "number"), str(po, "supplier"));
                     n.put("ref", po.get("id"));
@@ -338,19 +298,16 @@ public class TraceService {
                     n.put("supplier", po.get("supplier"));
                     id = str(po, "id");
                 } else {
-                    var grn = s.one(
-                            """
+                    var grn = s.one("""
                             SELECT r.number,MIN(r.created_at) AS created_at,MIN(po.id) AS po_id,MIN(po.number) AS po,
                                    MIN(p.id) AS supplier_id,MIN(p.name) AS supplier,MIN(r.delivery_note) AS delivery_note
                             FROM receipts r
                             JOIN purchase_orders po ON po.tenant_id=r.tenant_id AND po.id=r.purchase_order_id
                             LEFT JOIN partners p ON p.tenant_id=po.tenant_id AND p.id=po.supplier_id
-                            WHERE r.tenant_id=? AND (r.number=? OR r.id=?) GROUP BY r.number""",
-                            t,
-                            id,
-                            id);
+                            WHERE r.tenant_id=? AND (r.number=? OR r.id=?) GROUP BY r.number""", t, id, id);
                     nodeId = "grn:" + grn.get("number");
-                    var n = g.node(nodeId, "GOODS_RECEIPT", str(grn, "number"), grn.get("po") + " · " + grn.get("supplier"));
+                    var n = g.node(
+                            nodeId, "GOODS_RECEIPT", str(grn, "number"), grn.get("po") + " · " + grn.get("supplier"));
                     n.put("ref", grn.get("number"));
                     n.put("at", grn.get("created_at"));
                     n.put("purchaseOrderId", grn.get("po_id"));
@@ -387,7 +344,14 @@ public class TraceService {
                     String lot = str(r, "lot_id");
                     seeds.add(lot);
                     g.lot(lot);
-                    g.edge(nodeId, "lot:" + lot, "RECEIVED", r.get("quantity"), r.get("uom"), r.get("created_at"), str(r, "number"));
+                    g.edge(
+                            nodeId,
+                            "lot:" + lot,
+                            "RECEIVED",
+                            r.get("quantity"),
+                            r.get("uom"),
+                            r.get("created_at"),
+                            str(r, "number"));
                 }
                 return new Root(nodeId, Set.of(), seeds);
             }
@@ -397,14 +361,10 @@ public class TraceService {
                 String soId = null;
                 String reference = null;
                 if (kind.equals("SO")) {
-                    var so = s.one(
-                            """
+                    var so = s.one("""
                             SELECT so.id,so.number,so.status,p.id AS customer_id,p.name AS customer FROM sales_orders so
                             JOIN partners p ON p.tenant_id=so.tenant_id AND p.id=so.customer_id
-                            WHERE so.tenant_id=? AND (so.id=? OR so.number=?)""",
-                            t,
-                            id,
-                            id);
+                            WHERE so.tenant_id=? AND (so.id=? OR so.number=?)""", t, id, id);
                     soId = str(so, "id");
                     nodeId = "so:" + soId;
                     var n = g.node(nodeId, "SALES_ORDER", str(so, "number"), str(so, "customer"));
@@ -413,17 +373,13 @@ public class TraceService {
                     n.put("customerId", so.get("customer_id"));
                     n.put("customer", so.get("customer"));
                 } else {
-                    var d = s.one(
-                            """
+                    var d = s.one("""
                             SELECT d.reference,MIN(d.created_at) AS created_at,MIN(so.id) AS so_id,MIN(so.number) AS so,
                                    MIN(p.id) AS customer_id,MIN(p.name) AS customer
                             FROM deliveries d
                             JOIN sales_orders so ON so.tenant_id=d.tenant_id AND so.id=d.sales_order_id
                             JOIN partners p ON p.tenant_id=so.tenant_id AND p.id=so.customer_id
-                            WHERE d.tenant_id=? AND (d.reference=? OR d.id=?) GROUP BY d.reference""",
-                            t,
-                            id,
-                            id);
+                            WHERE d.tenant_id=? AND (d.reference=? OR d.id=?) GROUP BY d.reference""", t, id, id);
                     reference = str(d, "reference");
                     nodeId = "dref:" + reference;
                     var n = g.node(nodeId, "DELIVERY_NOTE", reference, d.get("so") + " · " + d.get("customer"));
@@ -436,41 +392,42 @@ public class TraceService {
                 }
                 var back = new LinkedHashSet<String>();
                 var fwd = new LinkedHashSet<String>();
-                for (var r : s.list(
-                        """
+                for (var r : s.list("""
                         SELECT d.id,d.lot_id,d.quantity,d.reference,d.created_at,i.uom FROM deliveries d
                         JOIN lots l ON l.tenant_id=d.tenant_id AND l.id=d.lot_id
                         JOIN items i ON i.tenant_id=l.tenant_id AND i.id=l.item_id
                         WHERE d.tenant_id=? AND (?::text IS NULL OR d.sales_order_id=?) AND (?::text IS NULL OR d.reference=?)
-                        ORDER BY d.created_at,d.id LIMIT ?""",
-                        t,
-                        soId,
-                        soId,
-                        reference,
-                        reference,
-                        MAX_LOTS)) {
+                        ORDER BY d.created_at,d.id LIMIT ?""", t, soId, soId, reference, reference, MAX_LOTS)) {
                     String lot = str(r, "lot_id");
                     back.add(lot);
                     g.lot(lot);
-                    g.edge("lot:" + lot, nodeId, "DELIVERED", r.get("quantity"), r.get("uom"), r.get("created_at"), str(r, "reference"));
+                    g.edge(
+                            "lot:" + lot,
+                            nodeId,
+                            "DELIVERED",
+                            r.get("quantity"),
+                            r.get("uom"),
+                            r.get("created_at"),
+                            str(r, "reference"));
                 }
-                for (var r : s.list(
-                        """
+                for (var r : s.list("""
                         SELECT cr.lot_id,cr.number,cr.quantity,cr.created_at,i.uom FROM customer_returns cr
                         JOIN deliveries d ON d.tenant_id=cr.tenant_id AND d.id=cr.delivery_id
                         JOIN lots l ON l.tenant_id=cr.tenant_id AND l.id=cr.lot_id
                         JOIN items i ON i.tenant_id=l.tenant_id AND i.id=l.item_id
                         WHERE cr.tenant_id=? AND (?::text IS NULL OR cr.sales_order_id=?) AND (?::text IS NULL OR d.reference=?)
-                        ORDER BY cr.created_at,cr.id""",
-                        t,
-                        soId,
-                        soId,
-                        reference,
-                        reference)) {
+                        ORDER BY cr.created_at,cr.id""", t, soId, soId, reference, reference)) {
                     String lot = str(r, "lot_id");
                     fwd.add(lot);
                     g.lot(lot);
-                    g.edge(nodeId, "lot:" + lot, "RETURNED", r.get("quantity"), r.get("uom"), r.get("created_at"), str(r, "number"));
+                    g.edge(
+                            nodeId,
+                            "lot:" + lot,
+                            "RETURNED",
+                            r.get("quantity"),
+                            r.get("uom"),
+                            r.get("created_at"),
+                            str(r, "number"));
                 }
                 return new Root(nodeId, back, fwd);
             }
@@ -518,8 +475,7 @@ public class TraceService {
             }
         }
         // Purchase receipts.
-        for (var r : s.list(
-                """
+        for (var r : s.list("""
                 SELECT r.id,r.lot_id,r.number,r.quantity,r.created_at,r.delivery_note,po.id AS po_id,po.number AS po,
                        p.id AS supplier_id,p.name AS supplier,i.uom
                 FROM receipts r
@@ -527,9 +483,7 @@ public class TraceService {
                 LEFT JOIN partners p ON p.tenant_id=po.tenant_id AND p.id=po.supplier_id
                 JOIN lots l ON l.tenant_id=r.tenant_id AND l.id=r.lot_id
                 JOIN items i ON i.tenant_id=l.tenant_id AND i.id=l.item_id
-                WHERE r.tenant_id=? AND r.lot_id IN (SELECT jsonb_array_elements_text(?::jsonb))""",
-                t,
-                lots)) {
+                WHERE r.tenant_id=? AND r.lot_id IN (SELECT jsonb_array_elements_text(?::jsonb))""", t, lots)) {
             String nodeId = "receipt:" + r.get("id");
             var n = g.node(nodeId, "RECEIPT", str(r, "number"), r.get("po") + " · " + r.get("supplier"));
             n.put("ref", r.get("number"));
@@ -539,7 +493,14 @@ public class TraceService {
             n.put("supplierId", r.get("supplier_id"));
             n.put("supplier", r.get("supplier"));
             n.put("deliveryNote", r.get("delivery_note"));
-            g.edge(nodeId, "lot:" + r.get("lot_id"), "RECEIVED", r.get("quantity"), r.get("uom"), r.get("created_at"), str(r, "number"));
+            g.edge(
+                    nodeId,
+                    "lot:" + r.get("lot_id"),
+                    "RECEIVED",
+                    r.get("quantity"),
+                    r.get("uom"),
+                    r.get("created_at"),
+                    str(r, "number"));
         }
         // Manufacturing orders: output edge into the lot and the material issued to the order.
         if (!orders.isEmpty()) {
@@ -548,15 +509,12 @@ public class TraceService {
             g.issuesToOrders(orders);
         }
         // Transfers into the lots.
-        for (var r : s.list(
-                """
+        for (var r : s.list("""
                 SELECT tl.source_lot_id,tl.destination_lot_id,tl.quantity,t.number,t.posted_at,i.uom
                 FROM stock_transfer_lines tl
                 JOIN stock_transfers t ON t.tenant_id=tl.tenant_id AND t.id=tl.transfer_id
                 JOIN items i ON i.tenant_id=tl.tenant_id AND i.id=tl.item_id
-                WHERE tl.tenant_id=? AND tl.destination_lot_id IN (SELECT jsonb_array_elements_text(?::jsonb))""",
-                t,
-                lots))
+                WHERE tl.tenant_id=? AND tl.destination_lot_id IN (SELECT jsonb_array_elements_text(?::jsonb))""", t, lots))
             g.edge(
                     "lot:" + r.get("source_lot_id"),
                     "lot:" + r.get("destination_lot_id"),
@@ -594,24 +552,20 @@ public class TraceService {
         for (var r : s.list(
                 "SELECT DISTINCT order_id FROM reservations WHERE tenant_id=? AND status='ISSUED' AND lot_id IN (SELECT jsonb_array_elements_text(?::jsonb))",
                 t,
-                lots))
-            orders.add(str(r, "order_id"));
+                lots)) orders.add(str(r, "order_id"));
         if (!orders.isEmpty()) {
             g.orders(orders);
             g.issues(lots);
             g.orderOutputs(orders);
         }
         // Transfers out of the lots.
-        for (var r : s.list(
-                """
+        for (var r : s.list("""
                 SELECT tl.source_lot_id,tl.destination_lot_id,tl.quantity,t.number,t.posted_at,i.uom
                 FROM stock_transfer_lines tl
                 JOIN stock_transfers t ON t.tenant_id=tl.tenant_id AND t.id=tl.transfer_id
                 JOIN items i ON i.tenant_id=tl.tenant_id AND i.id=tl.item_id
                 WHERE tl.tenant_id=? AND tl.destination_lot_id IS NOT NULL
-                  AND tl.source_lot_id IN (SELECT jsonb_array_elements_text(?::jsonb))""",
-                t,
-                lots))
+                  AND tl.source_lot_id IN (SELECT jsonb_array_elements_text(?::jsonb))""", t, lots))
             g.edge(
                     "lot:" + r.get("source_lot_id"),
                     "lot:" + r.get("destination_lot_id"),
@@ -622,16 +576,10 @@ public class TraceService {
                     str(r, "number"));
         // Rework orders consuming the lots (open ones have no output yet).
         var reworks = new LinkedHashSet<String>();
-        for (var r : s.list(
-                """
+        for (var r : s.list("""
                 SELECT id FROM rework_orders WHERE tenant_id=? AND input_lot_id IN (SELECT jsonb_array_elements_text(?::jsonb))
                 UNION
-                SELECT rework_order_id FROM rework_materials WHERE tenant_id=? AND lot_id IN (SELECT jsonb_array_elements_text(?::jsonb))""",
-                t,
-                lots,
-                t,
-                lots))
-            reworks.add(str(r, "id"));
+                SELECT rework_order_id FROM rework_materials WHERE tenant_id=? AND lot_id IN (SELECT jsonb_array_elements_text(?::jsonb))""", t, lots, t, lots)) reworks.add(str(r, "id"));
         if (!reworks.isEmpty()) {
             g.reworks(reworks);
             g.reworkInputs(reworks);
@@ -695,8 +643,14 @@ public class TraceService {
         }
         out.put("lots", lots);
         out.put("inStockLots", inStock);
-        out.put("orders", nodes.stream().filter(n -> "MANUFACTURING_ORDER".equals(n.get("kind"))).count());
-        out.put("deliveries", nodes.stream().filter(n -> "DELIVERY".equals(n.get("kind"))).count());
+        out.put(
+                "orders",
+                nodes.stream()
+                        .filter(n -> "MANUFACTURING_ORDER".equals(n.get("kind")))
+                        .count());
+        out.put(
+                "deliveries",
+                nodes.stream().filter(n -> "DELIVERY".equals(n.get("kind"))).count());
         out.put("customers", customers.size());
         out.put("suppliers", suppliers.size());
         out.put("edges", edges.size());
@@ -769,18 +723,19 @@ public class TraceService {
         }
 
         void orders(Collection<String> ids) {
-            for (var r : s.list(
-                    """
+            for (var r : s.list("""
                     SELECT m.id,m.number,m.status,m.quantity,m.good_qty,m.scrap_qty,m.created_at,m.started_at,
                            m.parent_order_id,i.sku,i.name AS item,i.uom,w.code AS machine,so.number AS sales_order
                     FROM manufacturing_orders m
                     JOIN items i ON i.tenant_id=m.tenant_id AND i.id=m.product_id
                     JOIN machines w ON w.tenant_id=m.tenant_id AND w.id=m.machine_id
                     LEFT JOIN sales_orders so ON so.tenant_id=m.tenant_id AND so.id=m.sales_order_id
-                    WHERE m.tenant_id=? AND m.id IN (SELECT jsonb_array_elements_text(?::jsonb))""",
-                    tenant,
-                    s.encode(ids))) {
-                var n = node("mo:" + r.get("id"), "MANUFACTURING_ORDER", str(r, "number"), r.get("sku") + " · " + r.get("item"));
+                    WHERE m.tenant_id=? AND m.id IN (SELECT jsonb_array_elements_text(?::jsonb))""", tenant, s.encode(ids))) {
+                var n = node(
+                        "mo:" + r.get("id"),
+                        "MANUFACTURING_ORDER",
+                        str(r, "number"),
+                        r.get("sku") + " · " + r.get("item"));
                 n.put("ref", r.get("id"));
                 n.put("status", r.get("status"));
                 n.put("quantity", r.get("quantity"));
@@ -796,8 +751,7 @@ public class TraceService {
 
         /** Material issued to the orders: lot → order edges; returns the rows. */
         List<Map<String, Object>> issuesToOrders(Collection<String> orderIds) {
-            return addIssues(
-                    "r.order_id IN (SELECT jsonb_array_elements_text(?::jsonb))", s.encode(orderIds));
+            return addIssues("r.order_id IN (SELECT jsonb_array_elements_text(?::jsonb))", s.encode(orderIds));
         }
 
         /** Material issued from the lots: lot → order edges. */
@@ -806,18 +760,14 @@ public class TraceService {
         }
 
         private List<Map<String, Object>> addIssues(String filter, String json) {
-            var rows = s.list(
-                    """
+            var rows = s.list("""
                     SELECT r.lot_id,r.order_id,SUM(r.quantity) AS quantity,m.number,i.uom,
                            (SELECT MIN(e.created_at) FROM stock_ledger e WHERE e.tenant_id=r.tenant_id AND e.lot_id=r.lot_id
                               AND e.reference=m.number AND e.reason='MATERIAL_ISSUE') AS issued_at
                     FROM reservations r
                     JOIN manufacturing_orders m ON m.tenant_id=r.tenant_id AND m.id=r.order_id
                     JOIN items i ON i.tenant_id=r.tenant_id AND i.id=r.item_id
-                    WHERE r.tenant_id=? AND r.status='ISSUED' AND\s"""
-                            + filter + " GROUP BY r.tenant_id,r.lot_id,r.order_id,m.number,i.uom",
-                    tenant,
-                    json);
+                    WHERE r.tenant_id=? AND r.status='ISSUED' AND\s""" + filter + " GROUP BY r.tenant_id,r.lot_id,r.order_id,m.number,i.uom", tenant, json);
             for (var r : rows) {
                 lotIds.add(str(r, "lot_id"));
                 lot(str(r, "lot_id"));
@@ -835,8 +785,7 @@ public class TraceService {
 
         /** Output lots of the orders: order → lot edges (quantity and time of the production receipt). */
         List<Map<String, Object>> orderOutputs(Collection<String> orderIds) {
-            var rows = s.list(
-                    """
+            var rows = s.list("""
                     SELECT l.id AS lot_id,l.source_id AS order_id,m.number,i.uom,
                            COALESCE((SELECT SUM(pa.good_qty) FROM production_actuals pa
                                      WHERE pa.tenant_id=l.tenant_id AND pa.lot_id=l.id),0) AS quantity,
@@ -846,9 +795,7 @@ public class TraceService {
                     JOIN items i ON i.tenant_id=l.tenant_id AND i.id=l.item_id
                     WHERE l.tenant_id=? AND l.source_type='MANUFACTURING'
                       AND l.source_id IN (SELECT jsonb_array_elements_text(?::jsonb))
-                    ORDER BY l.created_at,l.id""",
-                    tenant,
-                    s.encode(orderIds));
+                    ORDER BY l.created_at,l.id""", tenant, s.encode(orderIds));
             for (var r : rows) {
                 lot(str(r, "lot_id"));
                 edge(
@@ -864,14 +811,11 @@ public class TraceService {
         }
 
         void reworks(Collection<String> ids) {
-            for (var r : s.list(
-                    """
+            for (var r : s.list("""
                     SELECT w.*,i.sku,i.name AS item,i.uom,n.number AS ncr FROM rework_orders w
                     JOIN items i ON i.tenant_id=w.tenant_id AND i.id=w.item_id
                     JOIN ncrs n ON n.tenant_id=w.tenant_id AND n.id=w.ncr_id
-                    WHERE w.tenant_id=? AND w.id IN (SELECT jsonb_array_elements_text(?::jsonb))""",
-                    tenant,
-                    s.encode(ids))) {
+                    WHERE w.tenant_id=? AND w.id IN (SELECT jsonb_array_elements_text(?::jsonb))""", tenant, s.encode(ids))) {
                 String nodeId = "rw:" + r.get("id");
                 var n = node(nodeId, "REWORK_ORDER", str(r, "number"), r.get("sku") + " · " + r.get("item"));
                 n.put("ref", r.get("id"));
@@ -895,8 +839,7 @@ public class TraceService {
 
         /** The reworked lot and the extra material of the orders: lot → rework order edges. */
         void reworkInputs(Collection<String> ids) {
-            for (var r : s.list(
-                    """
+            for (var r : s.list("""
                     SELECT w.id,w.number,w.input_lot_id AS lot_id,w.input_quantity AS quantity,w.created_at,
                            'REWORK_INPUT' AS kind,i.uom
                     FROM rework_orders w JOIN items i ON i.tenant_id=w.tenant_id AND i.id=w.item_id
@@ -906,11 +849,7 @@ public class TraceService {
                     FROM rework_materials m
                     JOIN rework_orders w ON w.tenant_id=m.tenant_id AND w.id=m.rework_order_id
                     JOIN items i ON i.tenant_id=m.tenant_id AND i.id=m.item_id
-                    WHERE m.tenant_id=? AND m.rework_order_id IN (SELECT jsonb_array_elements_text(?::jsonb))""",
-                    tenant,
-                    s.encode(ids),
-                    tenant,
-                    s.encode(ids))) {
+                    WHERE m.tenant_id=? AND m.rework_order_id IN (SELECT jsonb_array_elements_text(?::jsonb))""", tenant, s.encode(ids), tenant, s.encode(ids))) {
                 lot(str(r, "lot_id"));
                 edge(
                         "lot:" + r.get("lot_id"),
@@ -969,14 +908,11 @@ public class TraceService {
                         str(r, "reference"));
             }
             if (!deliveryIds.isEmpty())
-                for (var r : s.list(
-                        """
+                for (var r : s.list("""
                         SELECT cr.delivery_id,cr.lot_id,cr.number,cr.quantity,cr.created_at,i.uom FROM customer_returns cr
                         JOIN lots l ON l.tenant_id=cr.tenant_id AND l.id=cr.lot_id
                         JOIN items i ON i.tenant_id=l.tenant_id AND i.id=l.item_id
-                        WHERE cr.tenant_id=? AND cr.delivery_id IN (SELECT jsonb_array_elements_text(?::jsonb))""",
-                        tenant,
-                        s.encode(deliveryIds))) {
+                        WHERE cr.tenant_id=? AND cr.delivery_id IN (SELECT jsonb_array_elements_text(?::jsonb))""", tenant, s.encode(deliveryIds))) {
                     lot(str(r, "lot_id"));
                     edge(
                             "delivery:" + r.get("delivery_id"),
@@ -996,8 +932,7 @@ public class TraceService {
          * adjustments (decreases, count variances).
          */
         void outflows(String lotsJson) {
-            for (var r : s.list(
-                    """
+            for (var r : s.list("""
                     SELECT e.lot_id,e.reference,i.uom,
                            CASE WHEN e.reason IN ('SUPPLIER_RETURN','SUPPLIER_RETURN_QC') THEN 'SUPPLIER_RETURN'
                                 WHEN e.reason='QUALITY_SCRAP' THEN 'SCRAP'
@@ -1011,19 +946,16 @@ public class TraceService {
                                         'MAINTENANCE_RETURN') OR e.reason LIKE 'ADJUSTMENT\\_%')
                     GROUP BY e.lot_id,e.reference,i.uom,4
                     HAVING SUM(e.delta) < 0
-                    ORDER BY MAX(e.created_at)""",
-                    tenant,
-                    lotsJson)) {
+                    ORDER BY MAX(e.created_at)""", tenant, lotsJson)) {
                 String kind = str(r, "kind");
                 String reference = str(r, "reference");
                 String label = reference;
-                String detail =
-                        switch (kind) {
-                            case "SUPPLIER_RETURN" -> "Returned to supplier";
-                            case "SCRAP" -> "Scrapped (nonconformance)";
-                            case "MAINTENANCE" -> "Issued to maintenance";
-                            default -> "Stock adjustment";
-                        };
+                String detail = switch (kind) {
+                    case "SUPPLIER_RETURN" -> "Returned to supplier";
+                    case "SCRAP" -> "Scrapped (nonconformance)";
+                    case "MAINTENANCE" -> "Issued to maintenance";
+                    default -> "Stock adjustment";
+                };
                 if (r.get("qc") != null) {
                     // A failed incoming inspection returns the lot under the purchase order id.
                     var po = s.list(
@@ -1032,7 +964,8 @@ public class TraceService {
                             reference);
                     if (!po.isEmpty()) {
                         label = str(po.getFirst(), "number");
-                        detail = "Failed incoming inspection · returned to " + po.getFirst().get("name");
+                        detail = "Failed incoming inspection · returned to "
+                                + po.getFirst().get("name");
                     }
                 } else if (kind.equals("SUPPLIER_RETURN")) {
                     var sr = s.list(
@@ -1058,9 +991,7 @@ public class TraceService {
                     SELECT DISTINCT ON (e.lot_id) e.lot_id,e.delta,e.created_at,i.uom FROM stock_ledger e
                     JOIN items i ON i.tenant_id=e.tenant_id AND i.id=e.item_id
                     WHERE e.tenant_id=? AND e.lot_id IN (SELECT jsonb_array_elements_text(?::jsonb))
-                    ORDER BY e.lot_id,e.created_at,e.id""",
-                    tenant,
-                    s.encode(lots.stream().map(l -> str(l, "id")).toList())))
+                    ORDER BY e.lot_id,e.created_at,e.id""", tenant, s.encode(lots.stream().map(l -> str(l, "id")).toList())))
                 first.put(str(r, "lot_id"), r);
             var adjustments = new HashMap<String, String>();
             for (var r : s.list(
@@ -1097,8 +1028,7 @@ public class TraceService {
         /** Item, warehouse, stock, status and open NCR of every lot node; {@code more} on lots at the depth limit. */
         void loadLots() {
             if (lotIds.isEmpty()) return;
-            for (var r : s.list(
-                    """
+            for (var r : s.list("""
                     SELECT l.id,l.number,l.status,l.source_type,l.created_at,l.unit_cost,i.id AS item_id,i.sku,
                            i.name AS item,i.type AS item_type,i.uom,w.id AS warehouse_id,w.name AS warehouse,
                            w.code AS warehouse_code,COALESCE(b.quantity,0) AS on_hand,COALESCE(b.reserved,0) AS reserved,
@@ -1110,9 +1040,7 @@ public class TraceService {
                     JOIN items i ON i.tenant_id=l.tenant_id AND i.id=l.item_id
                     JOIN warehouses w ON w.tenant_id=l.tenant_id AND w.id=l.warehouse_id
                     LEFT JOIN stock_balances b ON b.tenant_id=l.tenant_id AND b.lot_id=l.id
-                    WHERE l.tenant_id=? AND l.id IN (SELECT jsonb_array_elements_text(?::jsonb))""",
-                    tenant,
-                    s.encode(lotIds))) {
+                    WHERE l.tenant_id=? AND l.id IN (SELECT jsonb_array_elements_text(?::jsonb))""", tenant, s.encode(lotIds))) {
                 var n = nodes.get("lot:" + r.get("id"));
                 if (n == null) continue;
                 n.put("label", r.get("number"));
@@ -1187,8 +1115,7 @@ public class TraceService {
             queue.add(root);
             reach.add(root);
             while (!queue.isEmpty())
-                for (String b : out.getOrDefault(queue.poll(), List.of()))
-                    if (reach.add(b)) queue.add(b);
+                for (String b : out.getOrDefault(queue.poll(), List.of())) if (reach.add(b)) queue.add(b);
             var indegree = new HashMap<String, Integer>();
             for (String a : reach)
                 for (String b : out.getOrDefault(a, List.of()))

@@ -87,8 +87,8 @@ public class RecallService {
                 require(!blank(c.supplierId()), "Choose the supplier");
                 require(from != null && to != null, "Enter the first and last receipt date");
                 require(!from.isAfter(to), "The first receipt date must not be after the last one");
-                var partner = s.one(
-                        "SELECT name,type FROM partners WHERE tenant_id=? AND id=?", a.tenant(), c.supplierId());
+                var partner =
+                        s.one("SELECT name,type FROM partners WHERE tenant_id=? AND id=?", a.tenant(), c.supplierId());
                 require("SUPPLIER".equals(partner.get("type")), "Choose a supplier, not a customer");
                 supplier = c.supplierId();
                 if (!blank(c.itemId())) {
@@ -166,13 +166,14 @@ public class RecallService {
         a.allow("QUALITY");
         return s.once(a, key, "recall-contain:" + id, Map.of(), () -> {
             var r = locked(a, id);
-            require(r.get("status").equals("OPEN"), "Recall " + r.get("number") + " is " + lower(r) + "; it was already contained or ended");
+            require(
+                    r.get("status").equals("OPEN"),
+                    "Recall " + r.get("number") + " is " + lower(r) + "; it was already contained or ended");
             var snapshot = recompute(a, r);
             String number = str(r, "number");
             int held = 0;
             var skipped = new ArrayList<String>();
-            for (var lot : s.list(
-                    """
+            for (var lot : s.list("""
                     SELECT x.id,x.lot_id,l.number,l.status,i.uom,COALESCE(b.quantity,0) AS quantity,
                            EXISTS(SELECT 1 FROM inspections q WHERE q.tenant_id=l.tenant_id AND q.lot_id=l.id
                                   AND q.status='PENDING') AS inspection_pending,
@@ -183,9 +184,7 @@ public class RecallService {
                     JOIN items i ON i.tenant_id=l.tenant_id AND i.id=l.item_id
                     LEFT JOIN stock_balances b ON b.tenant_id=l.tenant_id AND b.lot_id=l.id
                     WHERE x.tenant_id=? AND x.recall_id=? AND COALESCE(b.quantity,0) > 0
-                    ORDER BY x.depth,l.number""",
-                    a.tenant(),
-                    id)) {
+                    ORDER BY x.depth,l.number""", a.tenant(), id)) {
                 String containment;
                 String ncr = null;
                 if (!lot.get("status").equals("RELEASED")) containment = "ALREADY_HELD";
@@ -214,7 +213,9 @@ public class RecallService {
                     ncr = str(raised, "id");
                     held++;
                 }
-                if (!containment.equals("HELD")) skipped.add(lot.get("number") + " (" + containment.toLowerCase(java.util.Locale.ROOT).replace('_', ' ') + ")");
+                if (!containment.equals("HELD"))
+                    skipped.add(lot.get("number") + " ("
+                            + containment.toLowerCase(java.util.Locale.ROOT).replace('_', ' ') + ")");
                 s.db().update(
                                 "UPDATE recall_lots SET containment=?,ncr_id=? WHERE tenant_id=? AND id=?",
                                 containment,
@@ -247,8 +248,8 @@ public class RecallService {
     /** The idempotency key of the RECALL NCR of one lot: unique per recall and lot, never reused. */
     static String ncrKey(String recall, String lot) {
         try {
-            var digest = MessageDigest.getInstance("SHA-256")
-                    .digest((recall + ":" + lot).getBytes(StandardCharsets.UTF_8));
+            var digest =
+                    MessageDigest.getInstance("SHA-256").digest((recall + ":" + lot).getBytes(StandardCharsets.UTF_8));
             return "recall-ncr-" + HexFormat.of().formatHex(digest).substring(0, 40);
         } catch (Exception e) {
             throw new IllegalStateException(e);
@@ -269,14 +270,10 @@ public class RecallService {
                     !r.get("status").equals("OPEN"),
                     "Contain recall " + number + " before recording customer notifications");
             require(r.get("status").equals("CONTAINED"), "Recall " + number + " is " + lower(r));
-            var customer = s.one(
-                    """
+            var customer = s.one("""
                     SELECT c.status,p.name FROM recall_customers c
                     JOIN partners p ON p.tenant_id=c.tenant_id AND p.id=c.customer_id
-                    WHERE c.tenant_id=? AND c.recall_id=? AND c.customer_id=?""",
-                    a.tenant(),
-                    id,
-                    customerId);
+                    WHERE c.tenant_id=? AND c.recall_id=? AND c.customer_id=?""", a.tenant(), id, customerId);
             require(
                     customer.get("status").equals("PENDING"),
                     customer.get("name") + " was already notified about recall " + number);
@@ -294,9 +291,9 @@ public class RecallService {
                     a,
                     "RECALL_CUSTOMER_NOTIFIED",
                     number,
-                    customer.get("name") + " notified on " + on + " · " + c.contact().strip());
-            long pending = s.db()
-                    .queryForObject(
+                    customer.get("name") + " notified on " + on + " · "
+                            + c.contact().strip());
+            long pending = s.db().queryForObject(
                             "SELECT COUNT(*) FROM recall_customers WHERE tenant_id=? AND recall_id=? AND status='PENDING'",
                             Long.class,
                             a.tenant(),
@@ -323,7 +320,8 @@ public class RecallService {
             var open = outstanding(a.tenant(), id);
             long pending = (Long) open.get("pendingCustomers");
             long unsettled = (Long) open.get("unsettledLots");
-            String override = blank(c.overrideReason()) ? null : c.overrideReason().strip();
+            String override =
+                    blank(c.overrideReason()) ? null : c.overrideReason().strip();
             boolean outstanding = pending > 0 || unsettled > 0;
             if (outstanding) {
                 require(
@@ -391,16 +389,13 @@ public class RecallService {
 
     /** Customers still PENDING and lots this recall held whose RECALL NCR is not yet DISPOSITIONED or CLOSED. */
     Map<String, Object> outstanding(String tenant, String id) {
-        return s.one(
-                """
+        return s.one("""
                 SELECT (SELECT COUNT(*) FROM recall_customers c WHERE c.tenant_id=r.tenant_id AND c.recall_id=r.id
                           AND c.status='PENDING') AS "pendingCustomers",
                        (SELECT COUNT(*) FROM recall_lots x JOIN ncrs n ON n.tenant_id=x.tenant_id AND n.id=x.ncr_id
                         WHERE x.tenant_id=r.tenant_id AND x.recall_id=r.id AND x.containment='HELD'
                           AND n.status NOT IN ('DISPOSITIONED','CLOSED')) AS "unsettledLots"
-                FROM recalls r WHERE r.tenant_id=? AND r.id=?""",
-                tenant,
-                id);
+                FROM recalls r WHERE r.tenant_id=? AND r.id=?""", tenant, id);
     }
 
     // ------------------------------------------------------------------ snapshot
@@ -470,15 +465,12 @@ public class RecallService {
         }
         int inStock = 0;
         if (!relation.isEmpty()) {
-            var rows = s.list(
-                    """
+            var rows = s.list("""
                     SELECT l.id,l.item_id,l.warehouse_id,l.status,i.uom,COALESCE(b.quantity,0) AS quantity,
                            COALESCE(b.reserved,0) AS reserved,COALESCE(b.value_amount,0) AS value_amount
                     FROM lots l JOIN items i ON i.tenant_id=l.tenant_id AND i.id=l.item_id
                     LEFT JOIN stock_balances b ON b.tenant_id=l.tenant_id AND b.lot_id=l.id
-                    WHERE l.tenant_id=? AND l.id IN (SELECT jsonb_array_elements_text(?::jsonb))""",
-                    t,
-                    s.encode(relation.keySet()));
+                    WHERE l.tenant_id=? AND l.id IN (SELECT jsonb_array_elements_text(?::jsonb))""", t, s.encode(relation.keySet()));
             var batch = new ArrayList<Object[]>();
             for (var l : rows) {
                 String lot = str(l, "id");
@@ -504,19 +496,15 @@ public class RecallService {
                             "INSERT INTO recall_lots(id,tenant_id,recall_id,lot_id,item_id,warehouse_id,relation,depth,quantity,reserved,value_amount,uom,lot_status) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)",
                             batch);
         }
-        var shipments = relation.isEmpty()
-                ? List.<Map<String, Object>>of()
-                : s.list(
-                        """
+        var shipments =
+                relation.isEmpty() ? List.<Map<String, Object>>of() : s.list("""
                         SELECT d.id,d.sales_order_id,so.customer_id,d.lot_id,l.item_id,d.reference,d.quantity,d.returned,
                                d.created_at
                         FROM deliveries d
                         JOIN sales_orders so ON so.tenant_id=d.tenant_id AND so.id=d.sales_order_id
                         JOIN lots l ON l.tenant_id=d.tenant_id AND l.id=d.lot_id
                         WHERE d.tenant_id=? AND d.lot_id IN (SELECT jsonb_array_elements_text(?::jsonb))
-                        ORDER BY d.created_at,d.id""",
-                        t,
-                        s.encode(relation.keySet()));
+                        ORDER BY d.created_at,d.id""", t, s.encode(relation.keySet()));
         var customers = new LinkedHashSet<String>();
         var batch = new ArrayList<Object[]>();
         for (var d : shipments) {

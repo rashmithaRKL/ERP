@@ -59,9 +59,7 @@ class RecallController {
 
     @PostMapping("/recalls")
     Map<String, Object> open(
-            Authentication a,
-            @Valid @RequestBody RecallCommands.Open c,
-            @RequestHeader("Idempotency-Key") String k) {
+            Authentication a, @Valid @RequestBody RecallCommands.Open c, @RequestHeader("Idempotency-Key") String k) {
         return recalls.open(Actor.of(a), c, k);
     }
 

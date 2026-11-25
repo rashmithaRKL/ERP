@@ -175,6 +175,15 @@ const LABELS: Record<string, string> = {
   MACHINE_METER_RECORDED: 'Run-hour meter recorded',
   MACHINE_STATUS_CORRECTED: 'Machine status corrected',
   MAINTENANCE_SETTINGS_UPDATED: 'Maintenance labour rate updated',
+  // Recalls (V14).
+  RECALL_OPENED: 'Recall opened',
+  RECALL_REFRESHED: 'Recall affected set recalculated',
+  RECALL_CONTAINED: 'Recall contained',
+  RECALL_CUSTOMER_NOTIFIED: 'Recall customer notified',
+  RECALL_NOTIFICATIONS_EXPORTED: 'Recall notification list exported',
+  RECALL_CLOSED: 'Recall closed',
+  RECALL_CLOSED_OVERRIDE: 'Recall closed by override',
+  RECALL_CANCELLED: 'Recall cancelled',
 };
 
 /** Fallback: a trailing bare verb (e.g. the `CANCEL` in `PO_CANCEL`) is shown in the past tense. */

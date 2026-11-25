@@ -52,17 +52,24 @@ class TraceEngineTest extends TraceTestSupport {
         // Forward from the purchased resin lot.
         var forward = trace("LOT", resinLot, "FORWARD");
         assertThat(map(forward.get("root"))).containsEntry("id", "lot:" + resinLot);
-        assertThat(node(forward, "lot:" + resinLot)).containsEntry("side", "ROOT").containsEntry("level", 0);
+        assertThat(node(forward, "lot:" + resinLot))
+                .containsEntry("side", "ROOT")
+                .containsEntry("level", 0);
         assertThat(num(node(forward, "lot:" + resinLot).get("onHand"))).isEqualByComparingTo("80");
-        assertThat(num(edge(forward, "lot:" + resinLot, "mo:" + preforms[0], "ISSUED").get("quantity")))
+        assertThat(num(edge(forward, "lot:" + resinLot, "mo:" + preforms[0], "ISSUED")
+                        .get("quantity")))
                 .isEqualByComparingTo("20");
-        assertThat(num(edge(forward, "mo:" + preforms[0], "lot:" + preforms[1], "PRODUCED").get("quantity")))
+        assertThat(num(edge(forward, "mo:" + preforms[0], "lot:" + preforms[1], "PRODUCED")
+                        .get("quantity")))
                 .isEqualByComparingTo("1000");
-        assertThat(num(edge(forward, "lot:" + preforms[1], "mo:" + bottles[0], "ISSUED").get("quantity")))
+        assertThat(num(edge(forward, "lot:" + preforms[1], "mo:" + bottles[0], "ISSUED")
+                        .get("quantity")))
                 .isEqualByComparingTo("400");
-        assertThat(num(edge(forward, "mo:" + bottles[0], "lot:" + bottles[1], "PRODUCED").get("quantity")))
+        assertThat(num(edge(forward, "mo:" + bottles[0], "lot:" + bottles[1], "PRODUCED")
+                        .get("quantity")))
                 .isEqualByComparingTo("400");
-        assertThat(num(edge(forward, "lot:" + bottles[1], "lot:" + moved, "TRANSFERRED").get("quantity")))
+        assertThat(num(edge(forward, "lot:" + bottles[1], "lot:" + moved, "TRANSFERRED")
+                        .get("quantity")))
                 .isEqualByComparingTo("100");
         var toAlpha = edge(forward, "lot:" + bottles[1], "delivery:" + saleA[1], "DELIVERED");
         assertThat(num(toAlpha.get("quantity"))).isEqualByComparingTo("120");
@@ -71,14 +78,19 @@ class TraceEngineTest extends TraceTestSupport {
         assertThat(node(forward, "delivery:" + saleA[1]))
                 .containsEntry("customer", "Alpha Beverages")
                 .containsEntry("salesOrderId", saleA[0]);
-        assertThat(num(edge(forward, "lot:" + moved, "delivery:" + saleB[1], "DELIVERED").get("quantity")))
+        assertThat(num(edge(forward, "lot:" + moved, "delivery:" + saleB[1], "DELIVERED")
+                        .get("quantity")))
                 .isEqualByComparingTo("30");
         assertThat(node(forward, "delivery:" + saleB[1])).containsEntry("customer", "Beta Foods");
-        assertThat(num(edge(forward, "delivery:" + saleA[1], "lot:" + returned, "RETURNED").get("quantity")))
+        assertThat(num(edge(forward, "delivery:" + saleA[1], "lot:" + returned, "RETURNED")
+                        .get("quantity")))
                 .isEqualByComparingTo("20");
-        assertThat(node(forward, "lot:" + bottles[1])).containsEntry("sku", "FG-BOT").containsEntry("status", "RELEASED");
+        assertThat(node(forward, "lot:" + bottles[1]))
+                .containsEntry("sku", "FG-BOT")
+                .containsEntry("status", "RELEASED");
         assertThat(num(node(forward, "lot:" + bottles[1]).get("onHand"))).isEqualByComparingTo("180");
-        assertThat(list(forward.get("nodes"))).allSatisfy(n -> assertThat(n.get("side")).isIn("ROOT", "FORWARD"));
+        assertThat(list(forward.get("nodes")))
+                .allSatisfy(n -> assertThat(n.get("side")).isIn("ROOT", "FORWARD"));
         assertLeftToRight(forward);
         assertThat(map(forward.get("summary"))).containsEntry("customers", 2).containsEntry("deliveries", 2);
         // The indented tree starts at the root's direct successors.
@@ -103,7 +115,8 @@ class TraceEngineTest extends TraceTestSupport {
                 .containsEntry("purchaseOrderId", receipt[0]);
         assertThat(list(backward.get("nodes")))
                 .filteredOn(n -> !"ROOT".equals(n.get("side")))
-                .allSatisfy(n -> assertThat(((Number) n.get("level")).intValue()).isNegative());
+                .allSatisfy(
+                        n -> assertThat(((Number) n.get("level")).intValue()).isNegative());
         assertLeftToRight(backward);
         // The transferred lot is a sibling of the returned goods, not an ancestor.
         assertThat(hasNode(backward, "lot:" + moved)).isFalse();
@@ -121,7 +134,9 @@ class TraceEngineTest extends TraceTestSupport {
 
         // Entry by goods receipt (GRN number) and by purchase order.
         var byReceipt = trace("RECEIPT", receipt[3], "BOTH");
-        assertThat(map(byReceipt.get("root"))).containsEntry("kind", "GOODS_RECEIPT").containsEntry("supplier", "Resin Supplier");
+        assertThat(map(byReceipt.get("root")))
+                .containsEntry("kind", "GOODS_RECEIPT")
+                .containsEntry("supplier", "Resin Supplier");
         edge(byReceipt, "grn:" + receipt[3], "lot:" + resinLot, "RECEIVED");
         assertThat(hasNode(byReceipt, "delivery:" + saleB[1])).isTrue();
         var byPo = trace("PO", receipt[0], "FORWARD");
@@ -150,18 +165,25 @@ class TraceEngineTest extends TraceTestSupport {
         String tomorrow = LocalDate.now(ZoneId.of("Asia/Colombo")).plusDays(1).toString();
         var none = json(query(
                         viewer,
-                        "/api/traceability/trace?type=SUPPLIER&id=" + supplier + "&from=" + tomorrow + "&to=" + tomorrow)
+                        "/api/traceability/trace?type=SUPPLIER&id=" + supplier + "&from=" + tomorrow + "&to="
+                                + tomorrow)
                 .andExpect(status().isOk()));
         assertThat(list(none.get("nodes"))).hasSize(1);
 
         // Search finds the entry points.
-        var orderNumber = str(row("SELECT number FROM manufacturing_orders WHERE tenant_id=? AND id=?", t, bottles[0]), "number");
-        var hits = list(json(query(viewer, "/api/traceability/search?q=" + orderNumber).andExpect(status().isOk()))
+        var orderNumber =
+                str(row("SELECT number FROM manufacturing_orders WHERE tenant_id=? AND id=?", t, bottles[0]), "number");
+        var hits = list(
+                json(query(viewer, "/api/traceability/search?q=" + orderNumber).andExpect(status().isOk()))
+                        .get("items"));
+        assertThat(hits)
+                .anySatisfy(h -> assertThat(h).containsEntry("type", "MO").containsEntry("id", bottles[0]));
+        var lotHits = list(json(query(viewer, "/api/traceability/search?q=" + lotNumber(resinLot)))
                 .get("items"));
-        assertThat(hits).anySatisfy(h -> assertThat(h).containsEntry("type", "MO").containsEntry("id", bottles[0]));
-        var lotHits = list(json(query(viewer, "/api/traceability/search?q=" + lotNumber(resinLot))).get("items"));
-        assertThat(lotHits).anySatisfy(h -> assertThat(h).containsEntry("type", "LOT").containsEntry("id", resinLot));
-        var supplierHits = list(json(query(viewer, "/api/traceability/search?q=Resin")).get("items"));
+        assertThat(lotHits)
+                .anySatisfy(h -> assertThat(h).containsEntry("type", "LOT").containsEntry("id", resinLot));
+        var supplierHits =
+                list(json(query(viewer, "/api/traceability/search?q=Resin")).get("items"));
         assertThat(supplierHits).anySatisfy(h -> assertThat(h).containsEntry("type", "SUPPLIER"));
         assertThat(list(json(query(viewer, "/api/traceability/search?q=DN-A")).get("items")))
                 .anySatisfy(h -> assertThat(h).containsEntry("type", "DELIVERY").containsEntry("id", "DN-A1"));
@@ -207,7 +229,8 @@ class TraceEngineTest extends TraceTestSupport {
                 new NcrCommands.ReworkComplete(
                         bd("38"), bd("0"), List.of(new NcrCommands.Material(preforms[1], bd("5"))), "Done"),
                 id());
-        String reworked = str(row("SELECT output_lot_id FROM rework_orders WHERE tenant_id=? AND id=?", t, rw), "output_lot_id");
+        String reworked =
+                str(row("SELECT output_lot_id FROM rework_orders WHERE tenant_id=? AND id=?", t, rw), "output_lot_id");
         String ncrNumber = str(row("SELECT number FROM ncrs WHERE tenant_id=? AND id=?", t, ncr), "number");
 
         var resin = trace("LOT", resinLot, "FORWARD");
@@ -217,23 +240,29 @@ class TraceEngineTest extends TraceTestSupport {
                 .orElseThrow();
         assertThat(num(returned.get("quantity"))).isEqualByComparingTo("10");
         assertThat(node(resin, str(returned, "to")).get("detail").toString()).contains("Resin Supplier");
-        assertThat(num(edge(resin, "lot:" + resinLot, "out:MAINTENANCE:MWO-T-1", "MAINTENANCE").get("quantity")))
+        assertThat(num(edge(resin, "lot:" + resinLot, "out:MAINTENANCE:MWO-T-1", "MAINTENANCE")
+                        .get("quantity")))
                 .isEqualByComparingTo("1.5");
-        assertThat(num(edge(resin, "lot:" + resinLot, "out:ADJUSTMENT:ADJ-T-1", "ADJUSTMENT").get("quantity")))
+        assertThat(num(edge(resin, "lot:" + resinLot, "out:ADJUSTMENT:ADJ-T-1", "ADJUSTMENT")
+                        .get("quantity")))
                 .isEqualByComparingTo("3");
         // 100 − 10 returned − 1.5 maintenance − 3 adjusted − 20 to the preform order.
         assertThat(num(node(resin, "lot:" + resinLot).get("onHand"))).isEqualByComparingTo("65.5");
 
         var bottleTrace = trace("LOT", bottles[1], "FORWARD");
-        assertThat(num(edge(bottleTrace, "lot:" + bottles[1], "out:SCRAP:" + ncrNumber, "SCRAP").get("quantity")))
+        assertThat(num(edge(bottleTrace, "lot:" + bottles[1], "out:SCRAP:" + ncrNumber, "SCRAP")
+                        .get("quantity")))
                 .isEqualByComparingTo("10");
-        assertThat(num(edge(bottleTrace, "lot:" + bottles[1], "rw:" + rw, "REWORK_INPUT").get("quantity")))
+        assertThat(num(edge(bottleTrace, "lot:" + bottles[1], "rw:" + rw, "REWORK_INPUT")
+                        .get("quantity")))
                 .isEqualByComparingTo("40");
-        assertThat(num(edge(bottleTrace, "rw:" + rw, "lot:" + reworked, "REWORKED").get("quantity")))
+        assertThat(num(edge(bottleTrace, "rw:" + rw, "lot:" + reworked, "REWORKED")
+                        .get("quantity")))
                 .isEqualByComparingTo("38");
 
         var preformTrace = trace("LOT", preforms[1], "FORWARD");
-        assertThat(num(edge(preformTrace, "lot:" + preforms[1], "rw:" + rw, "REWORK_MATERIAL").get("quantity")))
+        assertThat(num(edge(preformTrace, "lot:" + preforms[1], "rw:" + rw, "REWORK_MATERIAL")
+                        .get("quantity")))
                 .isEqualByComparingTo("5");
         assertThat(hasNode(preformTrace, "lot:" + reworked)).isTrue();
 
@@ -294,7 +323,8 @@ class TraceEngineTest extends TraceTestSupport {
 
         var limited = json(query(viewer, "/api/traceability/trace?id=" + lots[0] + "&direction=FORWARD&depth=2")
                 .andExpect(status().isOk()));
-        assertThat(list(limited.get("nodes"))).extracting(n -> n.get("id"))
+        assertThat(list(limited.get("nodes")))
+                .extracting(n -> n.get("id"))
                 .containsExactlyInAnyOrder("lot:" + lots[0], "lot:" + lots[1], "lot:" + lots[2]);
         assertThat(limited).containsEntry("depth", 2);
         query(viewer, "/api/traceability/trace?id=" + lots[0] + "&depth=0").andExpect(status().isConflict());
@@ -311,7 +341,8 @@ class TraceEngineTest extends TraceTestSupport {
         query(stranger, "/api/traceability/trace?type=PO&id=" + receipt[0]).andExpect(status().isNotFound());
         query(stranger, "/api/traceability/trace?type=SUPPLIER&id=" + supplier).andExpect(status().isNotFound());
         assertThat(traces.forward(other.id(), List.of(receipt[1]), 5).lots()).isEmpty();
-        assertThat(list(json(query(stranger, "/api/traceability/search?q=" + lotNumber(receipt[1]))).get("items")))
+        assertThat(list(json(query(stranger, "/api/traceability/search?q=" + lotNumber(receipt[1])))
+                        .get("items")))
                 .isEmpty();
         // Every role of the lot's own tenant may trace.
         for (var actor : List.of(viewer, operator, salesRep, warehouse))

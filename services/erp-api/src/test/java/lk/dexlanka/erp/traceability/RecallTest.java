@@ -16,7 +16,8 @@ class RecallTest extends TraceTestSupport {
     private static final String TODAY = LocalDate.now(ZoneId.of("Asia/Colombo")).toString();
 
     /** Resin R (100 kg) → preforms S (1,000) → bottles F1 (400) and F2 (300); F1 shipped to Alpha (100) and Beta (50). */
-    private record Chain(String[] receipt, String[] preforms, String[] bottles1, String[] bottles2, String[] saleA, String[] saleB) {
+    private record Chain(
+            String[] receipt, String[] preforms, String[] bottles1, String[] bottles2, String[] saleA, String[] saleB) {
         String resin() {
             return receipt[1];
         }
@@ -74,7 +75,17 @@ class RecallTest extends TraceTestSupport {
         ncrs.raise(
                 qa,
                 new NcrCommands.Raise(
-                        "PRODUCTION", "MINOR", "VIS", "Scuffs", "Scuffed", "", null, c.bottles2()[1], bd("10"), null, null),
+                        "PRODUCTION",
+                        "MINOR",
+                        "VIS",
+                        "Scuffs",
+                        "Scuffed",
+                        "",
+                        null,
+                        c.bottles2()[1],
+                        bd("10"),
+                        null,
+                        null),
                 id());
         assertThat(lotStatus(c.bottles2()[1])).isEqualTo("QUARANTINE");
 
@@ -90,7 +101,9 @@ class RecallTest extends TraceTestSupport {
                 .containsEntry("truncated", false);
 
         var before = detail(id);
-        assertThat(lotRow(before, c.resin())).containsEntry("relation", "SUSPECT").containsEntry("depth", 0);
+        assertThat(lotRow(before, c.resin()))
+                .containsEntry("relation", "SUSPECT")
+                .containsEntry("depth", 0);
         assertThat(num(lotRow(before, c.resin()).get("quantity"))).isEqualByComparingTo("80");
         assertThat(lotRow(before, c.preforms()[1])).containsEntry("relation", "DOWNSTREAM");
         assertThat(num(lotRow(before, c.bottles1()[1]).get("quantity"))).isEqualByComparingTo("250");
@@ -98,18 +111,20 @@ class RecallTest extends TraceTestSupport {
                 .extracting(r -> r.get("customer"))
                 .containsExactlyInAnyOrder("Alpha Beverages", "Beta Foods");
         assertThat(list(before.get("customers"))).allSatisfy(r -> assertThat(r).containsEntry("status", "PENDING"));
-        assertThat(list(before.get("suspects"))).singleElement().satisfies(r -> assertThat(r).containsEntry("lot_id", c.resin()));
+        assertThat(list(before.get("suspects")))
+                .singleElement()
+                .satisfies(r -> assertThat(r).containsEntry("lot_id", c.resin()));
 
         String key = id();
-        var contained = json(command(qa, "/api/recalls/" + id + "/contain", null, key).andExpect(status().isOk()));
+        var contained =
+                json(command(qa, "/api/recalls/" + id + "/contain", null, key).andExpect(status().isOk()));
         assertThat(contained)
                 .containsEntry("status", "CONTAINED")
                 .containsEntry("heldLots", 3)
                 .containsEntry("skippedLots", 1);
         for (String lot : List.of(c.resin(), c.preforms()[1], c.bottles1()[1]))
             assertThat(lotStatus(lot)).isEqualTo("QUARANTINE");
-        var recallNcrs = rows(
-                "SELECT n.* FROM ncrs n WHERE n.tenant_id=? AND n.source='RECALL' ORDER BY n.number", t);
+        var recallNcrs = rows("SELECT n.* FROM ncrs n WHERE n.tenant_id=? AND n.source='RECALL' ORDER BY n.number", t);
         assertThat(recallNcrs).hasSize(3).allSatisfy(n -> {
             assertThat(n).containsEntry("status", "OPEN").containsEntry("severity", "CRITICAL");
             assertThat(n).containsEntry("defect_code", "CONT").containsEntry("hold_applied", true);
@@ -118,7 +133,9 @@ class RecallTest extends TraceTestSupport {
         assertThat(dec(resinNcr.get("quantity"))).isEqualByComparingTo("80");
         var after = detail(id);
         assertThat(after).containsEntry("status", "CONTAINED").containsEntry("held_lots", 3);
-        assertThat(lotRow(after, c.resin())).containsEntry("containment", "HELD").containsEntry("ncr", resinNcr.get("number"));
+        assertThat(lotRow(after, c.resin()))
+                .containsEntry("containment", "HELD")
+                .containsEntry("ncr", resinNcr.get("number"));
         assertThat(lotRow(after, c.bottles2()[1])).containsEntry("containment", "ALREADY_HELD");
         assertThat(lotRow(after, c.bottles2()[1]).get("ncr_id")).isNull();
         assertThat(count("SELECT COUNT(*) FROM audit_events WHERE tenant_id=? AND action='RECALL_CONTAINED'", t))
@@ -127,9 +144,11 @@ class RecallTest extends TraceTestSupport {
                 .isEqualTo(1);
 
         // Retrying the same containment replays its result; a new attempt is refused.
-        var replay = json(command(qa, "/api/recalls/" + id + "/contain", null, key).andExpect(status().isOk()));
+        var replay =
+                json(command(qa, "/api/recalls/" + id + "/contain", null, key).andExpect(status().isOk()));
         assertThat(replay).containsEntry("heldLots", 3);
-        assertThat(count("SELECT COUNT(*) FROM ncrs WHERE tenant_id=? AND source='RECALL'", t)).isEqualTo(3);
+        assertThat(count("SELECT COUNT(*) FROM ncrs WHERE tenant_id=? AND source='RECALL'", t))
+                .isEqualTo(3);
         command(qa, "/api/recalls/" + id + "/contain", null).andExpect(status().isConflict());
         command(qa, "/api/recalls/" + id + "/refresh", null).andExpect(status().isConflict());
         command(qa, "/api/recalls/" + id + "/cancel", Map.of("reason", "x")).andExpect(status().isConflict());
@@ -144,7 +163,10 @@ class RecallTest extends TraceTestSupport {
         assertThatThrownBy(() -> update("DELETE FROM recalls WHERE tenant_id=? AND id=?", t, id))
                 .hasMessageContaining("cannot be deleted");
         assertThatThrownBy(() -> update(
-                        "INSERT INTO recall_customers(tenant_id,recall_id,customer_id) VALUES(?,?,?)", t, id, customerA))
+                        "INSERT INTO recall_customers(tenant_id,recall_id,customer_id) VALUES(?,?,?)",
+                        t,
+                        id,
+                        customerA))
                 .isInstanceOf(Exception.class);
     }
 
@@ -170,7 +192,9 @@ class RecallTest extends TraceTestSupport {
         command(
                         qa,
                         "/api/recalls/" + id + "/customers/" + customerB + "/notify",
-                        notifyBody(LocalDate.now(ZoneId.of("Asia/Colombo")).plusDays(2).toString()))
+                        notifyBody(LocalDate.now(ZoneId.of("Asia/Colombo"))
+                                .plusDays(2)
+                                .toString()))
                 .andExpect(status().isConflict()); // future date
         command(qa, "/api/recalls/" + id + "/customers/" + id() + "/notify", notifyBody(TODAY))
                 .andExpect(status().isNotFound());
@@ -210,7 +234,9 @@ class RecallTest extends TraceTestSupport {
         var check = map(detail(id).get("closeCheck"));
         assertThat(check).containsEntry("pendingCustomers", 1).containsEntry("unsettledLots", 4);
         var closed = json(command(
-                        qa2, "/api/recalls/" + id + "/close", Map.of("note", "Beta closed", "overrideReason", "Beta Foods ceased trading"))
+                        qa2,
+                        "/api/recalls/" + id + "/close",
+                        Map.of("note", "Beta closed", "overrideReason", "Beta Foods ceased trading"))
                 .andExpect(status().isOk()));
         assertThat(closed).containsEntry("status", "CLOSED").containsEntry("override", true);
         var recall = row("SELECT * FROM recalls WHERE tenant_id=? AND id=?", t, id);
@@ -245,7 +271,9 @@ class RecallTest extends TraceTestSupport {
         for (String customer : List.of(customerA, customerB))
             command(qa, "/api/recalls/" + id + "/customers/" + customer + "/notify", notifyBody(TODAY))
                     .andExpect(status().isOk());
-        assertThat(map(detail(id).get("closeCheck"))).containsEntry("pendingCustomers", 0).containsEntry("unsettledLots", 4);
+        assertThat(map(detail(id).get("closeCheck")))
+                .containsEntry("pendingCustomers", 0)
+                .containsEntry("unsettledLots", 4);
         command(qa, "/api/recalls/" + id + "/close", Map.of("note", "x")).andExpect(status().isConflict());
 
         for (var ncr : rows("SELECT id,quantity FROM ncrs WHERE tenant_id=? AND source='RECALL'", t))
@@ -256,14 +284,19 @@ class RecallTest extends TraceTestSupport {
                     id());
         assertThat(map(detail(id).get("closeCheck"))).containsEntry("unsettledLots", 0);
         // The opener may close it now: no override needed (an override reason is ignored).
-        var closed = json(command(qa, "/api/recalls/" + id + "/close", Map.of("note", "All stock scrapped", "overrideReason", "n/a"))
+        var closed = json(command(
+                        qa,
+                        "/api/recalls/" + id + "/close",
+                        Map.of("note", "All stock scrapped", "overrideReason", "n/a"))
                 .andExpect(status().isOk()));
         assertThat(closed).containsEntry("override", false);
         assertThat(row("SELECT override_reason,close_note FROM recalls WHERE tenant_id=? AND id=?", t, id))
                 .containsEntry("close_note", "All stock scrapped");
-        assertThat(row("SELECT override_reason FROM recalls WHERE tenant_id=? AND id=?", t, id).get("override_reason"))
+        assertThat(row("SELECT override_reason FROM recalls WHERE tenant_id=? AND id=?", t, id)
+                        .get("override_reason"))
                 .isNull();
-        assertThat(count("SELECT COUNT(*) FROM audit_events WHERE tenant_id=? AND action='RECALL_CLOSED'", t)).isEqualTo(1);
+        assertThat(count("SELECT COUNT(*) FROM audit_events WHERE tenant_id=? AND action='RECALL_CLOSED'", t))
+                .isEqualTo(1);
         assertThat(onHand(c.resin())).isZero();
     }
 
@@ -285,7 +318,18 @@ class RecallTest extends TraceTestSupport {
 
         // By supplier and receipt dates.
         var bySupplier = open(new RecallCommands.Open(
-                "Supplier recall", "Supplier notice", "MAJOR", "FORWARD", "SUPPLIER", null, supplier, resin, TODAY, TODAY, "MAT", 20));
+                "Supplier recall",
+                "Supplier notice",
+                "MAJOR",
+                "FORWARD",
+                "SUPPLIER",
+                null,
+                supplier,
+                resin,
+                TODAY,
+                TODAY,
+                "MAT",
+                20));
         assertThat(bySupplier).containsEntry("suspectLots", 1).containsEntry("affectedLots", 4);
         var supplierDetail = detail(str(bySupplier, "id"));
         assertThat(supplierDetail).containsEntry("basis", "SUPPLIER").containsEntry("supplier", "Resin Supplier");
@@ -294,17 +338,53 @@ class RecallTest extends TraceTestSupport {
                         qa,
                         "/api/recalls",
                         new RecallCommands.Open(
-                                "Old", "Old", "MINOR", "FORWARD", "SUPPLIER", null, supplier, null, "2020-01-01", "2020-01-31", "MAT", null))
+                                "Old",
+                                "Old",
+                                "MINOR",
+                                "FORWARD",
+                                "SUPPLIER",
+                                null,
+                                supplier,
+                                null,
+                                "2020-01-01",
+                                "2020-01-31",
+                                "MAT",
+                                null))
                 .andExpect(status().isConflict());
         command(
                         qa,
                         "/api/recalls",
                         new RecallCommands.Open(
-                                "Bad", "Bad", "MINOR", "FORWARD", "SUPPLIER", List.of(c.resin()), supplier, null, TODAY, TODAY, "MAT", null))
+                                "Bad",
+                                "Bad",
+                                "MINOR",
+                                "FORWARD",
+                                "SUPPLIER",
+                                List.of(c.resin()),
+                                supplier,
+                                null,
+                                TODAY,
+                                TODAY,
+                                "MAT",
+                                null))
                 .andExpect(status().isConflict());
         command(qa, "/api/recalls", lots("FORWARD")).andExpect(status().isConflict());
-        command(qa, "/api/recalls", new RecallCommands.Open(
-                        "x", "x", "MINOR", "FORWARD", "SUPPLIER", null, customerA, null, TODAY, TODAY, "MAT", null))
+        command(
+                        qa,
+                        "/api/recalls",
+                        new RecallCommands.Open(
+                                "x",
+                                "x",
+                                "MINOR",
+                                "FORWARD",
+                                "SUPPLIER",
+                                null,
+                                customerA,
+                                null,
+                                TODAY,
+                                TODAY,
+                                "MAT",
+                                null))
                 .andExpect(status().isConflict()); // a customer is not a supplier
 
         // Refresh picks up a later shipment to a third customer while the recall is open.
@@ -312,16 +392,19 @@ class RecallTest extends TraceTestSupport {
         String gamma = id();
         update("INSERT INTO partners(id,tenant_id,name,type) VALUES(?,?,'Gamma Stores','CUSTOMER')", gamma, t);
         sell(gamma, c.bottles2()[1], "25", "DN-RG");
-        var refreshed = json(command(qa, "/api/recalls/" + recall + "/refresh", null).andExpect(status().isOk()));
+        var refreshed =
+                json(command(qa, "/api/recalls/" + recall + "/refresh", null).andExpect(status().isOk()));
         assertThat(refreshed).containsEntry("customers", 3).containsEntry("shipments", 3);
 
         // Cancel an open recall; it can no longer be contained.
-        command(qa, "/api/recalls/" + recall + "/cancel", Map.of("reason", "Opened twice")).andExpect(status().isOk());
+        command(qa, "/api/recalls/" + recall + "/cancel", Map.of("reason", "Opened twice"))
+                .andExpect(status().isOk());
         assertThat(row("SELECT status,cancel_reason FROM recalls WHERE tenant_id=? AND id=?", t, recall))
                 .containsEntry("status", "CANCELLED")
                 .containsEntry("cancel_reason", "Opened twice");
         command(qa, "/api/recalls/" + recall + "/contain", null).andExpect(status().isConflict());
-        assertThat(count("SELECT COUNT(*) FROM ncrs WHERE tenant_id=? AND source='RECALL'", t)).isZero();
+        assertThat(count("SELECT COUNT(*) FROM ncrs WHERE tenant_id=? AND source='RECALL'", t))
+                .isZero();
     }
 
     @Test
@@ -336,7 +419,8 @@ class RecallTest extends TraceTestSupport {
         var again = json(command(qa, "/api/recalls", body, key).andExpect(status().isOk()));
         assertThat(again.get("id")).isEqualTo(first.get("id"));
         assertThat(count("SELECT COUNT(*) FROM recalls WHERE tenant_id=?", t)).isEqualTo(1);
-        command(qa, "/api/recalls", lots("FORWARD_AND_SIBLINGS", c.resin()), key).andExpect(status().isConflict());
+        command(qa, "/api/recalls", lots("FORWARD_AND_SIBLINGS", c.resin()), key)
+                .andExpect(status().isConflict());
         String id = str(first, "id");
         command(viewer, "/api/recalls/" + id + "/contain", null).andExpect(status().isForbidden());
 
@@ -352,14 +436,32 @@ class RecallTest extends TraceTestSupport {
         assertThat(list(json(query(stranger, "/api/recalls")).get("items"))).isEmpty();
 
         // An admin opens a second, minor recall; the list filters and pages.
-        var second = json(command(admin, "/api/recalls", new RecallCommands.Open(
-                        "Label smudge", "Smudged print", "MINOR", "FORWARD", "LOTS", List.of(c.bottles2()[1]), null, null, null, null, "PACK", null))
+        var second = json(command(
+                        admin,
+                        "/api/recalls",
+                        new RecallCommands.Open(
+                                "Label smudge",
+                                "Smudged print",
+                                "MINOR",
+                                "FORWARD",
+                                "LOTS",
+                                List.of(c.bottles2()[1]),
+                                null,
+                                null,
+                                null,
+                                null,
+                                "PACK",
+                                null))
                 .andExpect(status().isOk()));
         var all = json(query(viewer, "/api/recalls?limit=1").andExpect(status().isOk()));
         assertThat(all).containsEntry("total", 2);
-        assertThat(list(all.get("items"))).singleElement().satisfies(r -> assertThat(r).containsEntry("id", second.get("id")));
+        assertThat(list(all.get("items")))
+                .singleElement()
+                .satisfies(r -> assertThat(r).containsEntry("id", second.get("id")));
         var page2 = json(query(viewer, "/api/recalls?limit=1&before=" + all.get("next")));
-        assertThat(list(page2.get("items"))).singleElement().satisfies(r -> assertThat(r).containsEntry("id", id));
+        assertThat(list(page2.get("items")))
+                .singleElement()
+                .satisfies(r -> assertThat(r).containsEntry("id", id));
         assertThat(page2).containsEntry("next", "");
         var critical = json(query(viewer, "/api/recalls?severity=CRITICAL&status=active"));
         assertThat(list(critical.get("items"))).extracting(r -> r.get("id")).containsExactly(id);
@@ -369,11 +471,14 @@ class RecallTest extends TraceTestSupport {
 
         // The overview/attention key.
         command(qa, "/api/recalls/" + id + "/contain", null).andExpect(status().isOk());
-        var state = map(json(query(viewer, "/api/state?days=7").andExpect(status().isOk())).get("recalls"));
+        var state = map(json(query(viewer, "/api/state?days=7").andExpect(status().isOk()))
+                .get("recalls"));
         assertThat(state).containsEntry("open", 1).containsEntry("contained", 1).containsEntry("pending_customers", 2);
-        assertThat(list(state.get("active"))).first().satisfies(r -> assertThat(r)
-                .containsEntry("id", id)
-                .containsEntry("severity", "CRITICAL")
-                .containsEntry("pending_customers", 2));
+        assertThat(list(state.get("active")))
+                .first()
+                .satisfies(r -> assertThat(r)
+                        .containsEntry("id", id)
+                        .containsEntry("severity", "CRITICAL")
+                        .containsEntry("pending_customers", 2));
     }
 }
