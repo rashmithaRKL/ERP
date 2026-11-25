@@ -4,6 +4,7 @@ import {
   Cpu,
   Factory,
   FileChartColumn,
+  Gauge,
   GitBranch,
   Layers,
   LayoutDashboard,
@@ -35,6 +36,7 @@ const InventoryPage = lazyPage(() => import('../pages/InventoryPage'));
 const MaintenancePage = lazyPage(() => import('../pages/MaintenancePage'));
 const ManufacturingPage = lazyPage(() => import('../pages/ManufacturingPage'));
 const OverviewPage = lazyPage(() => import('../pages/OverviewPage'));
+const PerformancePage = lazyPage(() => import('../pages/PerformancePage'));
 const PlanningPage = lazyPage(() => import('../pages/PlanningPage'));
 const ProductsPage = lazyPage(() => import('../pages/ProductsPage'));
 const PurchasingPage = lazyPage(() => import('../pages/PurchasingPage'));
@@ -227,6 +229,24 @@ export const routes: PageRoute[] = [
       // Loaded on demand so the maintenance feature stays out of the entry chunk.
       run: (workspace) => {
         void import('../features/maintenance/forms').then((forms) => forms.requestMaintenance(workspace));
+      },
+    },
+  },
+  {
+    path: '/performance',
+    label: 'Performance (OEE)',
+    icon: Gauge,
+    roles: ['ADMIN', 'PLANNER', 'MAINTENANCE', 'QUALITY', 'VIEWER'],
+    group: 'MANUFACTURING',
+    page: PerformancePage,
+    heading: 'Performance (OEE)',
+    description: 'Availability, performance and quality of every work center, measured from real records.',
+    action: {
+      label: 'Close a day',
+      roles: ['PLANNER'],
+      // Loaded on demand so the performance feature stays out of the entry chunk.
+      run: (workspace) => {
+        void import('../features/performance/api').then((m) => m.closeDay(workspace));
       },
     },
   },

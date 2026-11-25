@@ -33,6 +33,23 @@ export type State = {
   /** V12 quality attention counts (open / open critical NCRs, pending concessions and supplier returns, open rework,
    * overdue CAPA actions, the caller's overdue CAPA actions). */
   qualityAlerts?: Record<string, number>;
+  /** V15: yesterday's measured plant OEE (null when no work center has a measured OEE that day). */
+  performance?: PlantOee | null;
+};
+/** `performance` state key (V15): ratios 0..1; the Performance page reads `GET /performance/**`. */
+export type PlantOee = {
+  day: string;
+  oee: number | null;
+  availability: number | null;
+  performance: number | null;
+  quality: number | null;
+  timeCoverage: number | null;
+  outputCoverage: number | null;
+  utilization: number | null;
+  measuredDays: number;
+  closedDays: number;
+  warningCount: number;
+  workCenters: number;
 };
 /** `maintenance` state key (V11): counts plus up to five open breakdowns and overdue preventive plans. */
 export type MaintenanceSummary = {
