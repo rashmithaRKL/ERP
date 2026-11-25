@@ -56,11 +56,15 @@ class OperationTrackingTest extends RoutingTestBase {
     }
 
     private Map<String, Object> start(Actor actor, String operation, String machine, String reason) throws Exception {
-        return json(command(actor, "/api/operations/" + operation + "/start", new OperationCommands.Start(machine, null, reason))
+        return json(command(
+                        actor,
+                        "/api/operations/" + operation + "/start",
+                        new OperationCommands.Start(machine, null, reason))
                 .andExpect(status().isOk()));
     }
 
-    private void qty(Actor actor, String operation, String path, String good, String scrap, String notes) throws Exception {
+    private void qty(Actor actor, String operation, String path, String good, String scrap, String notes)
+            throws Exception {
         command(
                         actor,
                         "/api/operations/" + operation + "/" + path,
@@ -84,7 +88,12 @@ class OperationTrackingTest extends RoutingTestBase {
         assertThat(dec(pack.get("planned_run_minutes"))).isEqualByComparingTo("20");
         assertThat(dec(pack.get("crew_size"))).isEqualByComparingTo("2");
         assertThat(pack).containsEntry("inspection_point", true).containsEntry("machine_id", pk1);
-        assertThat(str(row("SELECT detail FROM audit_events WHERE tenant_id=? AND action='MO_CREATED' AND reference=?", t, o.get("number")), "detail"))
+        assertThat(str(
+                        row(
+                                "SELECT detail FROM audit_events WHERE tenant_id=? AND action='MO_CREATED' AND reference=?",
+                                t,
+                                o.get("number")),
+                        "detail"))
                 .contains("routing R1 (2 operations)");
 
         // An order on the alternate work center runs the operations it may run there; decimal-safe minutes.
@@ -94,16 +103,19 @@ class OperationTrackingTest extends RoutingTestBase {
         assertThat(dec(op(onAlternate, 10).get("planned_run_minutes"))).isEqualByComparingTo("16.65");
 
         // A new approved revision does not change existing orders; the snapshot itself cannot be edited.
-        String r2 = str(routings.copy(planner, routing, new lk.dexlanka.erp.routing.RoutingCommands.Copy("R2"), id()), "id");
+        String r2 = str(
+                routings.copy(planner, routing, new lk.dexlanka.erp.routing.RoutingCommands.Copy("R2"), id()), "id");
         routings.approve(otherPlanner, r2, id());
         assertThat(orderRow(order)).containsEntry("routing_id", routing);
         assertThat(orderRow(order("10", bm1, "NORMAL"))).containsEntry("routing_id", r2);
-        assertThatThrownBy(() -> update("UPDATE mo_operations SET setup_minutes=1 WHERE tenant_id=? AND order_id=?", t, order))
+        assertThatThrownBy(() ->
+                        update("UPDATE mo_operations SET setup_minutes=1 WHERE tenant_id=? AND order_id=?", t, order))
                 .hasMessageContaining("snapshot");
         assertThatThrownBy(() -> update("DELETE FROM mo_operations WHERE tenant_id=? AND order_id=?", t, order))
                 .hasMessageContaining("cannot be deleted");
 
-        var read = json(query(viewer, "/api/manufacturing/" + order + "/operations").andExpect(status().isOk()));
+        var read = json(
+                query(viewer, "/api/manufacturing/" + order + "/operations").andExpect(status().isOk()));
         assertThat(read.get("operations")).asList().hasSize(2);
         @SuppressWarnings("unchecked")
         var r = (Map<String, Object>) read.get("routing");
@@ -149,12 +161,21 @@ class OperationTrackingTest extends RoutingTestBase {
         assertThat(machineStatus(bm1)).isEqualTo("RUNNING");
 
         // Quantities: scrap needs a reason, whole pieces, never more than the input.
-        command(operator, "/api/operations/" + blow + "/report", new OperationCommands.Quantities(bd("10"), bd("5"), ""))
+        command(
+                        operator,
+                        "/api/operations/" + blow + "/report",
+                        new OperationCommands.Quantities(bd("10"), bd("5"), ""))
                 .andExpect(status().isConflict());
-        command(operator, "/api/operations/" + blow + "/report", new OperationCommands.Quantities(bd("1.5"), bd("0"), ""))
+        command(
+                        operator,
+                        "/api/operations/" + blow + "/report",
+                        new OperationCommands.Quantities(bd("1.5"), bd("0"), ""))
                 .andExpect(status().isConflict());
         qty(operator, blow, "report", "600", "10", "Start-up rejects");
-        command(operator, "/api/operations/" + blow + "/report", new OperationCommands.Quantities(bd("391"), bd("0"), ""))
+        command(
+                        operator,
+                        "/api/operations/" + blow + "/report",
+                        new OperationCommands.Quantities(bd("391"), bd("0"), ""))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.detail").value(containsString("at most 1000")));
         qty(operator, blow, "finish", "380", "10", "Trim");
@@ -170,8 +191,11 @@ class OperationTrackingTest extends RoutingTestBase {
 
         // Time logs: SETUP (switched), RUN (paused), RUN (finished); closed rows are immutable.
         var logs = rows(
-                "SELECT * FROM mo_operation_time_logs WHERE tenant_id=? AND operation_id=? ORDER BY started_at,id", t, blow);
-        assertThat(logs).extracting(l -> l.get("activity"), l -> l.get("end_reason"))
+                "SELECT * FROM mo_operation_time_logs WHERE tenant_id=? AND operation_id=? ORDER BY started_at,id",
+                t,
+                blow);
+        assertThat(logs)
+                .extracting(l -> l.get("activity"), l -> l.get("end_reason"))
                 .containsExactly(
                         org.assertj.core.groups.Tuple.tuple("SETUP", "SWITCHED"),
                         org.assertj.core.groups.Tuple.tuple("RUN", "PAUSED"),
@@ -181,7 +205,9 @@ class OperationTrackingTest extends RoutingTestBase {
             assertThat(l.get("machine_id")).isEqualTo(bm1);
         });
         assertThatThrownBy(() -> update(
-                        "UPDATE mo_operation_time_logs SET ended_at=now() WHERE tenant_id=? AND operation_id=?", t, blow))
+                        "UPDATE mo_operation_time_logs SET ended_at=now() WHERE tenant_id=? AND operation_id=?",
+                        t,
+                        blow))
                 .hasMessageContaining("immutable");
         assertThat(count("SELECT COUNT(*) FROM mo_operation_reports WHERE tenant_id=? AND operation_id=?", t, blow))
                 .isEqualTo(2);
@@ -190,20 +216,24 @@ class OperationTrackingTest extends RoutingTestBase {
         start(operator2, pack, null, null); // no skill required
         assertThat(op(order, 20)).containsEntry("activity", "RUN");
         assertThat(machineStatus(pk1)).isEqualTo("RUNNING");
-        command(operator2, "/api/operations/" + pack + "/report", new OperationCommands.Quantities(bd("981"), bd("0"), ""))
+        command(
+                        operator2,
+                        "/api/operations/" + pack + "/report",
+                        new OperationCommands.Quantities(bd("981"), bd("0"), ""))
                 .andExpect(status().isConflict());
         qty(operator2, pack, "finish", "970", "10", "Leak test failures");
         assertThat(machineStatus(pk1)).isEqualTo("IDLE");
         var packLog = row("SELECT * FROM mo_operation_time_logs WHERE tenant_id=? AND operation_id=?", t, pack);
         assertThat(dec(packLog.get("labour_minutes")))
-                .isCloseTo(dec(packLog.get("minutes")).multiply(bd("2")), org.assertj.core.api.Assertions.within(bd("0.00001")));
+                .isCloseTo(
+                        dec(packLog.get("minutes")).multiply(bd("2")),
+                        org.assertj.core.api.Assertions.within(bd("0.00001")));
 
         var read = json(query(viewer, "/api/manufacturing/" + order + "/operations"));
         assertThat(read.get("logs")).asList().hasSize(4);
         assertThat(rows(
                         "SELECT action FROM audit_events WHERE tenant_id=? AND reference=? AND action LIKE 'OP_%' ORDER BY created_at,id",
-                        t,
-                        o.get("number")))
+                        t, o.get("number")))
                 .extracting(e -> e.get("action"))
                 .containsExactlyInAnyOrder( // audits of one command share its transaction timestamp
                         "OP_STARTED",
@@ -268,7 +298,10 @@ class OperationTrackingTest extends RoutingTestBase {
 
         // One running operation per work center.
         String second = releasedOrder("100", bm2, "URGENT");
-        command(operator, "/api/operations/" + opId(second, 10) + "/start", new OperationCommands.Start(null, "RUN", null))
+        command(
+                        operator,
+                        "/api/operations/" + opId(second, 10) + "/start",
+                        new OperationCommands.Start(null, "RUN", null))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.detail").value(containsString("is running")));
 
@@ -297,7 +330,12 @@ class OperationTrackingTest extends RoutingTestBase {
                 mo.create(
                         planner,
                         new ManufacturingCommands.Manufacture(
-                                plainBom, bm2, null, bd("100"), "NORMAL", LocalDate.now().toString()),
+                                plainBom,
+                                bm2,
+                                null,
+                                bd("100"),
+                                "NORMAL",
+                                LocalDate.now().toString()),
                         id()),
                 "id");
         mo.transition(otherPlanner, plain, "approve", id());
@@ -336,8 +374,7 @@ class OperationTrackingTest extends RoutingTestBase {
         start(planner, blow, null, "Certified operator on leave; supervised trial");
         var log = row("SELECT * FROM mo_operation_time_logs WHERE tenant_id=? AND operation_id=?", t, blow);
         assertThat(str(log, "skill_override_reason")).contains("supervised trial");
-        assertThat(count(
-                        "SELECT COUNT(*) FROM audit_events WHERE tenant_id=? AND action='OP_SKILL_OVERRIDDEN'", t))
+        assertThat(count("SELECT COUNT(*) FROM audit_events WHERE tenant_id=? AND action='OP_SKILL_OVERRIDDEN'", t))
                 .isEqualTo(1);
     }
 
@@ -384,11 +421,17 @@ class OperationTrackingTest extends RoutingTestBase {
                 mo.create(
                         planner,
                         new ManufacturingCommands.Manufacture(
-                                plainBom, bm1, null, bd("100"), "NORMAL", LocalDate.now().toString()),
+                                plainBom,
+                                bm1,
+                                null,
+                                bd("100"),
+                                "NORMAL",
+                                LocalDate.now().toString()),
                         id()),
                 "id");
         assertThat(orderRow(order).get("routing_id")).isNull();
-        assertThat(count("SELECT COUNT(*) FROM mo_operations WHERE tenant_id=? AND order_id=?", t, order)).isZero();
+        assertThat(count("SELECT COUNT(*) FROM mo_operations WHERE tenant_id=? AND order_id=?", t, order))
+                .isZero();
         mo.transition(otherPlanner, order, "approve", id());
         mo.transition(planner, order, "reserve", id());
         mo.transition(warehouse, order, "issue", id());
@@ -396,7 +439,8 @@ class OperationTrackingTest extends RoutingTestBase {
         mo.transition(operator, order, "pause", id());
         mo.transition(operator, order, "resume", id());
         assertThat(machineStatus(bm1)).isEqualTo("IDLE"); // orders without operations never change work-center status
-        mo.complete(operator, order, new ManufacturingCommands.Complete(bd("100"), bd("0"), bd("10"), bd("5"), ""), id());
+        mo.complete(
+                operator, order, new ManufacturingCommands.Complete(bd("100"), bd("0"), bd("10"), bd("5"), ""), id());
         var inspection = row(
                 "SELECT i.id FROM inspections i JOIN lots l ON l.tenant_id=i.tenant_id AND l.id=i.lot_id WHERE l.tenant_id=? AND l.source_id=?",
                 t,
@@ -405,7 +449,8 @@ class OperationTrackingTest extends RoutingTestBase {
         mo.transition(planner, order, "close", id());
         assertThat(orderRow(order)).containsEntry("status", "CLOSED");
 
-        var read = json(query(viewer, "/api/manufacturing/" + order + "/operations").andExpect(status().isOk()));
+        var read = json(
+                query(viewer, "/api/manufacturing/" + order + "/operations").andExpect(status().isOk()));
         assertThat(read.get("routing")).isNull();
         assertThat(read.get("operations")).asList().isEmpty();
         var floor = json(query(viewer, "/api/manufacturing/orders?status=all&routing=none"));
@@ -426,8 +471,10 @@ class OperationTrackingTest extends RoutingTestBase {
                 .andExpect(status().isForbidden());
 
         String key = id();
-        var first = json(command(operator, "/api/operations/" + blow + "/start", body, key).andExpect(status().isOk()));
-        var replay = json(command(operator, "/api/operations/" + blow + "/start", body, key).andExpect(status().isOk()));
+        var first = json(command(operator, "/api/operations/" + blow + "/start", body, key)
+                .andExpect(status().isOk()));
+        var replay = json(command(operator, "/api/operations/" + blow + "/start", body, key)
+                .andExpect(status().isOk()));
         assertThat(replay.get("status")).isEqualTo(first.get("status"));
         assertThat(count("SELECT COUNT(*) FROM mo_operation_time_logs WHERE tenant_id=? AND operation_id=?", t, blow))
                 .isEqualTo(1);
@@ -436,11 +483,14 @@ class OperationTrackingTest extends RoutingTestBase {
 
         var other = createTenant();
         var outsider = createUser(other.id(), "OPERATOR");
-        command(outsider, "/api/operations/" + blow + "/pause", new OperationCommands.Pause("")).andExpect(status().isNotFound());
+        command(outsider, "/api/operations/" + blow + "/pause", new OperationCommands.Pause(""))
+                .andExpect(status().isNotFound());
         query(outsider, "/api/operations/" + blow).andExpect(status().isNotFound());
         query(outsider, "/api/operations/queue?machineId=" + bm1).andExpect(status().isNotFound());
         query(outsider, "/api/manufacturing/" + order + "/operations").andExpect(status().isNotFound());
-        assertThat(json(query(outsider, "/api/operations/time-logs")).get("items")).asList().isEmpty();
+        assertThat(json(query(outsider, "/api/operations/time-logs")).get("items"))
+                .asList()
+                .isEmpty();
         // Failed commands leave nothing behind.
         assertThat(op(order, 10)).containsEntry("status", "IN_PROGRESS");
     }
@@ -452,7 +502,8 @@ class OperationTrackingTest extends RoutingTestBase {
         String onAlternate = releasedOrder("100", bm2, "HIGH");
         start(operator, opId(normal, 10), null, null);
 
-        var queue = json(query(operator, "/api/operations/queue?machineId=" + bm1).andExpect(status().isOk()));
+        var queue =
+                json(query(operator, "/api/operations/queue?machineId=" + bm1).andExpect(status().isOk()));
         @SuppressWarnings("unchecked")
         var items = (List<Map<String, Object>>) queue.get("items");
         // Running first, then by priority: urgent (bm1), then the HIGH order planned on bm2 offered as an alternate.
@@ -462,7 +513,8 @@ class OperationTrackingTest extends RoutingTestBase {
         assertThat(((Number) items.get(1).get("input_qty")).intValue()).isEqualTo(100);
         var page = json(query(operator, "/api/operations/queue?machineId=" + bm1 + "&limit=2"));
         assertThat(page.get("items")).asList().hasSize(2);
-        var rest = json(query(operator, "/api/operations/queue?machineId=" + bm1 + "&limit=2&before=" + page.get("next")));
+        var rest =
+                json(query(operator, "/api/operations/queue?machineId=" + bm1 + "&limit=2&before=" + page.get("next")));
         @SuppressWarnings("unchecked")
         var restItems = (List<Map<String, Object>>) rest.get("items");
         assertThat(restItems).extracting(i -> i.get("order_id")).containsExactly(onAlternate);
@@ -483,9 +535,11 @@ class OperationTrackingTest extends RoutingTestBase {
         assertThat(detail.get("machines")).asList().hasSize(2);
         assertThat(detail.get("logs")).asList().hasSize(1);
 
-        var logs = json(query(viewer, "/api/operations/time-logs?machineId=" + bm1).andExpect(status().isOk()));
+        var logs =
+                json(query(viewer, "/api/operations/time-logs?machineId=" + bm1).andExpect(status().isOk()));
         assertThat(logs.get("items")).asList().hasSize(1);
-        assertThat(json(query(viewer, "/api/operations/time-logs?orderId=" + urgent)).get("items"))
+        assertThat(json(query(viewer, "/api/operations/time-logs?orderId=" + urgent))
+                        .get("items"))
                 .asList()
                 .isEmpty();
     }

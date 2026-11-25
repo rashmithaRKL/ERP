@@ -297,11 +297,11 @@ public class ManufacturingService {
                     require(
                             operations.routed(a.tenant(), id)
                                     || !s.one(
-                                            "SELECT status FROM machines WHERE tenant_id=? AND id=?",
-                                            a.tenant(),
-                                            o.get("machine_id"))
-                                    .get("status")
-                                    .equals("MAINTENANCE"),
+                                                    "SELECT status FROM machines WHERE tenant_id=? AND id=?",
+                                                    a.tenant(),
+                                                    o.get("machine_id"))
+                                            .get("status")
+                                            .equals("MAINTENANCE"),
                             "Machine is under maintenance");
                     s.db().update(
                                     "UPDATE manufacturing_orders SET started_at=now() WHERE tenant_id=? AND id=?",

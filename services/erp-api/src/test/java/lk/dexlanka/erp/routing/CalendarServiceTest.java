@@ -98,7 +98,9 @@ class CalendarServiceTest extends RoutingTestBase {
                 TUE.atTime(9, 0).atZone(CalendarService.ZONE).toInstant());
         // 22:00–02:00, then 02:30–06:00 merged with Tuesday's day shift (they touch at 06:00), clipped at 09:00.
         assertThat(nightOnly).hasSize(2);
-        assertThat(nightOnly.stream().mapToLong(CalendarService.Interval::minutes).sum())
+        assertThat(nightOnly.stream()
+                        .mapToLong(CalendarService.Interval::minutes)
+                        .sum())
                 .isEqualTo(240 + 210 + 180);
         assertThat(nightOnly.get(1).start().toLocalTime()).isEqualTo(LocalTime.of(2, 30));
         assertThat(nightOnly.get(1).end().toLocalTime()).isEqualTo(LocalTime.of(9, 0));
@@ -123,7 +125,8 @@ class CalendarServiceTest extends RoutingTestBase {
         // Tuesday keeps Monday night's tail; Wednesday loses Tuesday night's tail.
         assertThat(minutes(bm1, TUE)).isEqualTo(330);
         assertThat(minutes(bm1, WED)).isEqualTo(450 + 120);
-        assertThat(calendars.availability(t, bm1, TUE, TUE).days().getFirst().closed()).isTrue();
+        assertThat(calendars.availability(t, bm1, TUE, TUE).days().getFirst().closed())
+                .isTrue();
 
         // Saturday overtime 08:00–12:00 adds 240; overtime overlapping Monday's day shift (13:00–15:00) adds only 60.
         exception(twoShift, SAT, "OVERTIME", "08:00", "12:00");
@@ -173,9 +176,9 @@ class CalendarServiceTest extends RoutingTestBase {
 
     @Test
     void availableMinutesEndpoint() throws Exception {
-        var one = json(query(
-                        operator, "/api/calendars/available-minutes?machineId=" + bm1 + "&from=" + MON + "&to=" + SUN)
-                .andExpect(status().isOk()));
+        var one = json(
+                query(operator, "/api/calendars/available-minutes?machineId=" + bm1 + "&from=" + MON + "&to=" + SUN)
+                        .andExpect(status().isOk()));
         @SuppressWarnings("unchecked")
         var rows = (List<Map<String, Object>>) one.get("workCenters");
         assertThat(rows).hasSize(1);
@@ -249,8 +252,10 @@ class CalendarServiceTest extends RoutingTestBase {
         query(outsider, "/api/calendars/" + twoShift).andExpect(status().isNotFound());
         command(outsider, "/api/calendars/assignments", new CalendarCommands.Assignment(bm1, ""))
                 .andExpect(status().isNotFound());
-        command(outsider, "/api/calendars/" + twoShift + "/exceptions", new CalendarCommands.DateException(
-                        MON.toString(), "CLOSED", null, null, "x"))
+        command(
+                        outsider,
+                        "/api/calendars/" + twoShift + "/exceptions",
+                        new CalendarCommands.DateException(MON.toString(), "CLOSED", null, null, "x"))
                 .andExpect(status().isNotFound());
         assertThat(rows("SELECT action FROM audit_events WHERE tenant_id=? AND reference='TWO' ORDER BY created_at", t))
                 .extracting(e -> e.get("action"))

@@ -74,10 +74,16 @@ class RoutingTest extends RoutingTestBase {
         // Only approved revisions can be current.
         String draft = draftRouting(bottle, "R9", op(10, "Blow", bm1));
         assertThatThrownBy(() -> update(
-                        "UPDATE routing_defaults SET routing_id=? WHERE tenant_id=? AND product_id=?", draft, t, bottle))
+                        "UPDATE routing_defaults SET routing_id=? WHERE tenant_id=? AND product_id=?",
+                        draft,
+                        t,
+                        bottle))
                 .hasMessageContaining("Only an approved routing can be the current revision");
 
-        assertThat(rows("SELECT action FROM audit_events WHERE tenant_id=? AND reference=? ORDER BY created_at", t, r.get("number")))
+        assertThat(rows(
+                        "SELECT action FROM audit_events WHERE tenant_id=? AND reference=? ORDER BY created_at",
+                        t,
+                        r.get("number")))
                 .extracting(e -> e.get("action"))
                 .containsExactly("ROUTING_DRAFT_CREATED", "ROUTING_APPROVED");
     }
@@ -103,7 +109,10 @@ class RoutingTest extends RoutingTestBase {
     @Test
     void copyIntoADraftAndSwitchTheCurrentRevision() throws Exception {
         String r1 = approvedRouting(
-                bottle, "R1", op(10, "Blow", bm1, List.of(bm2), "30", "0.05", "1", null, null, false), op(20, "Pack", pk1));
+                bottle,
+                "R1",
+                op(10, "Blow", bm1, List.of(bm2), "30", "0.05", "1", null, null, false),
+                op(20, "Pack", pk1));
         String draft = draftRouting(bottle, "D1", op(10, "Blow", bm1));
         command(planner, "/api/routings/" + draft + "/copy", new RoutingCommands.Copy("X"))
                 .andExpect(status().isConflict());
@@ -120,7 +129,8 @@ class RoutingTest extends RoutingTestBase {
                         t,
                         r2))
                 .extracting(o -> o.get("seq"), o -> o.get("machine_id"))
-                .containsExactly(org.assertj.core.groups.Tuple.tuple(10, bm1), org.assertj.core.groups.Tuple.tuple(20, pk1));
+                .containsExactly(
+                        org.assertj.core.groups.Tuple.tuple(10, bm1), org.assertj.core.groups.Tuple.tuple(20, pk1));
         assertThat(count(
                         "SELECT COUNT(*) FROM routing_operation_alternates x JOIN routing_operations o ON o.tenant_id=x.tenant_id AND o.id=x.operation_id WHERE x.tenant_id=? AND o.routing_id=?",
                         t,
@@ -142,7 +152,8 @@ class RoutingTest extends RoutingTestBase {
         assertThat(currentRouting()).isEqualTo(r1);
 
         // Compare R1 → R2: op 10 changed (setup, run), op 20 removed.
-        var compare = json(query(planner, "/api/routings/compare?from=" + r1 + "&to=" + r2).andExpect(status().isOk()));
+        var compare = json(
+                query(planner, "/api/routings/compare?from=" + r1 + "&to=" + r2).andExpect(status().isOk()));
         @SuppressWarnings("unchecked")
         var ops = (List<Map<String, Object>>) compare.get("operations");
         assertThat(ops).extracting(o -> o.get("status")).containsExactly("CHANGED", "REMOVED");
@@ -163,16 +174,23 @@ class RoutingTest extends RoutingTestBase {
                 foreign.id(),
                 foreign.plant());
 
-        command(planner, "/api/routings", body("A", op(10, "Blow", bm1, List.of(other), "0", "1", "1", null, null, false)))
+        command(
+                        planner,
+                        "/api/routings",
+                        body("A", op(10, "Blow", bm1, List.of(other), "0", "1", "1", null, null, false)))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.detail").value(org.hamcrest.Matchers.containsString("is not a Blow moulding")));
-        command(planner, "/api/routings", body("A", op(10, "Blow", bm1, List.of(bm1), "0", "1", "1", null, null, false)))
+        command(
+                        planner,
+                        "/api/routings",
+                        body("A", op(10, "Blow", bm1, List.of(bm1), "0", "1", "1", null, null, false)))
                 .andExpect(status().isConflict());
         command(planner, "/api/routings", body("A", op(10, "Blow", bm1), op(10, "Pack", pk1)))
                 .andExpect(status().isConflict());
         command(planner, "/api/routings", body("A", op(10, "Blow", bm1, List.of(), "0", "1", "1", inactive, 1, false)))
                 .andExpect(status().isConflict());
-        command(planner, "/api/routings", body("A", op(10, "Blow", foreignMachine))).andExpect(status().isNotFound());
+        command(planner, "/api/routings", body("A", op(10, "Blow", foreignMachine)))
+                .andExpect(status().isNotFound());
         command(planner, "/api/routings", new RoutingCommands.Routing(raw, "A", "", List.of(op(10, "Mix", bm1))))
                 .andExpect(status().isConflict());
         command(planner, "/api/routings", new RoutingCommands.Routing(bottle, "A", "", List.of()))
@@ -199,14 +217,16 @@ class RoutingTest extends RoutingTestBase {
         var outsider = createUser(other.id(), "ADMIN");
         query(outsider, "/api/routings/" + first.get("id")).andExpect(status().isNotFound());
         command(outsider, "/api/routings/" + first.get("id") + "/approve", null).andExpect(status().isNotFound());
-        assertThat(json(query(outsider, "/api/routings").andExpect(status().isOk())).get("items"))
+        assertThat(json(query(outsider, "/api/routings").andExpect(status().isOk()))
+                        .get("items"))
                 .asList()
                 .isEmpty();
     }
 
     @Test
     void listAndDetail() throws Exception {
-        String r1 = approvedRouting(bottle, "R1", op(10, "Blow", bm1, List.of(bm2), "30", "0.05", "1", null, null, false));
+        String r1 =
+                approvedRouting(bottle, "R1", op(10, "Blow", bm1, List.of(bm2), "30", "0.05", "1", null, null, false));
         draftRouting(bottle, "R2", op(10, "Blow", bm1));
 
         var page = json(query(operator, "/api/routings?limit=1").andExpect(status().isOk()));
@@ -232,6 +252,8 @@ class RoutingTest extends RoutingTestBase {
     }
 
     private String currentRouting() {
-        return str(row("SELECT routing_id FROM routing_defaults WHERE tenant_id=? AND product_id=?", t, bottle), "routing_id");
+        return str(
+                row("SELECT routing_id FROM routing_defaults WHERE tenant_id=? AND product_id=?", t, bottle),
+                "routing_id");
     }
 }
