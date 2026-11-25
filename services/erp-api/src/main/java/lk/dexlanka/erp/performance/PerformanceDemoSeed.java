@@ -134,7 +134,8 @@ public class PerformanceDemoSeed implements ApplicationRunner {
         var bottle = routing("bottle");
         if (bottle.size() < 2) return; // the V10 routing seed did not run
         var preformItem = s.list("SELECT id FROM items WHERE tenant_id=? AND lower(sku)='sf-001'", T);
-        var preform = preformItem.isEmpty() ? List.<Map<String, Object>>of() : routing(str(preformItem.getFirst(), "id"));
+        var preform =
+                preformItem.isEmpty() ? List.<Map<String, Object>>of() : routing(str(preformItem.getFirst(), "id"));
 
         LocalDate today = LocalDate.now(CalendarService.ZONE);
         LocalDate first = today.minusDays(DAYS);
@@ -143,10 +144,38 @@ public class PerformanceDemoSeed implements ApplicationRunner {
         Instant changeover = OeeEngine.dayStart(today.minusDays(7));
 
         // Extra downtime through the V11 command (skipped where it would overlap existing records).
-        stop("bm02-breakdown", "bm02", "BREAKDOWN", today.minusDays(9), "09:40", 420, "Clamp hydraulic hose burst; hose and seals replaced");
-        stop("im01-pm", "im01", "PLANNED_MAINTENANCE", today.minusDays(12), "06:00", 120, "Mould cleaning and water-line descaling");
-        stop("pk01-material", "pk01", "MATERIAL_SHORTAGE", today.minusDays(11), "15:10", 45, "Label reels not staged at the applicator");
-        stop("im01-quality", "im01", "QUALITY_HOLD", today.minusDays(4), "11:20", 35, "Preform weight drift; dryer checked");
+        stop(
+                "bm02-breakdown",
+                "bm02",
+                "BREAKDOWN",
+                today.minusDays(9),
+                "09:40",
+                420,
+                "Clamp hydraulic hose burst; hose and seals replaced");
+        stop(
+                "im01-pm",
+                "im01",
+                "PLANNED_MAINTENANCE",
+                today.minusDays(12),
+                "06:00",
+                120,
+                "Mould cleaning and water-line descaling");
+        stop(
+                "pk01-material",
+                "pk01",
+                "MATERIAL_SHORTAGE",
+                today.minusDays(11),
+                "15:10",
+                45,
+                "Label reels not staged at the applicator");
+        stop(
+                "im01-quality",
+                "im01",
+                "QUALITY_HOLD",
+                today.minusDays(4),
+                "11:20",
+                35,
+                "Preform weight drift; dryer checked");
 
         // ---------------------------------------------------------------- bottle campaigns: BM-02 blows, PK-01 packs
         String orderA = Store.id(), orderB = Store.id();
@@ -196,35 +225,24 @@ public class PerformanceDemoSeed implements ApplicationRunner {
 
     /** Operations of the product's current routing, in sequence. */
     private List<Map<String, Object>> routing(String product) {
-        return s.list(
-                """
+        return s.list("""
                 SELECT o.*,r.revision FROM routing_defaults d
                 JOIN routings r ON r.tenant_id=d.tenant_id AND r.id=d.routing_id
                 JOIN routing_operations o ON o.tenant_id=r.tenant_id AND o.routing_id=r.id
-                WHERE d.tenant_id=? AND d.product_id=? ORDER BY o.seq""",
-                T,
-                product);
+                WHERE d.tenant_id=? AND d.product_id=? ORDER BY o.seq""", T, product);
     }
 
-    private void stop(String key, String machine, String reason, LocalDate day, String time, int minutes, String notes) {
-        OffsetDateTime from = day.atTime(LocalTime.parse(time)).atZone(CalendarService.ZONE).toOffsetDateTime();
+    private void stop(
+            String key, String machine, String reason, LocalDate day, String time, int minutes, String notes) {
+        OffsetDateTime from =
+                day.atTime(LocalTime.parse(time)).atZone(CalendarService.ZONE).toOffsetDateTime();
         OffsetDateTime to = from.plusMinutes(minutes);
-        boolean busy = !s.list(
-                        """
+        boolean busy = !s.list("""
                         SELECT 1 FROM machine_downtime WHERE tenant_id=? AND machine_id=?
                           AND started_at<? AND COALESCE(ended_at,'infinity'::timestamptz)>?
                         UNION ALL
                         SELECT 1 FROM mo_operation_time_logs WHERE tenant_id=? AND machine_id=?
-                          AND started_at<? AND COALESCE(ended_at,'infinity'::timestamptz)>?""",
-                        T,
-                        machine,
-                        to,
-                        from,
-                        T,
-                        machine,
-                        to,
-                        from)
-                .isEmpty();
+                          AND started_at<? AND COALESCE(ended_at,'infinity'::timestamptz)>?""", T, machine, to, from, T, machine, to, from).isEmpty();
         if (busy) return;
         Actor reporter = reason.equals("PLANNED_MAINTENANCE") ? DemoPersonas.PLANNER : DemoPersonas.OPERATOR;
         downtime.report(
@@ -238,7 +256,9 @@ public class PerformanceDemoSeed implements ApplicationRunner {
     private Spans free(String machine, Instant start, Instant end) {
         var working = new ArrayList<long[]>();
         for (var i : calendars.workingIntervals(T, machine, start, end))
-            working.add(new long[] {i.start().toInstant().toEpochMilli(), i.end().toInstant().toEpochMilli()});
+            working.add(new long[] {
+                i.start().toInstant().toEpochMilli(), i.end().toInstant().toEpochMilli()
+            });
         var busy = new ArrayList<long[]>();
         for (var r : s.list(
                 """
@@ -257,7 +277,9 @@ public class PerformanceDemoSeed implements ApplicationRunner {
                 OeeEngine.utc(start)))
             busy.add(new long[] {
                 OeeEngine.instant(r.get("started_at")).toEpochMilli(),
-                r.get("ended_at") == null ? end.toEpochMilli() : OeeEngine.instant(r.get("ended_at")).toEpochMilli()
+                r.get("ended_at") == null
+                        ? end.toEpochMilli()
+                        : OeeEngine.instant(r.get("ended_at")).toEpochMilli()
             });
         return Spans.union(working).minus(Spans.union(busy));
     }
