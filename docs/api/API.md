@@ -28,8 +28,8 @@ All business mutations require a unique `Idempotency-Key` header; keep it across
 | POST | `/purchases/{id}/approve` | Independent approval (same command as `/purchases/orders/{id}/approve`); PLANNER |
 | POST | `/purchases/{id}/receive` | Original single-lot receipt `{quantity, warehouseId, supplierLot}` of the order's only open line; WAREHOUSE |
 | POST | `/receipts/{id}/invoice` | Original whole-receipt match `{reference}` at the order price (creates a matched supplier invoice); ADMIN |
-| POST | `/quality/{id}/inspect` | Finalize pending inspection; QUALITY |
-| GET | `/quality/inspections?status=&type=&q=&limit=&before=` | V9: inspections, newest first, keyset-paged. `status` `all`/PENDING/PASSED/FAILED, `type` INCOMING/FINAL/RETURN/OPENING, `q` matches lot number, item name/SKU and notes. `{items, next, total, counts}`; rows add `sku`, `uom`, `lot_status` and `source_number` (MO, PO or SO number); `counts` per status are tenant-wide; all roles |
+| POST | `/quality/{id}/inspect` | Finalize pending inspection `{result, notes, measurements?}`; V12: measurements are required when an inspection plan governs it, a critical characteristic out of specification fails it, and a FAILED decision raises an NCR (see Quality management below); QUALITY |
+| GET | `/quality/inspections?status=&type=&q=&limit=&before=` | V9: inspections, newest first, keyset-paged. `status` `all`/PENDING/PASSED/FAILED, `type` INCOMING/FINAL/RETURN/OPENING/REWORK (V12), `q` matches lot number, item name/SKU and notes. `{items, next, total, counts}`; rows add `sku`, `uom`, `lot_status` and `source_number` (MO, PO, SO or, V12, rework order number), and V12 `plan_id` (pending inspections governed by a plan), `ncr_id`, `ncr_number`; `counts` per status are tenant-wide; all roles |
 | GET | `/reports/costs?status=&q=&limit=&before=` | V9: manufacturing cost register, newest first, keyset-paged: estimated, material, conversion, actual, WIP, finished and scrap cost per order; `status` `all`/`active`/a code, `q` matches number, product name/SKU. `{items, next, total, summary}`; `summary` = tenant-wide `{orders, estimated_cost, material_cost, conversion_cost, wip_cost, finished_cost, scrap_cost}`; ADMIN/PLANNER |
 | GET | `/reports/journal?account=&q=&from=&to=&limit=&before=` | V9: posted journal lines, newest entry first, debits before credits (keyset on entry `created_at, id`, line `debit, id`; `limit` default 50). `account` exact, `q` matches reference/description, `from`/`to` inclusive Asia/Colombo dates (400 when malformed, 409 when `to` < `from`). `{items, next, totals:{debit, credit}, accounts}` (`accounts` = posted account codes, first page only); ADMIN/PLANNER |
 | GET | `/sales/orders?status=&q=&limit=&before=` | Sales orders, newest first, keyset-paged (`limit` 1–200, default 25; `before` = previous page's `next`). `status`: `all` (default), `open` (CONFIRMED+PARTIAL) or a status code; `q` matches number, customer, customer reference, line product name/SKU. Returns `{items, next, total, counts}` (`counts` per status for the same search) |
@@ -160,6 +160,62 @@ MRP (`GET /planning/mrp`, and the `mrp` rows of `/state`): gross demand = unrese
 ```json
 {"machineId":null,"priority":"HIGH","itemIds":["opaque-semi-finished-item"]}
 ```
+### Quality management (`/quality/*`, V12)
+
+Reads are open to every signed-in role (the Quality control screen gates actions to QUALITY/ADMIN; PLANNER/WAREHOUSE view). Lists are keyset-paged (`limit` 1–200, default 25, `before` = previous `next`) and return `{items, next, total[, counts]}`.
+
+| Method | Path | Purpose / allowed roles (ADMIN also allowed) |
+|---|---|---|
+| GET | `/quality/plans?status=&type=&q=` | Inspection plans: `status` `active` (default)/`inactive`/`all`, `type` INCOMING/FINAL/RETURN/REWORK; rows add item/category names and characteristic counts |
+| GET | `/quality/plans/{id}` | `{plan, characteristics}` (current version) |
+| POST | `/quality/plans` | `{name, itemId \| categoryId, inspectionType, notes?, characteristics:[{name, kind VARIABLE\|ATTRIBUTE, unit?, nominal?, lowerLimit?, upperLimit?, sampleSize, critical, defectCode?, method?}]}`; one active plan per item (or category) and type; VARIABLE needs a limit and 1–20 readings; QUALITY |
+| POST | `/quality/plans/{id}` | `{name, notes?, active, characteristics}`: replaces the characteristic set (old ones are retired, measurements keep them), `version` + 1; QUALITY |
+| GET | `/quality/inspections/{id}/plan` | `{inspection, plan \| null, characteristics}`: the plan that governs the decision (item plan before category plan, nearest category first; RETURN and REWORK inspections fall back to the FINAL plan) |
+| GET | `/quality/inspections/{id}/measurements` | `{inspection, items}`: measurements with `readings` and the specification snapshot (`plan_version`, limits, `critical`, `conforming`, `note`) |
+| GET / POST | `/quality/defect-codes`, `/quality/defect-codes/{code}` | Catalogue `{items}` (seeded per tenant: INSP, DIM, VIS, LEAK, CONT, MAT, PACK, DOC, OTHER); create/edit `{code, name, description?, active}`; system code `INSP` stays active; QUALITY |
+| GET | `/quality/ncrs?status=&severity=&defect=&item=&source=&q=` | NCRs; `status` `all`/`active` (open + dispositioned)/a status; rows add item, lot, defect name, `dispositioned`, `pending`; `counts` per status and `OPEN_<severity>` (tenant-wide) |
+| GET | `/quality/ncrs/{id}` | `{ncr, dispositions, capas, activity}`; the NCR row adds lot status/balance, inspection, MO, supplier, customer return and rework source |
+| POST | `/quality/ncrs` | Raise `{source PRODUCTION\|SUPPLIER\|CUSTOMER\|INTERNAL\|AUDIT\|RECALL, severity, defectCode, title, description, containment?, itemId?, lotId?, quantity, manufacturingOrderId?, supplierId?}`. With a lot: quantity ≤ its balance, no pending inspection, at most one open NCR per lot, links derived from the lot's source; a RELEASED lot is put on hold (QUARANTINE, `holdApplied`). Without a lot the NCR closes directly; QUALITY |
+| POST | `/quality/ncrs/{id}` | Edit an OPEN NCR `{severity, defectCode, title, description, containment?}`; QUALITY |
+| POST | `/quality/ncrs/{id}/dispositions` | `{type, quantity, note, instructions?}`; open NCR with a lot; the non-rejected dispositions never exceed the affected quantity. `USE_AS_IS` → PENDING_APPROVAL; `SCRAP` → posted now (ledger `QUALITY_SCRAP`, Dr `QUALITY_LOSS` / Cr inventory account; closed period → 409); `RETURN_TO_SUPPLIER` (purchased lots, ≤ receipt quantity not yet returned) → AWAITING_RETURN; `REWORK` → opens `RW-…` and moves the quantity into rework WIP. Returns `{id, status, value, ncrStatus, reworkOrderId?, reworkNumber?}`; QUALITY |
+| POST | `/quality/dispositions/{id}/decision` | `{decision APPROVE\|REJECT, note}` on a pending concession; the approver must differ from the requester (ADMIN included); QUALITY |
+| POST | `/quality/dispositions/{id}/return` | `{debitNote, reason?}`: posts the supplier return through `procurement.SupplierReturnService` (same `SR-…` document, `SUPPLIER_RETURN` ledger, GRNI / accounts-payable postings, receipt and order-line `returned`); WAREHOUSE |
+| POST | `/quality/ncrs/{id}/close` | `{note}`: DISPOSITIONED (no open rework order), or OPEN with nothing to disposition; QUALITY |
+| POST | `/quality/ncrs/{id}/cancel` | `{reason}`: OPEN without dispositions; a containment hold is lifted; QUALITY |
+| GET | `/quality/rework?status=&q=` | Rework orders (`all`/OPEN/COMPLETED) with input/output lots and the output inspection status |
+| GET | `/quality/rework/{id}` | `{rework, materials, links, activity}` (`links` = `rework_lot_links`) |
+| POST | `/quality/rework/{id}/complete` | `{outputQuantity ≤ input, labourCost, materials?:[{lotId, quantity}], note?}`: materials from RELEASED lots (unreserved), output lot `source_type REWORK` in QUARANTINE with a REWORK inspection, value = input + material + labour; QUALITY/OPERATOR/PLANNER |
+| GET | `/quality/summary?from=&to=` | Inclusive Asia/Colombo dates (default the last 30 days): `{openBySeverity, raised, scrapValue, scrapDispositions, reworkCost, reworkInputValue, reworkCompleted, concessions, topDefects}` |
+| GET | `/quality/lots/{id}` | `{ncrs, reworkOrigin, reworkedInto}` for the lot drawer |
+| GET | `/quality/people` | Active users `{items:[{id, name, role}]}` for CAPA owner pickers |
+| GET | `/quality/capas?status=&q=&overdue=` | CAPAs (`all`/`active`/a status; `overdue=true` keeps CAPAs past their target or with an overdue action); rows add owner, action counts, `overdue_actions`, linked NCR numbers; `counts` adds `OVERDUE_ACTIONS` |
+| GET | `/quality/capas/{id}` | `{capa, ncrs, actions (with overdue), activity}` |
+| GET | `/quality/capa-actions?status=&overdue=&mine=` | Actions across CAPAs |
+| POST | `/quality/capas` | `{title, problem, source NCR\|AUDIT\|CUSTOMER\|SUPPLIER\|INTERNAL, ownerId, dueDate?, ncrIds?}`; QUALITY |
+| POST | `/quality/capas/{id}` | `{title, problem, ownerId, dueDate?, rootCauseCategory? MAN\|MACHINE\|METHOD\|MATERIAL\|MEASUREMENT\|ENVIRONMENT, whys?[≤5], rootCause?, ncrIds?}` (not CLOSED/CANCELLED); QUALITY |
+| POST | `/quality/capas/{id}/actions` | `{type CORRECTIVE\|PREVENTIVE, description, ownerId, dueDate}` (OPEN/IN_PROGRESS); QUALITY |
+| POST | `/quality/capa-actions/{id}/complete`, `/cancel` | `{note}`; complete: the action's owner (any role) or QUALITY; cancel: QUALITY |
+| POST | `/quality/capas/{id}/start`, `/submit`, `/verify`, `/cancel` | `start {note}` OPEN → IN_PROGRESS (root-cause category + analysis and an action needed); `submit {note}` IN_PROGRESS → VERIFICATION (all actions done or cancelled, one done; QUALITY or the owner); `verify {effective, note}` by a different person than the owner: effective → CLOSED, not effective → IN_PROGRESS; `cancel {note}` also cancels open actions; QUALITY |
+
+Inspection decisions with a plan: `POST /quality/{id}/inspect` takes `measurements:[{characteristicId, values?, nonconforming?, note?}]`, one per active characteristic of the governing plan (VARIABLE: exactly `sample_size` readings; ATTRIBUTE: nonconforming units ≤ sample size). A critical characteristic out of specification makes the decision FAILED whatever `result` says; a non-critical one passes only with a `note` on that measurement. Without a plan, measurements are refused and the Phase 1 decision is unchanged. Every FAILED decision raises an NCR (source INSPECTION, severity CRITICAL when a critical characteristic failed, else MAJOR; defect from the failing characteristic, else `INSP`); the response adds `ncrId`, `ncrNumber`. A failed incoming lot is still returned to the supplier in full, and that return is recorded on its NCR as an automatic, posted RETURN_TO_SUPPLIER disposition (NCR DISPOSITIONED).
+
+`/state` key `qualityAlerts` (order 2200, every role): `{open_ncrs, open_critical_ncrs, pending_concessions, awaiting_returns, open_rework, overdue_capa_actions, my_overdue_capa_actions}`.
+
+```json
+{"result":"PASSED","notes":"Walls within specification","measurements":[
+  {"characteristicId":"opaque-wall","values":["0.45","0.44","0.46"],"nonconforming":null,"note":null},
+  {"characteristicId":"opaque-weight","values":["22.9","22.1"],"nonconforming":null,"note":"Heavier neck accepted (drawing rev B)"},
+  {"characteristicId":"opaque-leak","values":null,"nonconforming":0,"note":null}]}
+```
+
+```json
+{"type":"REWORK","quantity":"200","note":"Sound bottles: sort and relabel","instructions":"100% shoulder gauge"}
+```
+
+```json
+{"outputQuantity":"200","labourCost":"1800","materials":[{"lotId":"opaque-label-lot","quantity":"200"}],"note":"Relabelled"}
+```
+
 ### Administration (`/admin/*`, ADMIN only)
 
 | Method | Path | Purpose |

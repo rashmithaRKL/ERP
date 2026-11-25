@@ -11,7 +11,9 @@ A screen alone does not satisfy a business workflow. Each supported command has 
 | Customer return | Return against a delivery (≤ delivered − returned) → quarantine lot at delivered cost → reversing revenue/receivable and COGS journals → RETURN inspection → pass restocks / fail holds | Replacement shipments are new orders; credit notes as documents and cash refunds later |
 | Material consumption | FIFO reservations → authorized issue → negative raw ledger → positive WIP value | Exact snapshot issue only; unplanned consumption requires a future controlled variance workflow |
 | Partial production | Partial good/scrap output → proportional cost allocation → retained WIP → final output → zero WIP | Conversion costs entered per posting; no implicit whole-order cost allocation |
-| Quality failure | Incoming failure → supplier return reversal; final failure → enforceable finished lot hold | Final rework/release/scrap disposition not implemented; unsafe dispatch remains blocked |
+| Quality failure | Incoming failure → supplier return reversal (recorded on an automatic NCR); any failed inspection → held lot + NCR; plan-driven inspections fail on a critical characteristic out of specification | Unsafe dispatch remains blocked until a disposition releases stock |
+| Nonconformance disposition (V12) | NCR (automatic or manual; manual on a released lot holds it) → partial dispositions ≤ affected quantity: concession (independent approval) / scrap (QUALITY_SCRAP, QUALITY_LOSS) / return to supplier (warehouse posts the SR document) / rework (RW order → output lot in quarantine → re-inspection releases it) → DISPOSITIONED (hold lifted, MO may complete) → CLOSED | Recall holds across a genealogy (V14); rework orders cannot be cancelled once opened |
+| CAPA (V12) | CAPA from NCRs or standalone → root cause (6M + five whys) → corrective/preventive actions with owners and due dates → start → all actions done → verification by someone other than the owner → closed (or reopened when not effective) | Notifications for overdue actions are attention counts only |
 | Local operations | Same local API/PostgreSQL transaction boundaries | Browser offline queue and cloud reconciliation not implemented or verified |
 | Costing | Actual FIFO materials + entered labour/machine → WIP/finished/scrap → dispatch COGS | Manufacturing subledger; full finance and statutory statements later |
 | Multi-level BOM | Semi-finished BOM approved first → parent BOM approved (no cycle at any depth) → explosion/where-used/cost roll-up through all levels → copy approved revision to draft → edit → compare → approve | Alternative components, phantom BOMs, effectivity dates and engineering change orders later |
@@ -43,6 +45,12 @@ A screen alone does not satisfy a business workflow. Each supported command has 
 21. Child order for a shortage: quantity = requirement − released stock − open child supply; a second run finds nothing short (409); the same key replays the first result.
 22. Child output satisfies the parent: after final QC releases the child's SF lot, the parent's reservation allocates it FIFO with the older stock; issue consumes it.
 23. Parent link tampering: changing `parent_order_id` is rejected by the database trigger.
+24. Plan-driven inspection (V12): a critical characteristic out of specification fails the decision even when the inspector chose pass; a non-critical one passes only with a deviation note; inspections without a plan behave as before (`quality.InspectionPlanTest`).
+25. Scrap disposition in a closed period: refused, nothing posted (`quality.NcrDispositionTest`).
+26. Concession requested and approved by the same person (ADMIN included): refused.
+27. Dispositions above the affected quantity: refused; a rejected concession frees its quantity.
+28. Rework value conservation: output lot value = input value + material + labour, rework WIP nets to zero per order and the database `CHECK` enforces it; input → output lot links are immutable.
+29. CAPA closed by its owner: refused; a different quality user verifies effectiveness (`quality.CapaTest`).
 
 ## Multi-level browser acceptance (V7 demo data)
 
@@ -51,6 +59,15 @@ A screen alone does not satisfy a business workflow. Each supported command has 
 3. **Manufacturing orders**: the FG-101 order due in 7 days (approved) shows **Order structure** in its drawer with one child order (SF-001 preform, "Child of …" in the list); the child's drawer shows its parent. The child needs approval by someone other than the planner who created it.
 4. **Material planning** (planner, warehouse or admin): the SF-001 preform row (level 1) shows planned production pegged to the draft FG-101 order due in 14 days (and safety stock); **Pegging** lists the orders; *Planned production* → **Create MO** prefills the BOM, quantity, start date and the parent order. *Purchase recommendations* → **Create purchase** prefills the purchasing form.
 5. On the draft FG-101 order (due in 14 days), the order structure shows the released preforms already allocated to the earlier order; **Create child orders for shortages** creates a preform child for its full requirement. Material planning then pegs no order demand to the preform; only the safety-stock top-up remains as planned production.
+
+## Quality management browser acceptance (V12 demo data)
+
+1. **Quality control → Inspection plans** (any role; quality/admin edit): *500ml bottle · final release* (4 characteristics, 2 critical) and *HDPE resin · incoming*. Open one: characteristics with limits, sample sizes, critical flags and defect codes; below, the defect-code catalogue.
+2. **Inspections** (demo.quality): filter *Passed* and type *Incoming*; the 500 kg HDPE resin receipt → **Measurements** shows three readings per variable characteristic and the CoA check. A pending final inspection of a bottle lot shows *Plan applies*: **Inspect lot** asks for 5 wall-thickness readings; entering 0.38 marks it red, disables *Pass* and explains that a nonconformance will be raised.
+3. **Nonconformances**: a CRITICAL `DIM` NCR from the failed return inspection, DISPOSITIONED: scrap 100 and rework 200 (link to the RW order, completed; its output lot released after re-inspection). A CRITICAL `LEAK` NCR is OPEN: as demo.quality **Add disposition** (e.g. use as is 20 → pending approval; scrap the rest); switch to demo.admin to **Approve** the concession (demo.quality cannot approve its own). **Open CAPA** from any NCR.
+4. **Rework**: the completed RW order shows input/output lots, labour and label material, and the lot genealogy table. **Inventory → Lots** → the rework lot drawer shows *Reworked by RW-…* under *Quality*.
+5. **CAPA**: *Bottle wall thickness below specification at the shoulder* is IN_PROGRESS with one action done and one overdue (red). The overview *Needs your attention* panel and the bell list the open critical NCR and the overdue CAPA action. As demo.quality mark the overdue action done and **Send to verification**; as demo.admin **Verify effectiveness** (the owner cannot).
+6. Roles: demo.warehouse sees all tabs read-only and posts the supplier return of a RETURN_TO_SUPPLIER disposition (**Post return**) on a purchased lot.
 
 ## Manual browser acceptance
 

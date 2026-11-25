@@ -1,6 +1,6 @@
 # Implemented data model
 
-Migrations: `V1__manufacturing_core.sql`, `V2__approved_bom_integrity.sql`, `V3__sales_documents_partners_returns.sql`, `V4__item_master.sql` (item master; see below), `V5__inventory_operations.sql` (inventory operations, below), `V6__procurement_documents.sql` (procurement documents, below), `V7__multi_level_bom_planning.sql` (multi-level BOMs and parent/child orders, below), `V8__administration.sql` (administration, below), `V9__integration.sql` (integration, below). Primary IDs are UUID strings except readable demonstration master IDs. Every tenant-owned table carries `tenant_id`; references use owner/id composites where operational records cross domains. Tenant-scoped document/SKU/lot/BOM revision uniqueness prevents duplicates.
+Migrations: `V1__manufacturing_core.sql`, `V2__approved_bom_integrity.sql`, `V3__sales_documents_partners_returns.sql`, `V4__item_master.sql` (item master; see below), `V5__inventory_operations.sql` (inventory operations, below), `V6__procurement_documents.sql` (procurement documents, below), `V7__multi_level_bom_planning.sql` (multi-level BOMs and parent/child orders, below), `V8__administration.sql` (administration, below), `V9__integration.sql` (integration, below), `V12__quality_management.sql` (quality management, below). Primary IDs are UUID strings except readable demonstration master IDs. Every tenant-owned table carries `tenant_id`; references use owner/id composites where operational records cross domains. Tenant-scoped document/SKU/lot/BOM revision uniqueness prevents duplicates.
 
 ```mermaid
 erDiagram
@@ -199,3 +199,59 @@ erDiagram
 Money/quantity precision is six decimal places (maximum 14 integer digits in the database, stricter API amount limits). UI formatting never changes stored values. SQL indexes cover owner/status/date list and allocation access. Current workspace list snapshots cap at 250 rows (BOM lines 1,000), with pagination inside that bound. This is explicitly not the large-ledger reporting solution; replace capped lists with server cursor pagination and background export before scale.
 
 Flyway validates checksums at startup and runs PostgreSQL transactional DDL. Never edit an applied migration. Add a new numbered migration and rehearse it against a restored backup. Posted financial and inventory rows have no delete/overwrite path. Retention/archive cutoffs, erasure handling and access to old records require an organization-approved policy and implementation before commercial data retention commitments.
+
+
+## Quality management (`V12__quality_management.sql`)
+
+```mermaid
+erDiagram
+    ITEMS ||--o{ INSPECTION_PLANS : "planned per item"
+    ITEM_CATEGORIES ||--o{ INSPECTION_PLANS : "or per category"
+    INSPECTION_PLANS ||--|{ INSPECTION_CHARACTERISTICS : "versioned set"
+    INSPECTIONS ||--o{ INSPECTION_MEASUREMENTS : "measured with the decision"
+    INSPECTION_CHARACTERISTICS ||--o{ INSPECTION_MEASUREMENTS : "snapshot of"
+    INSPECTION_MEASUREMENTS ||--o{ INSPECTION_READINGS : "one per sample"
+    DEFECT_CODES ||--o{ NCRS : classifies
+    INSPECTIONS ||--o| NCRS : "failed inspection raises"
+    LOTS ||--o{ NCRS : "affected lot"
+    NCRS ||--o{ NCR_DISPOSITIONS : "split into"
+    NCR_DISPOSITIONS ||--o| REWORK_ORDERS : "REWORK opens"
+    NCR_DISPOSITIONS ||--o| SUPPLIER_RETURNS : "RETURN_TO_SUPPLIER posts"
+    REWORK_ORDERS ||--o{ REWORK_MATERIALS : "extra material"
+    REWORK_ORDERS ||--o{ REWORK_LOT_LINKS : genealogy
+    LOTS ||--o{ REWORK_LOT_LINKS : "input lot"
+    LOTS ||--o{ REWORK_LOT_LINKS : "output lot"
+    CAPAS ||--o{ CAPA_NCRS : addresses
+    NCRS ||--o{ CAPA_NCRS : "linked to"
+    CAPAS ||--|{ CAPA_ACTIONS : "corrective / preventive"
+```
+
+| Table / change | Purpose and rules |
+|---|---|
+| `defect_codes` | PK `(tenant_id, code)`, `code` `^[A-Z0-9][A-Z0-9_-]{0,19}$`, `name`, `description`, `active`, `system`. Seeded for every existing and new tenant by `seed_default_defect_codes` (trigger `tenant_default_defect_codes` `AFTER INSERT ON tenants`): `INSP` (system: failed inspection, unclassified), `DIM`, `VIS`, `LEAK`, `CONT`, `MAT`, `PACK`, `DOC`, `OTHER`. |
+| `inspection_plans` | `number` (`QP-…`), `name`, exactly one of `item_id` / `category_id` (composite FKs), `inspection_type` ∈ `INCOMING, FINAL, RETURN, REWORK`, `active`, `version` (+1 per edit), `notes`, `created_by`, `updated_by`. Partial unique indexes: one active plan per (item, type) and per (category, type). |
+| `inspection_characteristics` | `plan_id`, `seq`, `name`, `kind` ∈ `VARIABLE` (unit, optional nominal, at least one of `lower_limit`/`upper_limit` with lower ≤ upper, `sample_size` 1–20 readings) / `ATTRIBUTE` (pass/fail of `sample_size` units, no limits), `critical`, optional `defect_code` (FK), `method`, `active`. Editing a plan retires the current rows (`active = false`) and inserts the new set, so measurements keep their characteristic. |
+| `applicable_inspection_plan(tenant, item, type)` | SQL function, used by the decision and the read model: the active plan of exactly that type (RETURN and REWORK fall back to FINAL), the item's own plan before a category plan, the nearest category (walking `item_categories.parent_id`) first. |
+| `inspection_measurements` + `inspection_readings` | Posted history (`inspection_measurements_immutable`, `inspection_readings_immutable`), written in the same transaction as the decision: one row per characteristic with a snapshot of its specification (`plan_version`, `name`, `kind`, `unit`, `nominal`, limits, `sample_size`, `critical`), `min/max/mean_value` or `nonconforming`, `conforming`, `note`, `recorded_by`; one reading row per sample. `UNIQUE (tenant_id, inspection_id, characteristic_id)`. |
+| `ncrs` | `number` (`NCR-…`), `status` ∈ `OPEN, DISPOSITIONED, CLOSED, CANCELLED`, `source` ∈ `INSPECTION, PRODUCTION, SUPPLIER, CUSTOMER, INTERNAL, AUDIT, RECALL`, `severity` ∈ `MINOR, MAJOR, CRITICAL`, `defect_code`, `title`, `description`, `containment`; links (all optional, composite FKs) `item_id`, `lot_id`, `inspection_id`, `manufacturing_order_id`, `supplier_id`, `customer_return_id`, `rework_order_id` (the rework order that produced the lot); `quantity ≥ 0` (affected), `uom`, `hold_applied` (raising it quarantined a released lot), close/cancel fields. `ncrs_failed_inspection`: one NCR per failed inspection; `ncrs_open_lot`: at most one OPEN NCR per lot. |
+| `ncr_dispositions` | `line_no`, `type` ∈ `USE_AS_IS, SCRAP, RETURN_TO_SUPPLIER, REWORK`, `status` ∈ `PENDING_APPROVAL` (concessions only), `AWAITING_RETURN` (returns only), `POSTED`, `REJECTED`; `lot_id`, `quantity > 0`, `value_amount` (value that left the lot), `note`, `reference` (ledger/journal reference: NCR number for scrap, `RW-…`, `SR-…`), `receipt_id`, `rework_order_id`, `supplier_return_id`, `automatic` (the Phase 1 return of a failed incoming lot), `created_by`, `decided_by/at`, `decision_note`, `posted_at`. Non-rejected dispositions never exceed the NCR quantity (service rule under the NCR row lock); the NCR becomes DISPOSITIONED when POSTED dispositions equal it. |
+| `rework_orders` | `number` (`RW-…`), `ncr_id`, `disposition_id`, `status` ∈ `OPEN, COMPLETED`, `item_id`, `input_lot_id`, `input_quantity`, `input_value`, `material_cost`, `labour_cost`, `output_lot_id`, `output_quantity`, `output_value`, instructions, completion note. `CHECK`: an open order has no output; a completed one has `output_value = input_value + material_cost + labour_cost` (value conservation enforced by the database). |
+| `rework_materials` | Extra material issued from released lots into a rework order (`lot_id`, `item_id`, `quantity`, `value_amount`); immutable. |
+| `rework_lot_links` | **Genealogy of rework** (immutable, `rework_lot_links_immutable`): one row per lot consumed by a completed rework order → the lot it produced: `rework_order_id`, `input_lot_id`, `output_lot_id`, `role` ∈ `REWORKED` (the held nonconforming lot) / `MATERIAL` (extra material), `quantity` consumed, `value_amount`. Indexed by input and by output lot, so a trace can walk forwards and backwards. The output lot itself carries `source_type = 'REWORK'`, `source_id` = the rework order. |
+| `capas` | `number` (`CAPA-…`), `title`, `problem`, `source` ∈ `NCR, AUDIT, CUSTOMER, SUPPLIER, INTERNAL`, `status` ∈ `OPEN, IN_PROGRESS, VERIFICATION, CLOSED, CANCELLED`, `owner_id`, `due_date`, `root_cause_category` ∈ `MAN, MACHINE, METHOD, MATERIAL, MEASUREMENT, ENVIRONMENT`, `why_1`…`why_5`, `root_cause`, `effective`, `verification_note`, `verified_by/at`. `CHECK`: a CLOSED CAPA was verified effective by someone other than its owner. |
+| `capa_ncrs`, `capa_actions` | Links CAPA ↔ NCR (many to many). Actions: `seq`, `type` ∈ `CORRECTIVE, PREVENTIVE`, `description`, `owner_id`, `due_date`, `status` ∈ `OPEN, DONE, CANCELLED`, completion fields; overdue = OPEN and `due_date < CURRENT_DATE` (index `(tenant_id, status, due_date)`). |
+| Lot status (no schema change) | A lot is held while QUARANTINE or REJECTED. Raising an NCR on a RELEASED lot sets QUARANTINE (manufacturing issue already refuses reserved lots that are not released). When the lot's open NCR is dispositioned or cancelled, a QUARANTINE lot without a pending inspection is released; a REJECTED lot is released only when its remaining balance is covered by approved concessions. The V5 trigger `transferred_lots_follow_quality` carries a release to lots transferred while quarantined. |
+
+Postings (all through `Store.ledger` / `Store.journal`, period-checked, in the command's transaction):
+
+| Movement | Ledger reason (reference) | Journal |
+|---|---|---|
+| Scrap disposition | `QUALITY_SCRAP` (NCR number) | Dr `QUALITY_LOSS` / Cr `FG_INVENTORY` or `RAW_INVENTORY` (by item type) |
+| Rework input | `REWORK_ISSUE` (RW number) | Dr `REWORK_WIP` / Cr the input lot's inventory account |
+| Rework material | `REWORK_MATERIAL` (RW number) | Dr `REWORK_WIP` / Cr the material's inventory account |
+| Rework labour | — | Dr `REWORK_WIP` / Cr `CONVERSION_CLEARING` |
+| Rework output | `REWORK_OUTPUT` (RW number), explicit value = input + material + labour | Dr inventory account / Cr `REWORK_WIP` (`REWORK_WIP` nets to zero per order) |
+| Return to supplier | `SUPPLIER_RETURN` (`SR-…`), via `procurement.SupplierReturnService` | Dr `GRNI` (uninvoiced part) and Dr `ACCOUNTS_PAYABLE` (invoiced part, debit note) / Cr `RAW_INVENTORY` |
+| Failed incoming inspection (unchanged) | `SUPPLIER_RETURN_QC` (purchase order id) | Dr `GRNI` / Cr `RAW_INVENTORY`; recorded on the NCR as an automatic RETURN_TO_SUPPLIER disposition |
+
+For genealogy/recall (V14): follow `rework_lot_links` (input lot → output lot) and `lots.source_type='REWORK'`; NCRs reference the lot, inspection, MO, supplier and customer return, and `ncrs.source` already accepts `RECALL` (raising an NCR on a released lot holds it). For OEE (V15): quality losses are `ncr_dispositions` of type SCRAP (quantity, `value_amount`, `posted_at`) and the `QUALITY_SCRAP` ledger rows; rework yield is `rework_orders.output_quantity / input_quantity`; a manufacturing order whose failed final lot is fully dispositioned now completes (V12 generalization of the Phase 1 completion rule).

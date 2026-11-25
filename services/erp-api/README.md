@@ -29,7 +29,7 @@ run by `target/surefire-reports/*.xml`.
 | `platform` | `Store` (posting primitives), `Actor` (identity + role checks), `ErpUser` (principal with its session version), `SecurityConfig`, `LoginRateLimit`, `SessionGuard` (per-request revocation, role refresh, forced password change), `Passwords` (the password rule, temporary passwords), `PasswordService` + `AccountCommands` (self-service change), `PasswordAttemptLimit` (V9: 5 wrong current passwords per account in 15 minutes, then 429), `AuthController` (`/api/health`, `/api/auth/*`), `ApiErrors` (the single `@RestControllerAdvice`) |
 | `catalog` | Organization, user accounts, partners (maintenance and directory in `Partner*` files), items, work centers (machines), BOM revisions; item master (V4: `ItemService`, `UnitService` conversion service, `CategoryService`, `VariantService`, `ItemQuery`); multi-level BOMs (V7: `BomGraph` structure + roll-up, `BomService` copy/edit-draft + approval rules called from `CatalogService.approveBom`, `BomQuery` explosion/where-used/compare/cost, `BomStateSections`) |
 | `procurement` | Multi-line purchase orders in purchase units (`PurchaseOrderService`: draft/submit/independent approval/cancel/close short, drafts from MRP shortages), goods receipts per line (`ReceivingService`), supplier invoices with quantity/price variances (`SupplierInvoiceService`), supplier returns (`SupplierReturnService`), the read model (`ProcurementQuery`), open MRP supply (`ProcurementSupply`), shared rules (`PurchaseRules`) and the original single-item contract (`ProcurementService`) |
-| `quality` | Incoming and final inspections (including the supplier return of a failed incoming lot and MO completion after the last final release); the paged inspection list (V9: `InspectionQuery`) |
+| `quality` | Incoming and final inspections (including the supplier return of a failed incoming lot and MO completion after the last final release); the paged inspection list (V9: `InspectionQuery`). V12 quality management: inspection plans, defect codes and measurement evaluation (`InspectionPlanService`, `InspectionPlanQuery`), nonconformance reports and dispositions (`NcrService`, `NcrQuery`), rework orders (`ReworkService`), CAPA (`CapaService`, `CapaQuery`), shared rules (`QualityRules`: lot hold settling, MO completion, accounts) and keyset paging (`QualityPaging`). `NcrService` calls `procurement.SupplierReturnService` (joining its transaction) to post RETURN_TO_SUPPLIER dispositions |
 | `sales` | Multi-line sales orders in sales units (V9: entered quantity/unit/factor/base quantity through `catalog.UnitService`; draft/confirm/cancel/close short), per-line dispatch (revenue/receivables and COGS per delivery), customer returns (`ReturnsService`), the sales read model (`SalesQuery`) |
 | `manufacturing` | Manufacturing-order lifecycle: snapshot, approval (V9: per the `MANUFACTURING_ORDER` approval policy), reservation, issue, start/pause/resume, output, close/cancel; parent/child orders (V7: `ChildPlanning` shortages, `OrderTreeService` child orders, `OrderTreeQuery` order tree); the paged order list (V9: `ManufacturingQuery`) |
 | `reporting` | `GET /api/state` (`StateQuery` + the `StateContributor` contract), `GET /api/manufacturing/{id}` (`OrderDetailsQuery`), cross-domain sections: inventory (lots, ledger), MRP, dashboard, audit/sync, finance; multi-level MRP (V7: `MrpPlanner` engine, `PlanningStateSections` with the isolated `incomingPurchaseSupply(tenant)` query, `PlanningQuery`); Costs & reports (V9: `ReportQuery` paged cost register and journal, `ReportsController`) |
@@ -50,8 +50,9 @@ A domain package contains, by convention:
 Dependency direction: domain packages → `platform` and `reporting` (contract only); `reporting` → `platform`;
 `demo` → domain services. Domains never call each other's services; cross-domain effects are SQL on the shared,
 tenant-scoped schema inside the same transaction (for example, `quality` completes a manufacturing order).
-Two deliberate exceptions: `admin` imports call the public `catalog.ItemService` / `catalog.CatalogService#partner`
-commands (joining the import's transaction), and domains that require approvals ask `admin.ApprovalPolicyService`
+Deliberate exceptions: `admin` imports call the public `catalog.ItemService` / `catalog.CatalogService#partner`
+commands (joining the import's transaction); `quality.NcrService` posts a RETURN_TO_SUPPLIER disposition through
+`procurement.SupplierReturnService#returnToSupplier` (V12, same transaction, warehouse actor); and domains that require approvals ask `admin.ApprovalPolicyService`
 (non-transactional reads inside the caller's transaction: `inventory` for stock adjustments, `manufacturing` for orders, `procurement` for purchase orders).
 Make a class or method `public` only when another package (or a test in another package) needs it.
 
@@ -66,7 +67,10 @@ Route ownership:
 | `catalog.PartnerController` | `GET /partners`, `GET /partners/{id}`, `POST /partners/{id}` |
 | `catalog.ItemMasterController` | `GET /items`, `/items/{id}`, `/items/{id}/movements`, `/items/{id}/units`, `/items/{id}/convert`, `/items/by-barcode`, `/units`, `/item-categories`, `/item-templates`, `/item-templates/{id}`; `POST /items/{id}`, `/items/{id}/deactivate`, `/items/{id}/activate`, `/items/{id}/conversions`, `/items/{id}/conversions/{unit}/remove`, `/items/{id}/barcodes`, `/items/{id}/barcodes/{barcodeId}/remove`, `/units`, `/units/{code}`, `/item-categories`, `/item-categories/{id}`, `/item-templates`, `/item-templates/{id}`, `/item-templates/{id}/variants` |
 | `procurement.ProcurementController` | `GET /purchases/orders`, `/purchases/orders/{id}`, `/purchases/receipts`, `/purchases/invoices`, `/purchases/returns`, `/purchases/sources`; `POST /purchases/orders`, `/purchases/orders/{id}`, `/purchases/orders/{id}/submit`, `/approve`, `/cancel`, `/close`, `/receipts`, `/invoices`, `/purchases/receipts/{id}/returns`, `/purchases/recommendations`; original contract `POST /purchases`, `/purchases/{id}/approve`, `/purchases/{id}/receive`, `/receipts/{id}/invoice` |
-| `quality.QualityController` | `GET /quality/inspections` (V9); `POST /quality/{id}/inspect` |
+| `quality.QualityController` | `GET /quality/inspections` (V9); `POST /quality/{id}/inspect` (V12: optional `measurements`) |
+| `quality.InspectionPlanController` | `GET /quality/plans`, `/quality/plans/{id}`, `/quality/inspections/{id}/plan`, `/quality/inspections/{id}/measurements`, `/quality/defect-codes`; `POST /quality/plans`, `/quality/plans/{id}`, `/quality/defect-codes`, `/quality/defect-codes/{code}` (V12) |
+| `quality.NcrController` | `GET /quality/ncrs`, `/quality/ncrs/{id}`, `/quality/rework`, `/quality/rework/{id}`, `/quality/summary`, `/quality/lots/{id}`, `/quality/people`; `POST /quality/ncrs`, `/quality/ncrs/{id}`, `/quality/ncrs/{id}/dispositions`, `/close`, `/cancel`, `/quality/dispositions/{id}/decision`, `/quality/dispositions/{id}/return`, `/quality/rework/{id}/complete` (V12) |
+| `quality.CapaController` | `GET /quality/capas`, `/quality/capas/{id}`, `/quality/capa-actions`; `POST /quality/capas`, `/quality/capas/{id}`, `/quality/capas/{id}/actions`, `/start`, `/submit`, `/verify`, `/cancel`, `/quality/capa-actions/{id}/complete`, `/cancel` (V12) |
 | `sales.SalesController` | `GET /sales/orders`, `GET /sales/orders/{id}`; `POST /sales/orders`, `/sales/orders/{id}`, `/sales/orders/{id}/confirm`, `/cancel`, `/close`, `/sales/orders/{id}/lines/{lineId}/dispatch`, `/sales/deliveries/{id}/returns`; original contract `POST /sales`, `/sales/{id}/dispatch` |
 | `catalog.BomController` | `GET /boms/{id}/explosion`, `/boms/explosion`, `/boms/where-used`, `/boms/compare`, `/boms/{id}/cost`; `POST /boms/{id}/copy`, `/boms/{id}` (edit draft) |
 | `manufacturing.ManufacturingController` | `GET /manufacturing/orders` (V9); `POST /manufacturing`, `/manufacturing/{id}/actions/{action}`, `/manufacturing/{id}/complete` |
@@ -277,6 +281,7 @@ annotate contributors with `@Transactional`. Existing keys, in order:
 | 310 | `financial` (ADMIN, PLANNER) | reporting (finance) |
 | 1300 | `salesLines` (open lines of confirmed orders, for planning; `quantity` is the base quantity, V9 adds `entered_quantity` and `unit`) | sales |
 | 1700 | `bomCosts` (multi-level standard-cost roll-up per revision; V7) | catalog |
+| 2200 | `qualityAlerts` (one object of attention counts: `open_ncrs`, `open_critical_ncrs`, `pending_concessions`, `awaiting_returns`, `open_rework`, `overdue_capa_actions`, `my_overdue_capa_actions`; V12) | quality |
 
 V9 removed keys no screen reads any more: `users` (110), `receipts` (240, `GET /api/purchases/receipts`), `ledger` (250, `GET /api/inventory/ledger`) and `journal` (320, `GET /api/reports/journal`). The Manufacturing orders, Shop floor, Quality control and Costs & reports screens read the V9 paged endpoints; `orders` and `inspections` stay for the dashboard and attention counts. V9 contributes no new keys (range 1900–1999 unused).
 
@@ -318,6 +323,13 @@ The database, not the Java code, is the last line of defence:
 | `mo_parent_immutable` (V7) | `BEFORE UPDATE OF parent_order_id ON manufacturing_orders`: a child order's parent link never changes (SQLSTATE 23514 → 409), so links always point at older orders and cannot form cycles. BOM cycles and missing sub-BOMs are approval rules in `BomService.checkApprovable`, not triggers. |
 | `users_keep_an_active_admin` (V8) | `BEFORE UPDATE OF role, active ON users`: the last active ADMIN of a tenant cannot be demoted or deactivated (*"A workspace needs at least one active administrator"*). |
 | `import_batches_immutable` (V8) | Committed CSV import batches cannot be changed or deleted (`reject_history_mutation()`). |
+| `tenant_default_defect_codes` (V12) | `AFTER INSERT ON tenants`: seeds the default defect codes (`seed_default_defect_codes`: system `INSP` plus DIM, VIS, LEAK, CONT, MAT, PACK, DOC, OTHER). |
+| `inspection_measurements_immutable`, `inspection_readings_immutable`, `rework_materials_immutable`, `rework_lot_links_immutable` (V12) | Measurements recorded with an inspection decision, rework material issues and rework lot links (genealogy) are posted history (`reject_history_mutation()`). `CHECK`s keep rework value conservation (`output_value = input_value + material_cost + labour_cost`) and a closed CAPA verified by someone other than its owner. |
+
+Ledger reasons and journal accounts written by V12 (`quality.QualityRules`): `QUALITY_SCRAP` (reference = NCR number;
+Dr `QUALITY_LOSS` / Cr `FG_INVENTORY` or `RAW_INVENTORY`), `REWORK_ISSUE`, `REWORK_MATERIAL`, `REWORK_OUTPUT` (reference =
+`RW-…`; through the new `REWORK_WIP` account, labour credited to `CONVERSION_CLEARING`); returns to the supplier reuse
+`SUPPLIER_RETURN` (`SR-…`). Genealogy reads `rework_lot_links` (input lot → output lot) and `lots.source_type='REWORK'`.
 
 A new table of posted history gets the same protection by reusing the function:
 `CREATE TRIGGER <table>_immutable BEFORE UPDATE OR DELETE ON <table> FOR EACH ROW EXECUTE FUNCTION reject_history_mutation();`.
@@ -337,7 +349,10 @@ documents, `demo.ProcurementDemoSeed` (`ORDER + 60`) the V6 purchase orders (one
 variance and a supplier return, and `demo.PlanningDemoSeed` (`ORDER + 70`) the V7 two-level bottle/preform structure,
 an R02 draft copy, an approved parent order with a preform child order and a draft parent that drives planned
 production, and `demo.IntegrationDemoSeed` (`ORDER + 90`) a confirmed sales order with a bottle line entered in
-cartons (`box` = 50 pcs, V9). A feature that needs
+cartons (`box` = 50 pcs, V9), and `demo.QualityDemoSeed` (`ORDER + 120`, own transaction, keys `demo-v12-…`) the V12
+quality data: bottle (final) and HDPE (incoming) inspection plans, a resin receipt released with measurements, a returned
+bottle lot failed on wall thickness whose NCR is partly scrapped and partly reworked (rework lot re-inspected and
+released), an open critical leak NCR, and a CAPA with one done and one overdue action. A feature that needs
 demo data adds its own runner, ordered after the base seed and idempotent (it also runs against an existing
 `.local/postgres` demo database on the next start):
 

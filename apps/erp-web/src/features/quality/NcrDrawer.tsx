@@ -39,7 +39,7 @@ export function NcrDrawer({
   const allocated = dispositions
     .filter((d) => d.status !== 'REJECTED')
     .reduce((s, d) => s + num(d.quantity), 0);
-  const remaining = Math.max(quantity - allocated, 0);
+  const remaining = Math.max(Number((quantity - allocated).toFixed(6)), 0);
   const decider = can(...DECIDERS);
   const uom = text(n?.uom);
 

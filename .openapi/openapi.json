@@ -242,7 +242,7 @@
     },
     "/quality/{id}/inspect": {
       "post": {
-        "summary": "Record quality decision",
+        "summary": "Record quality decision; with an inspection plan, one measurement per characteristic (a critical one out of specification fails the inspection; a non-critical one passes only with a note). A FAILED decision raises an NCR (V12)",
         "parameters": [
           {
             "$ref": "#/components/parameters/IdempotencyKey"
@@ -5445,7 +5445,7 @@
             "schema": {
               "type": "string"
             },
-            "description": "INCOMING, FINAL, RETURN or OPENING"
+            "description": "INCOMING, FINAL, RETURN, OPENING or REWORK"
           },
           {
             "name": "q",
@@ -5479,7 +5479,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Page of inspections with lot, item, sku, uom, quantity, lot_status and source_number; `counts` per status are tenant-wide"
+            "description": "Page of inspections with lot, item, sku, uom, quantity, lot_status and source_number; `counts` per status are tenant-wide; V12 adds plan_id (pending inspections governed by a plan), ncr_id and ncr_number"
           },
           "409": {
             "description": "Unknown filter or page size outside 1-200"
@@ -5619,6 +5619,1563 @@
           },
           "409": {
             "description": "End date before start date, or page size outside 1-200"
+          }
+        }
+      }
+    },
+    "/quality/plans": {
+      "get": {
+        "summary": "Inspection plans, newest first, keyset-paged (V12): {items, next, total}",
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "active (default), inactive or all"
+          },
+          {
+            "name": "type",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "INCOMING, FINAL, RETURN or REWORK"
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Plan number/name, item SKU/name, category name"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200,
+              "default": 25
+            }
+          },
+          {
+            "name": "before",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Cursor: the previous page's next value"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Result object"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "Unknown filter or page size outside 1-200"
+          }
+        }
+      },
+      "post": {
+        "summary": "Create an inspection plan for one item or item category and inspection type; QUALITY",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InspectionPlan"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Committed result; retry with same key returns prior result"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Role/CSRF denied"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "State/stock/period/idempotency conflict"
+          }
+        }
+      }
+    },
+    "/quality/plans/{id}": {
+      "get": {
+        "summary": "One plan with its current characteristics",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Result object"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "Unknown filter or page size outside 1-200"
+          }
+        }
+      },
+      "post": {
+        "summary": "Edit a plan: replaces its characteristics, version + 1, optional deactivation; QUALITY",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InspectionPlanUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Committed result; retry with same key returns prior result"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Role/CSRF denied"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "State/stock/period/idempotency conflict"
+          }
+        }
+      }
+    },
+    "/quality/inspections/{id}/plan": {
+      "get": {
+        "summary": "The plan governing an inspection (null when none) with its characteristics",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Result object"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "Unknown filter or page size outside 1-200"
+          }
+        }
+      }
+    },
+    "/quality/inspections/{id}/measurements": {
+      "get": {
+        "summary": "Measurements recorded with a decided inspection, with readings and the specification snapshot",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Result object"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "Unknown filter or page size outside 1-200"
+          }
+        }
+      }
+    },
+    "/quality/defect-codes": {
+      "get": {
+        "summary": "Defect-code catalogue {items}",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Result object"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "Unknown filter or page size outside 1-200"
+          }
+        }
+      },
+      "post": {
+        "summary": "Create a defect code; QUALITY",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DefectCode"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Committed result; retry with same key returns prior result"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Role/CSRF denied"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "State/stock/period/idempotency conflict"
+          }
+        }
+      }
+    },
+    "/quality/defect-codes/{code}": {
+      "post": {
+        "summary": "Edit a defect code (system code INSP stays active); QUALITY",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          },
+          {
+            "name": "code",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DefectCode"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Committed result; retry with same key returns prior result"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Role/CSRF denied"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "State/stock/period/idempotency conflict"
+          }
+        }
+      }
+    },
+    "/quality/ncrs": {
+      "get": {
+        "summary": "Nonconformance reports, newest first, keyset-paged: {items, next, total, counts}",
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "all (default), active (open or dispositioned), OPEN, DISPOSITIONED, CLOSED, CANCELLED"
+          },
+          {
+            "name": "severity",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "MINOR, MAJOR or CRITICAL"
+          },
+          {
+            "name": "defect",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Defect code"
+          },
+          {
+            "name": "item",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Item id"
+          },
+          {
+            "name": "source",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "INSPECTION, PRODUCTION, SUPPLIER, CUSTOMER, INTERNAL, AUDIT or RECALL"
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "NCR number, title, lot number, item SKU/name"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200,
+              "default": 25
+            }
+          },
+          {
+            "name": "before",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Cursor: the previous page's next value"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Result object"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "Unknown filter or page size outside 1-200"
+          }
+        }
+      },
+      "post": {
+        "summary": "Raise an NCR; a released lot is put on hold (QUARANTINE); QUALITY",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NcrRaise"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Committed result; retry with same key returns prior result"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Role/CSRF denied"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "State/stock/period/idempotency conflict"
+          }
+        }
+      }
+    },
+    "/quality/ncrs/{id}": {
+      "get": {
+        "summary": "One NCR: {ncr, dispositions, capas, activity}",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Result object"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "Unknown filter or page size outside 1-200"
+          }
+        }
+      },
+      "post": {
+        "summary": "Edit an open NCR (severity, defect, texts); QUALITY",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NcrUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Committed result; retry with same key returns prior result"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Role/CSRF denied"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "State/stock/period/idempotency conflict"
+          }
+        }
+      }
+    },
+    "/quality/ncrs/{id}/dispositions": {
+      "post": {
+        "summary": "Add a disposition (USE_AS_IS, SCRAP, RETURN_TO_SUPPLIER, REWORK); the total never exceeds the affected quantity; QUALITY",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NcrDisposition"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Committed result; retry with same key returns prior result"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Role/CSRF denied"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "State/stock/period/idempotency conflict"
+          }
+        }
+      }
+    },
+    "/quality/ncrs/{id}/close": {
+      "post": {
+        "summary": "Close a dispositioned NCR (or an open one with nothing to disposition); QUALITY",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NcrClose"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Committed result; retry with same key returns prior result"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Role/CSRF denied"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "State/stock/period/idempotency conflict"
+          }
+        }
+      }
+    },
+    "/quality/ncrs/{id}/cancel": {
+      "post": {
+        "summary": "Cancel an open NCR without dispositions; lifts its containment hold; QUALITY",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NcrCancel"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Committed result; retry with same key returns prior result"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Role/CSRF denied"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "State/stock/period/idempotency conflict"
+          }
+        }
+      }
+    },
+    "/quality/dispositions/{id}/decision": {
+      "post": {
+        "summary": "Approve or reject a pending concession; approver differs from the requester; QUALITY",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NcrDecision"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Committed result; retry with same key returns prior result"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Role/CSRF denied"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "State/stock/period/idempotency conflict"
+          }
+        }
+      }
+    },
+    "/quality/dispositions/{id}/return": {
+      "post": {
+        "summary": "Post the supplier return of a RETURN_TO_SUPPLIER disposition through the supplier-return document; WAREHOUSE",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NcrShipReturn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Committed result; retry with same key returns prior result"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Role/CSRF denied"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "State/stock/period/idempotency conflict"
+          }
+        }
+      }
+    },
+    "/quality/rework": {
+      "get": {
+        "summary": "Rework orders, newest first, keyset-paged: {items, next, total, counts}",
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "all, OPEN or COMPLETED"
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Rework/NCR number, lot, item"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200,
+              "default": 25
+            }
+          },
+          {
+            "name": "before",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Cursor: the previous page's next value"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Result object"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "Unknown filter or page size outside 1-200"
+          }
+        }
+      }
+    },
+    "/quality/rework/{id}": {
+      "get": {
+        "summary": "One rework order: {rework, materials, links, activity}",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Result object"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "Unknown filter or page size outside 1-200"
+          }
+        }
+      }
+    },
+    "/quality/rework/{id}/complete": {
+      "post": {
+        "summary": "Complete a rework order: output lot (QUARANTINE, REWORK inspection) valued at input + material + labour; QUALITY/OPERATOR/PLANNER",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReworkComplete"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Committed result; retry with same key returns prior result"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Role/CSRF denied"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "State/stock/period/idempotency conflict"
+          }
+        }
+      }
+    },
+    "/quality/summary": {
+      "get": {
+        "summary": "Quality summary for a date range: open NCRs by severity, scrap value, rework cost, top defects",
+        "parameters": [
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "yyyy-MM-dd (default: 29 days before to)"
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "yyyy-MM-dd (default: today)"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Result object"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "Unknown filter or page size outside 1-200"
+          }
+        }
+      }
+    },
+    "/quality/lots/{id}": {
+      "get": {
+        "summary": "A lot's quality side: {ncrs, reworkOrigin, reworkedInto}",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Result object"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "Unknown filter or page size outside 1-200"
+          }
+        }
+      }
+    },
+    "/quality/people": {
+      "get": {
+        "summary": "Active users of the tenant (id, name, role) for CAPA owner pickers",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Result object"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "Unknown filter or page size outside 1-200"
+          }
+        }
+      }
+    },
+    "/quality/capas": {
+      "get": {
+        "summary": "CAPAs, newest first, keyset-paged: {items, next, total, counts}",
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "all, active or a status"
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Number, title, owner"
+          },
+          {
+            "name": "overdue",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            },
+            "description": "true: overdue CAPAs or CAPAs with overdue actions"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200,
+              "default": 25
+            }
+          },
+          {
+            "name": "before",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Cursor: the previous page's next value"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Result object"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "Unknown filter or page size outside 1-200"
+          }
+        }
+      },
+      "post": {
+        "summary": "Create a CAPA linked to zero or more NCRs; QUALITY",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Capa"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Committed result; retry with same key returns prior result"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Role/CSRF denied"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "State/stock/period/idempotency conflict"
+          }
+        }
+      }
+    },
+    "/quality/capas/{id}": {
+      "get": {
+        "summary": "One CAPA: {capa, ncrs, actions, activity}",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Result object"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "Unknown filter or page size outside 1-200"
+          }
+        }
+      },
+      "post": {
+        "summary": "Edit a CAPA: texts, owner, due date, root-cause category, five whys, root cause, linked NCRs; QUALITY",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CapaUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Committed result; retry with same key returns prior result"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Role/CSRF denied"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "State/stock/period/idempotency conflict"
+          }
+        }
+      }
+    },
+    "/quality/capas/{id}/actions": {
+      "post": {
+        "summary": "Add a corrective or preventive action; QUALITY",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CapaAction"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Committed result; retry with same key returns prior result"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Role/CSRF denied"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "State/stock/period/idempotency conflict"
+          }
+        }
+      }
+    },
+    "/quality/capas/{id}/start": {
+      "post": {
+        "summary": "OPEN → IN_PROGRESS (root cause and an action required); QUALITY",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CapaNote"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Committed result; retry with same key returns prior result"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Role/CSRF denied"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "State/stock/period/idempotency conflict"
+          }
+        }
+      }
+    },
+    "/quality/capas/{id}/submit": {
+      "post": {
+        "summary": "IN_PROGRESS → VERIFICATION (all actions done or cancelled); QUALITY or the owner",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CapaNote"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Committed result; retry with same key returns prior result"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Role/CSRF denied"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "State/stock/period/idempotency conflict"
+          }
+        }
+      }
+    },
+    "/quality/capas/{id}/verify": {
+      "post": {
+        "summary": "Effectiveness verification by a different person than the owner: effective closes, not effective reopens; QUALITY",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CapaVerify"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Committed result; retry with same key returns prior result"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Role/CSRF denied"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "State/stock/period/idempotency conflict"
+          }
+        }
+      }
+    },
+    "/quality/capas/{id}/cancel": {
+      "post": {
+        "summary": "Cancel a CAPA and its open actions; QUALITY",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CapaNote"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Committed result; retry with same key returns prior result"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Role/CSRF denied"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "State/stock/period/idempotency conflict"
+          }
+        }
+      }
+    },
+    "/quality/capa-actions": {
+      "get": {
+        "summary": "CAPA actions, newest first, keyset-paged",
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "all, OPEN, DONE or CANCELLED"
+          },
+          {
+            "name": "overdue",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            },
+            "description": "true: open actions past their due date"
+          },
+          {
+            "name": "mine",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            },
+            "description": "true: the caller's actions"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200,
+              "default": 25
+            }
+          },
+          {
+            "name": "before",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Cursor: the previous page's next value"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Result object"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "Unknown filter or page size outside 1-200"
+          }
+        }
+      }
+    },
+    "/quality/capa-actions/{id}/complete": {
+      "post": {
+        "summary": "Mark an action done; its owner (any role) or QUALITY",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CapaNote"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Committed result; retry with same key returns prior result"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Role/CSRF denied"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "State/stock/period/idempotency conflict"
+          }
+        }
+      }
+    },
+    "/quality/capa-actions/{id}/cancel": {
+      "post": {
+        "summary": "Cancel an open action; QUALITY",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CapaNote"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Committed result; retry with same key returns prior result"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Role/CSRF denied"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "State/stock/period/idempotency conflict"
           }
         }
       }
@@ -5873,6 +7430,14 @@
           "notes": {
             "type": "string",
             "minLength": 1
+          },
+          "measurements": {
+            "type": "array",
+            "maxItems": 40,
+            "items": {
+              "$ref": "#/components/schemas/Measurement"
+            },
+            "description": "V12: required when an inspection plan governs the inspection"
           }
         }
       },
@@ -7842,6 +9407,561 @@
             "type": "string",
             "minLength": 10,
             "maxLength": 400
+          }
+        }
+      },
+      "Measurement": {
+        "type": "object",
+        "required": [
+          "characteristicId"
+        ],
+        "properties": {
+          "characteristicId": {
+            "type": "string"
+          },
+          "values": {
+            "type": "array",
+            "maxItems": 20,
+            "items": {
+              "type": "string",
+              "description": "Decimal (up to 6 fraction digits); a JSON number is also accepted"
+            },
+            "description": "VARIABLE: exactly sample_size readings"
+          },
+          "nonconforming": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "ATTRIBUTE: nonconforming units in the sample"
+          },
+          "note": {
+            "type": "string",
+            "maxLength": 500,
+            "description": "Required to pass with a non-critical characteristic out of specification"
+          }
+        }
+      },
+      "Characteristic": {
+        "type": "object",
+        "required": [
+          "name",
+          "kind",
+          "sampleSize",
+          "critical"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 120
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "VARIABLE",
+              "ATTRIBUTE"
+            ]
+          },
+          "unit": {
+            "type": "string",
+            "maxLength": 20
+          },
+          "nominal": {
+            "type": "string",
+            "description": "Decimal (up to 6 fraction digits); a JSON number is also accepted"
+          },
+          "lowerLimit": {
+            "type": "string",
+            "description": "Decimal (up to 6 fraction digits); a JSON number is also accepted"
+          },
+          "upperLimit": {
+            "type": "string",
+            "description": "Decimal (up to 6 fraction digits); a JSON number is also accepted"
+          },
+          "sampleSize": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100000,
+            "description": "VARIABLE: 1-20 readings"
+          },
+          "critical": {
+            "type": "boolean"
+          },
+          "defectCode": {
+            "type": "string",
+            "maxLength": 20
+          },
+          "method": {
+            "type": "string",
+            "maxLength": 200
+          }
+        }
+      },
+      "InspectionPlan": {
+        "type": "object",
+        "required": [
+          "name",
+          "inspectionType",
+          "characteristics"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 120
+          },
+          "itemId": {
+            "type": "string"
+          },
+          "categoryId": {
+            "type": "string"
+          },
+          "inspectionType": {
+            "type": "string",
+            "enum": [
+              "INCOMING",
+              "FINAL",
+              "RETURN",
+              "REWORK"
+            ]
+          },
+          "notes": {
+            "type": "string",
+            "maxLength": 2000
+          },
+          "characteristics": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 40,
+            "items": {
+              "$ref": "#/components/schemas/Characteristic"
+            }
+          }
+        },
+        "description": "Exactly one of itemId / categoryId"
+      },
+      "InspectionPlanUpdate": {
+        "type": "object",
+        "required": [
+          "name",
+          "active",
+          "characteristics"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 120
+          },
+          "notes": {
+            "type": "string"
+          },
+          "active": {
+            "type": "boolean"
+          },
+          "characteristics": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 40,
+            "items": {
+              "$ref": "#/components/schemas/Characteristic"
+            }
+          }
+        }
+      },
+      "DefectCode": {
+        "type": "object",
+        "required": [
+          "code",
+          "name",
+          "active"
+        ],
+        "properties": {
+          "code": {
+            "type": "string",
+            "pattern": "^[A-Z0-9][A-Z0-9_-]{0,19}$"
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 120
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 400
+          },
+          "active": {
+            "type": "boolean"
+          }
+        }
+      },
+      "NcrRaise": {
+        "type": "object",
+        "required": [
+          "source",
+          "severity",
+          "defectCode",
+          "title",
+          "description",
+          "quantity"
+        ],
+        "properties": {
+          "source": {
+            "type": "string",
+            "enum": [
+              "PRODUCTION",
+              "SUPPLIER",
+              "CUSTOMER",
+              "INTERNAL",
+              "AUDIT",
+              "RECALL"
+            ]
+          },
+          "severity": {
+            "type": "string",
+            "enum": [
+              "MINOR",
+              "MAJOR",
+              "CRITICAL"
+            ]
+          },
+          "defectCode": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string",
+            "maxLength": 160
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 4000
+          },
+          "containment": {
+            "type": "string",
+            "maxLength": 2000
+          },
+          "itemId": {
+            "type": "string"
+          },
+          "lotId": {
+            "type": "string"
+          },
+          "quantity": {
+            "type": "string",
+            "description": "Decimal (up to 6 fraction digits); a JSON number is also accepted"
+          },
+          "manufacturingOrderId": {
+            "type": "string"
+          },
+          "supplierId": {
+            "type": "string"
+          }
+        }
+      },
+      "NcrUpdate": {
+        "type": "object",
+        "required": [
+          "severity",
+          "defectCode",
+          "title",
+          "description"
+        ],
+        "properties": {
+          "severity": {
+            "type": "string",
+            "enum": [
+              "MINOR",
+              "MAJOR",
+              "CRITICAL"
+            ]
+          },
+          "defectCode": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "containment": {
+            "type": "string"
+          }
+        }
+      },
+      "NcrDisposition": {
+        "type": "object",
+        "required": [
+          "type",
+          "quantity",
+          "note"
+        ],
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "USE_AS_IS",
+              "SCRAP",
+              "RETURN_TO_SUPPLIER",
+              "REWORK"
+            ]
+          },
+          "quantity": {
+            "type": "string",
+            "description": "Decimal (up to 6 fraction digits); a JSON number is also accepted"
+          },
+          "note": {
+            "type": "string",
+            "maxLength": 2000
+          },
+          "instructions": {
+            "type": "string",
+            "maxLength": 2000,
+            "description": "Rework instructions"
+          }
+        }
+      },
+      "NcrDecision": {
+        "type": "object",
+        "required": [
+          "decision",
+          "note"
+        ],
+        "properties": {
+          "decision": {
+            "type": "string",
+            "enum": [
+              "APPROVE",
+              "REJECT"
+            ]
+          },
+          "note": {
+            "type": "string"
+          }
+        }
+      },
+      "NcrShipReturn": {
+        "type": "object",
+        "required": [
+          "debitNote"
+        ],
+        "properties": {
+          "debitNote": {
+            "type": "string",
+            "maxLength": 80
+          },
+          "reason": {
+            "type": "string",
+            "maxLength": 400
+          }
+        }
+      },
+      "NcrClose": {
+        "type": "object",
+        "required": [
+          "note"
+        ],
+        "properties": {
+          "note": {
+            "type": "string"
+          }
+        }
+      },
+      "NcrCancel": {
+        "type": "object",
+        "required": [
+          "reason"
+        ],
+        "properties": {
+          "reason": {
+            "type": "string",
+            "maxLength": 400
+          }
+        }
+      },
+      "ReworkComplete": {
+        "type": "object",
+        "required": [
+          "outputQuantity",
+          "labourCost"
+        ],
+        "properties": {
+          "outputQuantity": {
+            "type": "string",
+            "description": "Decimal (up to 6 fraction digits); a JSON number is also accepted"
+          },
+          "labourCost": {
+            "type": "string",
+            "description": "Decimal (up to 6 fraction digits); a JSON number is also accepted"
+          },
+          "materials": {
+            "type": "array",
+            "maxItems": 20,
+            "items": {
+              "type": "object",
+              "required": [
+                "lotId",
+                "quantity"
+              ],
+              "properties": {
+                "lotId": {
+                  "type": "string"
+                },
+                "quantity": {
+                  "type": "string",
+                  "description": "Decimal (up to 6 fraction digits); a JSON number is also accepted"
+                }
+              }
+            }
+          },
+          "note": {
+            "type": "string"
+          }
+        }
+      },
+      "Capa": {
+        "type": "object",
+        "required": [
+          "title",
+          "problem",
+          "source",
+          "ownerId"
+        ],
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 160
+          },
+          "problem": {
+            "type": "string"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "NCR",
+              "AUDIT",
+              "CUSTOMER",
+              "SUPPLIER",
+              "INTERNAL"
+            ]
+          },
+          "ownerId": {
+            "type": "string"
+          },
+          "dueDate": {
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+          },
+          "ncrIds": {
+            "type": "array",
+            "maxItems": 50,
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "CapaUpdate": {
+        "type": "object",
+        "required": [
+          "title",
+          "problem",
+          "ownerId"
+        ],
+        "properties": {
+          "title": {
+            "type": "string"
+          },
+          "problem": {
+            "type": "string"
+          },
+          "ownerId": {
+            "type": "string"
+          },
+          "dueDate": {
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+          },
+          "rootCauseCategory": {
+            "type": "string",
+            "enum": [
+              "MAN",
+              "MACHINE",
+              "METHOD",
+              "MATERIAL",
+              "MEASUREMENT",
+              "ENVIRONMENT"
+            ]
+          },
+          "whys": {
+            "type": "array",
+            "maxItems": 5,
+            "items": {
+              "type": "string",
+              "maxLength": 1000
+            }
+          },
+          "rootCause": {
+            "type": "string",
+            "maxLength": 4000
+          },
+          "ncrIds": {
+            "type": "array",
+            "maxItems": 50,
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "CapaAction": {
+        "type": "object",
+        "required": [
+          "type",
+          "description",
+          "ownerId",
+          "dueDate"
+        ],
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "CORRECTIVE",
+              "PREVENTIVE"
+            ]
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 1000
+          },
+          "ownerId": {
+            "type": "string"
+          },
+          "dueDate": {
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+          }
+        }
+      },
+      "CapaNote": {
+        "type": "object",
+        "required": [
+          "note"
+        ],
+        "properties": {
+          "note": {
+            "type": "string",
+            "maxLength": 2000
+          }
+        }
+      },
+      "CapaVerify": {
+        "type": "object",
+        "required": [
+          "effective",
+          "note"
+        ],
+        "properties": {
+          "effective": {
+            "type": "boolean"
+          },
+          "note": {
+            "type": "string"
           }
         }
       }
