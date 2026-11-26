@@ -5,27 +5,18 @@ import {
   ArrowRight,
   ArrowUpRight,
   Boxes,
-  CalendarClock,
   ChartNoAxesCombined,
   CheckCheck,
   CircleDollarSign,
-  ClipboardCheck,
   Cpu,
   Factory,
-  ListChecks,
-  Network,
-  Package,
-  ShieldAlert,
   ShieldCheck,
-  ShoppingCart,
   SlidersHorizontal,
-  Timer,
-  Wrench,
 } from 'lucide-react';
 import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { useStateData, useWorkspace } from '../app/workspace';
 import { Badge, Panel, Stat, Table } from '../components';
-import { useApprovalPolicy } from '../features/approvals/policies';
+import { useAttention } from '../features/attention/useAttention';
 import { useOrderColumns } from '../features/manufacturing/orderColumns';
 import { OverviewOee } from '../features/performance/Snippets';
 import type { State } from '../lib/api';
@@ -79,9 +70,8 @@ const plural = (count: number, one: string, many: string) => `${fmt(count)} ${co
 /** Route `/`: factory overview dashboard. */
 export default function OverviewPage() {
   const navigate = useNavigate();
-  const { can, days, setDays, openOrder, summary, user } = useWorkspace();
-  const { approverRoles: purchaseApprovers } = useApprovalPolicy('PURCHASE_ORDER');
-  const { active, shortages, pendingQc, output, scrap, yieldPct } = summary;
+  const { days, setDays, openOrder, summary } = useWorkspace();
+  const { active, output, scrap, yieldPct } = summary;
   const data = useStateData();
   const points = trendPoints(data.trend);
   const partialDay = points.find((p) => p.partial);
@@ -89,31 +79,8 @@ export default function OverviewPage() {
   const overdue = num(data.metrics.overdue);
   const orderColumns = useOrderColumns();
   const [tab, setTab] = useState('all');
-  // Purchasing: orders this approver (per the purchase-order approval policy) may approve, i.e. created and submitted
-  // by someone else, and approved deliveries that are late.
-  const awaitingApproval = can(...purchaseApprovers)
-    ? data.purchases.filter(
-        (p) => p.status === 'SUBMITTED' && p.created_by !== user.id && p.submitted_by !== user.id,
-      )
-    : [];
-  const lateDeliveries = data.purchases.filter(
-    (p) => ['APPROVED', 'PARTIAL'].includes(text(p.status)) && text(p.due_date).substring(0, 10) < today(),
-  );
-  const purchaseAttention = awaitingApproval.length + lateDeliveries.length;
-  // Maintenance (V11): open breakdowns and overdue preventive plans from the `maintenance` state key.
-  const breakdowns = num(data.maintenance?.open_breakdowns);
-  const overduePlans = num(data.maintenance?.overdue_plans);
-  const maintenanceAttention = breakdowns + overduePlans;
-  // V12 quality: open critical nonconformances and overdue CAPA actions (`qualityAlerts` state key).
-  const criticalNcrs = num(data.qualityAlerts?.open_critical_ncrs);
-  const overdueCapa = num(data.qualityAlerts?.overdue_capa_actions);
-  // V13 scheduling: open orders the published schedule projects to finish after their due date.
-  const lateScheduled = num(data.schedule?.late_orders);
-  const firstLate = data.schedule?.late?.[0];
-  // V14 recalls: not yet contained, and customers still to notify (`recalls` state key).
-  const openRecalls = num(data.recalls?.open);
-  const recallCustomers = num(data.recalls?.pending_customers);
-  const recallAttention = openRecalls + recallCustomers;
+  // One attention model for this panel, the attention center and the header bell (features/attention).
+  const attention = useAttention();
   return (
     <>
       <motion.div className="stats-grid" variants={stagger} initial="hidden" animate="visible">
@@ -431,218 +398,30 @@ export default function OverviewPage() {
         </Panel>
         <Panel
           title="Needs your attention"
-          action={
-            <span className="attention-count">
-              {shortages.length +
-                pendingQc.length +
-                overdue +
-                (purchaseAttention ? 1 : 0) +
-                (maintenanceAttention ? 1 : 0) +
-                (criticalNcrs ? 1 : 0) +
-                (overdueCapa ? 1 : 0) +
-                (lateScheduled ? 1 : 0) +
-                (recallAttention ? 1 : 0)}
-            </span>
-          }
+          action={<span className="attention-count">{fmt(attention.total)}</span>}
           className="attention-panel"
         >
           <div className="attention-list">
-            {recallAttention > 0 && (
-              <button
-                className="attention-item"
-                onClick={() =>
-                  navigate(
-                    data.recalls?.active.length === 1
-                      ? `/traceability?tab=recalls&recall=${encodeURIComponent(data.recalls.active[0].id)}`
-                      : '/traceability?tab=recalls',
-                  )
-                }
-              >
-                <span className={`attention-symbol ${openRecalls ? 'red' : 'amber'}`}>
-                  <Network size={16} />
+            {attention.groups.map((group) => (
+              <button key={group.key} className="attention-item" onClick={() => navigate(group.path)}>
+                <span className={`attention-symbol ${group.tone}`}>
+                  <group.icon size={16} />
                 </span>
                 <div>
-                  <strong>
-                    {openRecalls
-                      ? plural(openRecalls, 'recall is not contained yet', 'recalls are not contained yet')
-                      : plural(
-                          recallCustomers,
-                          'recalled customer to notify',
-                          'recalled customers to notify',
-                        )}
-                  </strong>
-                  <p>
-                    {openRecalls && recallCustomers
-                      ? `${plural(recallCustomers, 'customer still needs', 'customers still need')} to be notified.`
-                      : openRecalls
-                        ? 'Put the affected stock on hold before it moves on.'
-                        : 'Record each customer notification to close the recall.'}
-                  </p>
+                  <strong>{group.title}</strong>
+                  <p>{group.body}</p>
                   <span>
-                    Open recalls
-                    <ArrowRight size={11} />
-                  </span>
-                </div>
-              </button>
-            )}
-            {maintenanceAttention > 0 && (
-              <button
-                className="attention-item"
-                onClick={() => navigate(breakdowns ? '/maintenance?tab=downtime' : '/maintenance?tab=plans')}
-              >
-                <span className={`attention-symbol ${breakdowns ? 'red' : 'amber'}`}>
-                  <Wrench size={16} />
-                </span>
-                <div>
-                  <strong>
-                    {breakdowns
-                      ? plural(
-                          breakdowns,
-                          'machine is down with a breakdown',
-                          'machines are down with breakdowns',
-                        )
-                      : plural(overduePlans, 'preventive plan is overdue', 'preventive plans are overdue')}
-                  </strong>
-                  <p>
-                    {breakdowns && overduePlans
-                      ? `${plural(overduePlans, 'preventive plan is', 'preventive plans are')} also overdue.`
-                      : breakdowns
-                        ? 'Approve and start the repair to get production running again.'
-                        : 'Generate the due work orders and schedule the maintenance windows.'}
-                  </p>
-                  <span>
-                    Open maintenance
-                    <ArrowRight size={11} />
-                  </span>
-                </div>
-              </button>
-            )}
-            {lateScheduled > 0 && (
-              <button className="attention-item" onClick={() => navigate('/schedule')}>
-                <span className="attention-symbol red">
-                  <CalendarClock size={16} />
-                </span>
-                <div>
-                  <strong>
-                    {plural(lateScheduled, 'order will finish late', 'orders will finish late')}
-                  </strong>
-                  <p>
-                    {firstLate
-                      ? `${text(firstLate.number)} (${text(firstLate.product)}) is projected past its due date in the published schedule.`
-                      : 'The published schedule projects them past their due dates.'}
-                  </p>
-                  <span>
-                    Open production schedule
-                    <ArrowRight size={11} />
-                  </span>
-                </div>
-              </button>
-            )}
-            {shortages.slice(0, 2).map((r) => (
-              <button key={r.id} className="attention-item" onClick={() => navigate('/planning')}>
-                <span className="attention-symbol amber">
-                  <Package size={16} />
-                </span>
-                <div>
-                  <strong>{text(r.name).split(' · ')[0]} running low</strong>
-                  <p>
-                    {fmt(r.shortage, 2)} {text(r.uom)} below planning requirement
-                  </p>
-                  <span>
-                    Review material planning
+                    {group.action}
                     <ArrowRight size={11} />
                   </span>
                 </div>
               </button>
             ))}
-            {!!pendingQc.length && (
-              <button className="attention-item" onClick={() => navigate('/quality')}>
-                <span className="attention-symbol blue">
-                  <ClipboardCheck size={16} />
-                </span>
-                <div>
-                  <strong>{pendingQc.length} inspections awaiting review</strong>
-                  <p>Quarantined stock needs a quality decision.</p>
-                  <span>
-                    Open quality control
-                    <ArrowRight size={11} />
-                  </span>
-                </div>
-              </button>
-            )}
-            {criticalNcrs > 0 && (
-              <button className="attention-item" onClick={() => navigate('/quality?tab=ncrs')}>
-                <span className="attention-symbol red">
-                  <ShieldAlert size={16} />
-                </span>
-                <div>
-                  <strong>
-                    {plural(criticalNcrs, 'critical nonconformance', 'critical nonconformances')} open
-                  </strong>
-                  <p>Held stock is waiting for a disposition decision.</p>
-                  <span>
-                    Review nonconformances
-                    <ArrowRight size={11} />
-                  </span>
-                </div>
-              </button>
-            )}
-            {overdueCapa > 0 && (
-              <button className="attention-item" onClick={() => navigate('/quality?tab=capa')}>
-                <span className="attention-symbol amber">
-                  <ListChecks size={16} />
-                </span>
-                <div>
-                  <strong>{plural(overdueCapa, 'CAPA action is', 'CAPA actions are')} overdue</strong>
-                  <p>Corrective and preventive actions are past their due date.</p>
-                  <span>
-                    Open CAPA
-                    <ArrowRight size={11} />
-                  </span>
-                </div>
-              </button>
-            )}
-            {purchaseAttention > 0 && (
-              <button className="attention-item" onClick={() => navigate('/purchasing')}>
-                <span className="attention-symbol amber">
-                  <ShoppingCart size={16} />
-                </span>
-                <div>
-                  <strong>
-                    {awaitingApproval.length
-                      ? `${awaitingApproval.length} purchase ${awaitingApproval.length === 1 ? 'order' : 'orders'} awaiting approval`
-                      : `${lateDeliveries.length} supplier ${lateDeliveries.length === 1 ? 'delivery is' : 'deliveries are'} late`}
-                  </strong>
-                  <p>
-                    {awaitingApproval.length && lateDeliveries.length
-                      ? `${lateDeliveries.length} approved ${lateDeliveries.length === 1 ? 'order is' : 'orders are'} also past the expected date.`
-                      : awaitingApproval.length
-                        ? 'Approve them in Purchasing before goods can be received.'
-                        : 'Approved purchase orders are past their expected delivery date.'}
-                  </p>
-                  <span>
-                    Open purchasing
-                    <ArrowRight size={11} />
-                  </span>
-                </div>
-              </button>
-            )}
-            {overdue > 0 && (
-              <button className="attention-item" onClick={() => navigate('/manufacturing')}>
-                <span className="attention-symbol red">
-                  <Timer size={16} />
-                </span>
-                <div>
-                  <strong>
-                    {plural(overdue, 'overdue manufacturing order', 'overdue manufacturing orders')}
-                  </strong>
-                  <p>Review progress and delivery commitments.</p>
-                  <span>
-                    Review overdue orders
-                    <ArrowRight size={11} />
-                  </span>
-                </div>
-              </button>
+            {attention.caughtUp && (
+              <div className="attention-empty">
+                <CheckCheck size={16} />
+                <span>You’re all caught up. Nothing needs attention right now.</span>
+              </div>
             )}
           </div>
           <div className="attention-foot">
