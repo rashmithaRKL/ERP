@@ -126,6 +126,13 @@ Each feature owns one Flyway version and one `/api/state` order range, so parall
 | `V14` | Phase 2 genealogy explorer and recalls (builds on V10–V12) | 2400–2499 |
 | `V15` | Phase 2 OEE and utilization (builds on V10–V12) | 2500–2599 |
 | `V16` | Phase 2 integration | 2600–2699 |
+| `V17` | Phase 3 security: TOTP MFA (required for administrators) with recovery codes, credential lifecycle | 2700–2799 |
+| `V18` | Phase 3 local server: hardened PostgreSQL on Windows, encrypted backup/restore, upgrade and restore drills, backup status | 2800–2899 |
+| `V19` | Phase 3 licensing: signed per-site licence files, user limits, 14-day grace, read-only-but-exportable expiry, optional online validation | 2900–2999 |
+| `V20` | Phase 3 company/site groundwork (tenant = company boundary, sites) and site/warehouse access scopes | 3000–3099 |
+| `V21` | Phase 3 LAN resilience: durable browser write queue for brief server/LAN outages, replay with idempotency keys | 3100–3199 |
+| `V22` | Phase 3 Windows installer: services, firewall, setup wizard, upgrade/rollback (unsigned; signing pluggable) | 3200–3299 |
+| `V23` | Phase 3 integration | 3300–3399 |
 
 Branches are merged to `main` in ascending migration order (Flyway runs with `outOfOrder=false`), two features at a
 time. A feature that needs a second migration uses a sub-version of its own number (e.g. `V3_1__…`) so it still sorts
