@@ -207,7 +207,7 @@ export function RecallDrawer({
                 <div>
                   <span>Customers to notify</span>
                   <strong className={num(check?.pendingCustomers) ? 'inv-attention' : undefined}>
-                    {fmt(check?.pendingCustomers)} <small>of {fmt(r.customers)}</small>
+                    {fmt(check?.pendingCustomers)} <small>of {fmt(customers.length)}</small>
                   </strong>
                 </div>
               </div>
