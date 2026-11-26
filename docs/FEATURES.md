@@ -32,6 +32,35 @@ Release 0.1.0, 29 October 2026. Scope: foundation and first reconciled manufactu
 | Maintenance (V11) | Maintenance page with three tabs. **Work orders**: corrective requests (operator/planner/technician; optionally with an open BREAKDOWN downtime event or linked to a reported one), independent approval by a different planner/ADMIN, scheduling (window + technician), start (machine → MAINTENANCE; refused while an MO is in progress on the machine; the work is always covered by open downtime), checklist results, findings/actions, labour hours at a configurable labour rate (journalized, reversible), spare-part issue from released lots FIFO and returns (ledger `MAINTENANCE_ISSUE`/`MAINTENANCE_RETURN`, balanced journals against `MAINTENANCE_EXPENSE`, closed-period guard), completion (machine → IDLE, downtime closed), cancellation before start; status tabs, filters, server paging, drawer with lifecycle, costs, journal and activity. **Plans**: preventive plans per machine (checklist, calendar interval and optional run-hour interval, estimated duration, priority, active), due/overdue lists, idempotent "Generate due orders" (approved and scheduled on the due date), completion reschedules from the completion date, cancellation skips an occurrence, run-hour meter readings pull plans forward. **Downtime**: stable reason codes with planned/unplanned flag, open/closed events that never overlap per machine, append-only corrections (superseded/withdrawn events), reason Pareto, MTBF/MTTR and downtime minutes per machine for 7/30/90 days, paged log. `MAINTENANCE` role and demo persona; `SPARE_PART` item type (never a BOM component; reorder-level replenishment in MRP) | Partial; no approval-policy thresholds for maintenance orders, no shift-calendar availability (MTBF uses calendar time), no automatic run hours from production, no telemetry; finite-capacity blocking (V13) and OEE (V15) will read the downtime view and maintenance windows |
 | HR/industry/SaaS/AI | Architecture/roadmap boundaries only | Planned; no empty operational screens or imaginary services |
 
+## Role access matrix (V16)
+
+Navigation per role (✓ = the page is in the role's navigation and every read it makes on load answers for that role;
+`RoleAccessMatrixTest` opens each page's reads as each role and fails on any 403). ADMIN passes every role check of the
+server but never the independence rules (a different person approves). Reads a page makes only for some roles
+(inventory valuation, skill matrix, schedule run list, administration directories) are gated in the page and on the
+server alike.
+
+| Page | ADMIN | PLANNER | WAREHOUSE | OPERATOR | QUALITY | SALES | VIEWER | MAINTENANCE | Who acts (writes) |
+|---|---|---|---|---|---|---|---|---|---|
+| Overview | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | attention items link only to pages the role can open |
+| Sales orders | ✓ | ✓ | ✓ |  |  | ✓ |  |  | SALES, PLANNER; dispatch WAREHOUSE |
+| Inventory | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | WAREHOUSE, PLANNER; valuation read by ADMIN/PLANNER/WAREHOUSE |
+| Purchasing | ✓ | ✓ | ✓ |  |  |  |  |  | PLANNER, WAREHOUSE (approval per policy) |
+| Manufacturing orders | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | PLANNER; issue WAREHOUSE; start/output OPERATOR |
+| Material planning | ✓ | ✓ | ✓ |  |  |  |  |  | PLANNER |
+| Bills of materials | ✓ | ✓ |  |  |  |  |  |  | PLANNER |
+| Routings & shifts | ✓ | ✓ |  |  |  |  |  |  | PLANNER |
+| Production schedule | ✓ | ✓ |  | ✓ |  |  | ✓ | ✓ | PLANNER runs, publishes and pins; others read the published run |
+| Shop floor | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | OPERATOR, PLANNER |
+| Quality control | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | QUALITY; supplier returns WAREHOUSE; rework completion QUALITY/OPERATOR/PLANNER; CAPA action owners |
+| Traceability & recalls | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | recalls QUALITY |
+| Work centers | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | new work center and status correction PLANNER; downtime OPERATOR/PLANNER/MAINTENANCE |
+| Maintenance | ✓ | ✓ |  | ✓ |  |  | ✓ | ✓ | requests OPERATOR/PLANNER/MAINTENANCE; approve, schedule, plans PLANNER; execution and parts MAINTENANCE |
+| Performance (OEE) | ✓ | ✓ |  |  | ✓ |  | ✓ | ✓ | close/recalculate days PLANNER |
+| Products & materials | ✓ | ✓ | ✓ |  |  |  |  |  | PLANNER |
+| Costs & reports | ✓ | ✓ |  |  |  |  |  |  | read only |
+| Administration | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | everyone sees the organization and connection tabs; organization edits, users, policies, imports, audit and periods ADMIN |
+
 ## Screen patterns actually implemented
 
 Application shell, responsive navigation, dashboard, order tables, search/filter/sort/pagination, create forms, form validation/error/loading states, modal dialogs, detail drawer, touch-oriented shop-floor cards, approved BOM cards and component editor, inventory ledger, QC decision forms, costing charts, audit table, organization and team configuration, profile/persona selection, attention dialog, help and keyboard command palette. Light/dark tokens and reduced-motion preferences are implemented. Responsive/keyboard checks are recorded separately; no completed accessibility certification is asserted.
