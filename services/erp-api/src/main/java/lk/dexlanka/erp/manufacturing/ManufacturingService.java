@@ -320,6 +320,17 @@ public class ManufacturingService {
                 case "resume" -> {
                     a.allow("OPERATOR", "PLANNER");
                     require(state.equals("ON_HOLD"), "Order is not on hold");
+                    // V16: like starting it (and like resuming a routed operation), resuming an order without a routing
+                    // is refused while maintenance, which may start while the order is on hold, has its work center.
+                    require(
+                            operations.routed(a.tenant(), id)
+                                    || !s.one(
+                                                    "SELECT status FROM machines WHERE tenant_id=? AND id=?",
+                                                    a.tenant(),
+                                                    o.get("machine_id"))
+                                            .get("status")
+                                            .equals("MAINTENANCE"),
+                            "Machine is under maintenance");
                     next = "IN_PROGRESS";
                 }
                 case "close" -> {

@@ -120,14 +120,20 @@ class MachineStatusHistoryTest extends RoutingTestBase {
 
     @Test
     void maintenanceIsNeverOverriddenAndHistoryStaysAppendOnly() throws Exception {
-        // A work center under maintenance: an order without a routing that was already running there keeps it so.
+        // A work center under maintenance: pausing an order without a routing that was running there never touches it,
+        // and (V16, like starting it or resuming a routed operation) the order cannot resume until maintenance ends.
         String order = releasedOrder("10", bm1, "NORMAL");
         mo.transition(operator, order, "start", id());
         update("UPDATE machines SET status='MAINTENANCE' WHERE tenant_id=? AND id=?", t, bm1);
         mo.transition(operator, order, "pause", id());
-        mo.transition(operator, order, "resume", id());
+        assertThatThrownBy(() -> mo.transition(operator, order, "resume", id()))
+                .hasMessageContaining("Machine is under maintenance");
+        assertThat(orderRow(order).get("status")).isEqualTo("ON_HOLD");
         assertThat(machineStatus(bm1)).isEqualTo("MAINTENANCE");
         assertThat(changes(bm1)).extracting(r -> r.get("to_status")).containsExactly("RUNNING");
+        update("UPDATE machines SET status='IDLE' WHERE tenant_id=? AND id=?", t, bm1);
+        mo.transition(operator, order, "resume", id());
+        assertThat(machineStatus(bm1)).isEqualTo("RUNNING");
 
         // History rows cannot be changed or deleted; the source must be one of the four known sources.
         assertThatThrownBy(() -> update("UPDATE machine_status_changes SET reason='x' WHERE tenant_id=?", t))
