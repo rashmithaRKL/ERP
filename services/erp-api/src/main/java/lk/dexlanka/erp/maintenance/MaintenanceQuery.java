@@ -380,6 +380,8 @@ public class MaintenanceQuery {
 
     /**
      * A machine's maintenance history, newest first: downtime events, work orders, status changes and meter readings.
+     * Status changes carry their {@code source} (V16): MAINTENANCE_ORDER, MANUAL (a planner's correction, also {@code
+     * flag=true}), OPERATION (a routed operation) or ORDER (an order without a routing); other rows have none.
      */
     public Map<String, Object> history(Actor a, String machineId, int limit, String before) {
         pageSize(limit);
@@ -389,20 +391,20 @@ public class MaintenanceQuery {
                 WITH h AS (
                   SELECT d.id,'DOWNTIME' AS kind,d.started_at AS at,d.number AS reference,d.reason AS code,d.status,
                          d.notes AS detail,ROUND(EXTRACT(EPOCH FROM (COALESCE(d.ended_at,?::timestamptz)-d.started_at))/60.0,1) AS value,
-                         d.planned AS flag,u.name AS actor
+                         d.planned AS flag,u.name AS actor,NULL::text AS source
                   FROM downtime_events d LEFT JOIN users u ON u.id=d.reported_by
                   WHERE d.tenant_id=? AND d.machine_id=?
                   UNION ALL
                   SELECT w.id,'WORK_ORDER',w.created_at,w.number,w.type,w.status,w.title,w.labour_cost+w.parts_cost,
-                         w.type='PREVENTIVE',u.name
+                         w.type='PREVENTIVE',u.name,NULL
                   FROM maintenance_work_orders w LEFT JOIN users u ON u.id=w.requested_by
                   WHERE w.tenant_id=? AND w.machine_id=?
                   UNION ALL
-                  SELECT c.id,'STATUS',c.changed_at,c.reference,c.to_status,c.from_status,c.reason,NULL,c.source='MANUAL',u.name
+                  SELECT c.id,'STATUS',c.changed_at,c.reference,c.to_status,c.from_status,c.reason,NULL,c.source='MANUAL',u.name,c.source
                   FROM machine_status_changes c LEFT JOIN users u ON u.id=c.changed_by
                   WHERE c.tenant_id=? AND c.machine_id=?
                   UNION ALL
-                  SELECT r.id,'METER',r.recorded_at,NULL,NULL,NULL,r.notes,r.reading,NULL,u.name
+                  SELECT r.id,'METER',r.recorded_at,NULL,NULL,NULL,r.notes,r.reading,NULL,u.name,NULL
                   FROM machine_meter_readings r LEFT JOIN users u ON u.id=r.recorded_by
                   WHERE r.tenant_id=? AND r.machine_id=?
                 )

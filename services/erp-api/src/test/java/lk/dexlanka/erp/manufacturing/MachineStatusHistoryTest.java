@@ -78,7 +78,11 @@ class MachineStatusHistoryTest extends RoutingTestBase {
                 .allSatisfy(i -> {
                     assertThat(i.get("reference")).isEqualTo(number);
                     assertThat(i.get("flag")).isEqualTo(false);
+                    assertThat(i.get("source")).isEqualTo("OPERATION");
                 });
+        assertThat(items)
+                .filteredOn(i -> !"STATUS".equals(i.get("kind")))
+                .allSatisfy(i -> assertThat(i.get("source")).isNull());
 
         // Putting the order on hold pauses the next running operation and records the idle change.
         String pack = opId(order, 20);

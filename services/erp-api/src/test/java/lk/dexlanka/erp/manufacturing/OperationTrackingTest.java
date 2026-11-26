@@ -437,10 +437,14 @@ class OperationTrackingTest extends RoutingTestBase {
         mo.transition(warehouse, order, "issue", id());
         mo.transition(operator, order, "start", id());
         mo.transition(operator, order, "pause", id());
+        assertThat(machineStatus(bm1)).isEqualTo("IDLE");
         mo.transition(operator, order, "resume", id());
-        assertThat(machineStatus(bm1)).isEqualTo("IDLE"); // orders without operations never change work-center status
+        // V16: an order without operations is one implicit operation, so it drives its work center like an operation
+        // (RUNNING while in progress, IDLE after its final output); see MachineStatusHistoryTest.
+        assertThat(machineStatus(bm1)).isEqualTo("RUNNING");
         mo.complete(
                 operator, order, new ManufacturingCommands.Complete(bd("100"), bd("0"), bd("10"), bd("5"), ""), id());
+        assertThat(machineStatus(bm1)).isEqualTo("IDLE");
         var inspection = row(
                 "SELECT i.id FROM inspections i JOIN lots l ON l.tenant_id=i.tenant_id AND l.id=i.lot_id WHERE l.tenant_id=? AND l.source_id=?",
                 t,
