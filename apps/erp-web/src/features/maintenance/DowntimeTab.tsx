@@ -141,8 +141,9 @@ export function DowntimeTab({ onOpenOrder }: { onOpenOrder: (id: string) => void
               ]}
             />
             <p className="muted inv-small mnt-pad">
-              Failures are breakdowns that started in the period. MTBF uses calendar time less recorded
-              downtime (no shift calendar yet); MTTR is the mean length of closed breakdowns.
+              Failures are breakdowns that started in the period. MTBF is operating time per failure: the work
+              center&apos;s shift working time (around the clock without a calendar) less the downtime inside
+              it. MTTR is the mean length of closed breakdowns.
             </p>
           </section>
         </div>
