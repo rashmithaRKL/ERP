@@ -122,7 +122,9 @@ public class OperationQuery {
                        o.good_qty AS order_good_qty,i.name AS product,i.sku,i.uom,
                        COALESCE((SELECT p.good_qty FROM mo_operations p WHERE p.tenant_id=op.tenant_id AND p.order_id=op.order_id
                                  AND p.seq<op.seq AND p.status<>'CANCELLED' ORDER BY p.seq DESC LIMIT 1),o.quantity) AS input_qty,
-                       (SELECT COUNT(*) FROM mo_operations c WHERE c.tenant_id=op.tenant_id AND c.order_id=op.order_id AND c.status<>'CANCELLED') AS operation_count
+                       (SELECT COUNT(*) FROM mo_operations c WHERE c.tenant_id=op.tenant_id AND c.order_id=op.order_id AND c.status<>'CANCELLED') AS operation_count,
+                       (SELECT COUNT(*) FROM mo_operations c WHERE c.tenant_id=op.tenant_id AND c.order_id=op.order_id AND c.status<>'CANCELLED'
+                          AND c.seq<=op.seq) AS operation_position
                 FROM q
                 JOIN mo_operations op ON op.tenant_id=? AND op.id=q.id
                 JOIN manufacturing_orders o ON o.tenant_id=op.tenant_id AND o.id=op.order_id
@@ -158,8 +160,10 @@ public class OperationQuery {
     }
 
     /**
-     * {@code GET /api/operations/work-centers}: every work center with its operation counts (ready, running, paused),
-     * running orders without a routing ({@code legacy_running}), today's available minutes and calendar.
+     * {@code GET /api/operations/work-centers}: every work center with its routed operation counts ({@code ready},
+     * {@code running}, {@code paused}), its open orders without a routing ({@code legacy_orders}, split V16 into {@code
+     * legacy_running} = in progress or partially completed, {@code legacy_paused} = on hold, {@code legacy_ready} =
+     * released), today's available minutes and calendar.
      */
     public Map<String, Object> workCenters(Actor a) {
         var machines = s.list("""
@@ -167,13 +171,21 @@ public class OperationQuery {
                        COUNT(op.id) FILTER (WHERE op.status='READY') AS ready,
                        COUNT(op.id) FILTER (WHERE op.status='IN_PROGRESS') AS running,
                        COUNT(op.id) FILTER (WHERE op.status='PAUSED') AS paused,
-                       (SELECT COUNT(*) FROM manufacturing_orders o WHERE o.tenant_id=m.tenant_id AND o.machine_id=m.id
-                          AND o.status IN ('RELEASED','IN_PROGRESS','ON_HOLD','PARTIALLY_COMPLETED')
-                          AND NOT EXISTS (SELECT 1 FROM mo_operations x WHERE x.tenant_id=o.tenant_id AND x.order_id=o.id)) AS legacy_orders
+                       lo.legacy_orders,lo.legacy_running,lo.legacy_paused,lo.legacy_ready
                 FROM machines m
+                -- V16: orders without a routing on this work center (one implicit operation each), by state.
+                CROSS JOIN LATERAL (
+                  SELECT COUNT(*) AS legacy_orders,
+                         COUNT(*) FILTER (WHERE o.status IN ('IN_PROGRESS','PARTIALLY_COMPLETED')) AS legacy_running,
+                         COUNT(*) FILTER (WHERE o.status='ON_HOLD') AS legacy_paused,
+                         COUNT(*) FILTER (WHERE o.status='RELEASED') AS legacy_ready
+                  FROM manufacturing_orders o
+                  WHERE o.tenant_id=m.tenant_id AND o.machine_id=m.id
+                    AND o.status IN ('RELEASED','IN_PROGRESS','ON_HOLD','PARTIALLY_COMPLETED')
+                    AND NOT EXISTS (SELECT 1 FROM mo_operations x WHERE x.tenant_id=o.tenant_id AND x.order_id=o.id)) lo
                 LEFT JOIN mo_operations op ON op.tenant_id=m.tenant_id AND op.machine_id=m.id AND op.status IN ('READY','IN_PROGRESS','PAUSED')
                 WHERE m.tenant_id=?
-                GROUP BY m.id
+                GROUP BY m.id,lo.legacy_orders,lo.legacy_running,lo.legacy_paused,lo.legacy_ready
                 ORDER BY m.code""", a.tenant());
         LocalDate today = LocalDate.now(CalendarService.ZONE);
         var availability = calendars.availability(

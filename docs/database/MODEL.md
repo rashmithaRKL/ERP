@@ -271,10 +271,10 @@ erDiagram
 | `maintenance_labour` | Immutable labour entries: `technician_id`, `hours` (± ≤ 1,000; negatives reverse), `rate` (snapshot of the tenant rate), `cost`, `notes`. Each posts Dr `MAINTENANCE_EXPENSE` / Cr `MAINTENANCE_LABOUR_CLEARING` (reversed for negative hours). |
 | `maintenance_part_movements` | Immutable `ISSUE` / `RETURN` (`returns_id` → the issue) rows: `lot_id`, `item_id`, `quantity`, `value_amount`. Issues consume released unreserved lots oldest first through `stock_ledger` reason `MAINTENANCE_ISSUE` and post Dr `MAINTENANCE_EXPENSE` / Cr the item's inventory account; returns put the quantity back into the same lot at the issue's unit value (reason `MAINTENANCE_RETURN`) with the reversed journal. Both are refused in a closed period. |
 | `machine_meter_readings` | Immutable run-hour readings per machine (never decreasing). |
-| `machine_status_changes` | Immutable history of the status changes maintenance makes: `from_status`, `to_status`, `source` (`MAINTENANCE_ORDER`: start → MAINTENANCE, completion → IDLE; `MANUAL`: a planner's correction to IDLE/RUNNING with a reason), `reference`, `changed_by/at`. Production-driven RUNNING/IDLE changes are not recorded here. |
+| `machine_status_changes` | Immutable history of every status change of a work center: `from_status`, `to_status`, `source` (`MAINTENANCE_ORDER`: start → MAINTENANCE, completion → IDLE; `MANUAL`: a planner's correction to IDLE/RUNNING with a reason; since V16 also `OPERATION` and `ORDER`, the production-driven IDLE ↔ RUNNING changes, see below), `reference`, `reason`, `changed_by/at`. |
 | `maintenance_settings` | Per tenant `labour_rate` (LKR per hour; default 1,500 when no row exists), `updated_by/at`. |
 
-Downtime does not change `machines.status`; only maintenance work orders (start/complete) and planner corrections do. `ManufacturingService` still refuses issue/start of an MO on a MAINTENANCE machine; starting maintenance is refused while an MO is `IN_PROGRESS`/`PARTIALLY_COMPLETED` on the machine.
+Downtime does not change `machines.status`; only maintenance work orders (start/complete), planner corrections and (IDLE ↔ RUNNING only, never into or out of MAINTENANCE) production do. `ManufacturingService` still refuses issue/start of an MO on a MAINTENANCE machine; starting maintenance is refused while an MO is `IN_PROGRESS`/`PARTIALLY_COMPLETED` on the machine.
 
 Money/quantity precision is six decimal places (maximum 14 integer digits in the database, stricter API amount limits). UI formatting never changes stored values. SQL indexes cover owner/status/date list and allocation access. Current workspace list snapshots cap at 250 rows (BOM lines 1,000), with pagination inside that bound. This is explicitly not the large-ledger reporting solution; replace capped lists with server cursor pagination and background export before scale.
 
@@ -423,3 +423,12 @@ unchanged; a recalculation (with a reason) supersedes it and inserts version n +
 auditable. Days that are not closed are always computed live. The demo seed's backfilled history is execution data
 only (see the backend README): dedicated orders `MO-DEMO-OEE-1..3` (CLOSED, no stock or cost postings) whose time logs
 and reports carry the note "Demo OEE history (backfilled by the V15 demo seed)".
+
+## Phase 2 integration (`V16__phase2_integration.sql`)
+
+V16 adds no table. It makes the six Phase 2 features agree with each other:
+
+| Table / change | Purpose and rules |
+|---|---|
+| `machine_status_changes.source` | `machine_status_changes_source_check` widened to `MAINTENANCE_ORDER`, `MANUAL`, `OPERATION`, `ORDER`. `OPERATION`: a routed operation started, resumed, paused or finished, or its order was put on hold; `ORDER`: an order without a routing (one implicit operation) started, resumed, was put on hold or posted its final output. `reference` = the order number, `reason` names the operation and event (e.g. *Op 10 Blow: run started*). Only real changes are recorded (IDLE → RUNNING when the first job starts, RUNNING → IDLE when the last one stops), so an idempotent retry or a second job on a busy work center adds nothing. Existing rows, `to_status` and the append-only trigger are unchanged. |
+| `machines.status` (rule) | One rule for every producer: a work center is RUNNING while a routed operation or an order without a routing is in progress on it, otherwise IDLE; MAINTENANCE is owned by maintenance work orders and never changed by production. Before V16 orders without a routing did not change the status at all although they kept a work center RUNNING; now they drive it like an operation. |

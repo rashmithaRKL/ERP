@@ -1,122 +1,67 @@
 import { useNavigate } from 'react-router-dom';
-import { ChevronRight, TriangleAlert } from 'lucide-react';
+import { Bell, ChevronRight } from 'lucide-react';
 import { Empty, Overlay } from '../components';
-import { fmt, num, text, today } from '../lib/format';
-import { useWorkspace } from './workspace';
+import { useAttention } from '../features/attention/useAttention';
+import { fmt } from '../lib/format';
 
 /**
- * Bell-icon notifications: shortages, pending inspections, overdue orders, open breakdowns and overdue preventive work,
- * quality alerts and active recalls (V14).
+ * Bell-icon notifications: every group of the shared attention model (`features/attention`), with up to five records
+ * each and a "more" link, in the same order and with the same counts as the overview's "Needs your attention" panel.
  */
 export function AttentionCenter({ onClose }: { onClose: () => void }) {
   const navigate = useNavigate();
-  const { data, summary } = useWorkspace();
-  const { active, shortages, pendingQc } = summary;
-  const breakdowns = data?.maintenance?.breakdowns || [];
-  const overduePlans = data?.maintenance?.overdue || [];
-  // V13: open orders the published schedule projects to finish after their due date.
-  const lateScheduled = data?.schedule?.late || [];
+  const { groups, total, caughtUp } = useAttention();
   return (
     <Overlay
       title="Attention center"
-      subtitle="Exceptions from current manufacturing records"
+      subtitle={
+        caughtUp
+          ? 'Exceptions from current manufacturing records'
+          : `${fmt(total)} ${total === 1 ? 'record needs' : 'records need'} attention`
+      }
       onClose={onClose}
     >
       <div className="notification-list">
-        {[
-          ...breakdowns.map((b) => ({
-            title: `${text(b.machine)} is down (breakdown)`,
-            body: b.work_order
-              ? `${text(b.number)} · repair ${text(b.work_order)}`
-              : `${text(b.number)} · no repair requested yet`,
-            path: '/maintenance?tab=downtime',
-          })),
-          ...overduePlans.map((p) => ({
-            title: `${text(p.title)} overdue on ${text(p.machine)}`,
-            body: `Preventive plan ${text(p.number)} was due ${text(p.next_due_date).substring(0, 10)}`,
-            path: '/maintenance?tab=plans',
-          })),
-          ...lateScheduled.map((o) => ({
-            title: `${text(o.number)} will finish late`,
-            body: `${text(o.product)} · due ${text(o.due_date).substring(0, 10)} · projected late by ${Math.round(num(o.lateness_minutes) / 60)} h`,
-            path: '/schedule',
-          })),
-          ...shortages.map((m) => ({
-            title: `${m.name} needs replenishment`,
-            body: `${fmt(m.shortage, 3)} ${m.uom} net shortage`,
-            path: '/planning',
-          })),
-          // V12 quality attention counts (`qualityAlerts` state key).
-          ...(num(data?.qualityAlerts?.open_critical_ncrs)
-            ? [
-                {
-                  title: `${fmt(data?.qualityAlerts?.open_critical_ncrs)} critical nonconformance(s) open`,
-                  body: 'Held stock is waiting for a disposition decision',
-                  path: '/quality?tab=ncrs',
-                },
-              ]
-            : []),
-          // V14 recalls (`recalls` state key): not yet contained, and contained with customers still to notify.
-          ...(data?.recalls?.active ?? [])
-            .filter((r) => r.status === 'OPEN' || num(r.pending_customers) > 0)
-            .map((r) => ({
-              title:
-                r.status === 'OPEN'
-                  ? `Recall ${text(r.number)} is not contained yet`
-                  : `Recall ${text(r.number)}: ${fmt(r.pending_customers)} customer(s) to notify`,
-              body: `${text(r.severity).toLowerCase()} · ${text(r.title)}`,
-              path: `/traceability?tab=recalls&recall=${encodeURIComponent(r.id)}`,
-            })),
-          ...(num(data?.qualityAlerts?.overdue_capa_actions)
-            ? [
-                {
-                  title: `${fmt(data?.qualityAlerts?.overdue_capa_actions)} CAPA action(s) overdue`,
-                  body: 'Corrective and preventive actions past their due date',
-                  path: '/quality?tab=capa',
-                },
-              ]
-            : []),
-          ...pendingQc.map((q) => ({
-            title: `${q.item} awaiting inspection`,
-            body: `Lot ${q.lot}`,
-            path: '/quality',
-          })),
-          ...active
-            .filter((o) => text(o.due_date) < today())
-            .map((o) => ({
-              title: `${o.number} is overdue`,
-              body: text(o.product),
-              path: '/manufacturing',
-            })),
-        ].map((n, i) => (
-          <button
-            key={i}
-            onClick={() => {
-              navigate(n.path);
-              onClose();
-            }}
-          >
-            <span className="attention-symbol amber">
-              <TriangleAlert size={17} />
-            </span>
-            <span>
-              <strong>{n.title}</strong>
-              <small>{n.body}</small>
-            </span>
-            <ChevronRight size={15} />
-          </button>
-        ))}
-        {!shortages.length &&
-          !pendingQc.length &&
-          !num(data?.metrics.overdue) &&
-          !breakdowns.length &&
-          !overduePlans.length &&
-          !lateScheduled.length &&
-          !num(data?.qualityAlerts?.open_critical_ncrs) &&
-          !num(data?.qualityAlerts?.overdue_capa_actions) &&
-          !num(data?.recalls?.open) &&
-          !num(data?.recalls?.pending_customers) && <Empty title="You’re all caught up" />}
+        {groups.flatMap((group) =>
+          group.items.map((item) => (
+            <button
+              key={item.key}
+              onClick={() => {
+                navigate(item.path);
+                onClose();
+              }}
+            >
+              <span className={`attention-symbol ${group.tone}`}>
+                <group.icon size={17} />
+              </span>
+              <span>
+                <strong>{item.title}</strong>
+                {item.body && <small>{item.body}</small>}
+              </span>
+              <ChevronRight size={15} />
+            </button>
+          )),
+        )}
+        {caughtUp && <Empty title="You’re all caught up" />}
       </div>
     </Overlay>
+  );
+}
+
+/** Header bell: the dot and label follow the same attention model as the attention center. */
+export function NotificationButton({ onOpen }: { onOpen: () => void }) {
+  const { total, caughtUp } = useAttention();
+  return (
+    <button
+      className={`icon-button notification-button ${caughtUp ? '' : 'has-notification'}`}
+      aria-label={
+        caughtUp
+          ? 'Open notifications'
+          : `Open notifications (${fmt(total)} ${total === 1 ? 'record needs' : 'records need'} attention)`
+      }
+      onClick={onOpen}
+    >
+      <Bell size={19} />
+    </button>
   );
 }

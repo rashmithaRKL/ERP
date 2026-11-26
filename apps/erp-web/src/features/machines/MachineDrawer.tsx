@@ -30,6 +30,14 @@ import { MachineOee } from '../performance/Snippets';
 
 const KIND_ICON = { DOWNTIME: Timer, WORK_ORDER: Wrench, STATUS: Gauge, METER: History } as const;
 
+/** Who changed a work center's status (V16 adds production: routed operations and orders without a routing). */
+const STATUS_SOURCE: Record<string, string> = {
+  MANUAL: ' (manual correction)',
+  MAINTENANCE_ORDER: ' (maintenance)',
+  OPERATION: ' (production)',
+  ORDER: ' (production)',
+};
+
 function historyTitle(r: Row) {
   switch (r.kind) {
     case 'DOWNTIME':
@@ -37,7 +45,7 @@ function historyTitle(r: Row) {
     case 'WORK_ORDER':
       return `${r.code === 'PREVENTIVE' ? 'Preventive' : 'Corrective'} ${text(r.reference)} · ${statusText(r.status).toLowerCase()}`;
     case 'STATUS':
-      return `${statusText(r.status)} → ${statusText(r.code)}${r.flag ? ' (manual correction)' : ''}`;
+      return `${statusText(r.status)} → ${statusText(r.code)}${STATUS_SOURCE[text(r.source)] ?? (r.flag ? ' (manual correction)' : '')}`;
     default:
       return `Meter ${fmt(r.value, 2)} run hours`;
   }

@@ -6,7 +6,7 @@ export function HelpDialog({ onClose }: { onClose: () => void }) {
   return (
     <Overlay
       title="Built around your factory"
-      subtitle="DexLanka Manufacturing Pro · Foundation release 0.1.0"
+      subtitle="DexLanka Manufacturing Pro · Release 0.1.0 with Phase 2 factory operations"
       onClose={onClose}
       wide
     >
@@ -45,9 +45,11 @@ export function HelpDialog({ onClose }: { onClose: () => void }) {
         <h3>What’s available in this release</h3>
         <p>
           Authenticated sessions, tenant-scoped records, the manufacturing lifecycle, basic MRP, purchases and
-          incoming QC, lot inventory, production costs, audit records and CSV exports. Maintenance tracks
-          machine downtime by reason, corrective and preventive work orders with checklists, spare parts and
-          labour, and MTBF/MTTR per work center.
+          incoming QC, lot inventory, production costs, audit records and CSV exports. Routings, shift
+          calendars and skills drive operations on the Shop floor. Maintenance tracks machine downtime by
+          reason, corrective and preventive work orders with checklists, spare parts and labour, and MTBF/MTTR
+          per work center on its shift working time. Work-center states follow production and maintenance, and
+          every change is kept in the work center&apos;s history.
         </p>
         <p>
           Quality management: inspection plans with measured characteristics, nonconformance reports raised by
@@ -60,7 +62,9 @@ export function HelpDialog({ onClose }: { onClose: () => void }) {
           calendars, holidays, overtime, maintenance windows and open downtime, alternate work centers),
           compare the draft with the published schedule, publish it, and pin or drag operations to a work
           center and time. Everyone sees the published Gantt, late orders and capacity load; the Shop floor
-          lists the next scheduled operations of each work center.
+          lists the next scheduled operations of each work center. When orders, operations, maintenance,
+          downtime or calendars change after a run, the page says the published schedule may be out of date;
+          nothing is re-scheduled without a planner.
         </p>
         <p>
           Performance (OEE) measures availability, performance and quality per work center and business day
@@ -77,9 +81,9 @@ export function HelpDialog({ onClose }: { onClose: () => void }) {
         </p>
         <h3>What remains on the roadmap</h3>
         <p>
-          Full finance and tax localization, personnel workflows, extended onboarding, MFA, cloud
-          synchronization, signed Windows installation, SaaS billing and AI services. The repository documents
-          acceptance criteria and readiness gaps.
+          Full finance and tax localization, personnel workflows, machine telemetry, extended onboarding, MFA,
+          cloud synchronization, signed Windows installation, SaaS billing and AI services. The repository
+          documents acceptance criteria and readiness gaps.
         </p>
         <div className="help-callout">
           <ShieldCheck size={18} />

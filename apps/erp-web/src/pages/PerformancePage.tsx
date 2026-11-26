@@ -1,7 +1,7 @@
 import { useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
 import { AnimatePresence, motion } from 'motion/react';
 import { Activity, ChartNoAxesCombined, Gauge, Info, Timer } from 'lucide-react';
+import { useUrlParams } from '../app/urlState';
 import { useStateData } from '../app/workspace';
 import { Empty, Panel, Stat } from '../components';
 import { useLosses, useOee, usePerformanceSync } from '../features/performance/api';
@@ -36,11 +36,13 @@ const PRESETS = [
 export default function PerformancePage() {
   usePerformanceSync();
   const data = useStateData();
-  const [params] = useSearchParams();
+  // The work-center filter lives in the URL (`?machine=`, linked from the machine drawer) so the view can be shared.
+  const [params, update] = useUrlParams();
   const [preset, setPreset] = useState('14');
   const [from, setFrom] = useState(() => businessDay(-13));
   const [to, setTo] = useState(() => businessDay(0));
-  const [machine, setMachine] = useState(() => params.get('machine') || '');
+  const machine = params.get('machine') || '';
+  const setMachine = (id: string) => update({ machine: id || null });
   const [bucket, setBucket] = useState<Filters['bucket']>('day');
   const [open, setOpen] = useState<{ machineId: string; day: string }>();
   const filters: Filters = { from, to, machine, bucket };
@@ -188,20 +190,25 @@ export default function PerformancePage() {
 
                 <div className="perf-grid">
                   <Panel title="OEE trend" subtitle={`Plant, by ${bucket}`}>
-                    <TrendChart series={oee.data.series} />
+                    <div className="perf-body">
+                      <TrendChart series={oee.data.series} bucket={bucket} />
+                    </div>
                   </Panel>
                   <Panel title="Loss waterfall" subtitle="From calendar time to fully productive time">
-                    <QueryState
-                      pending={losses.isPending}
-                      error={losses.error}
-                      retry={() => losses.refetch()}
-                    >
-                      {losses.data && <LossWaterfall steps={losses.data.waterfall} />}
-                    </QueryState>
+                    <div className="perf-body">
+                      <QueryState
+                        pending={losses.isPending}
+                        error={losses.error}
+                        retry={() => losses.refetch()}
+                      >
+                        {losses.data && <LossWaterfall steps={losses.data.waterfall} />}
+                      </QueryState>
+                    </div>
                   </Panel>
                 </div>
 
                 <Panel
+                  className="perf-section"
                   title="OEE by work center"
                   subtitle={
                     bucket === 'day'
@@ -209,24 +216,33 @@ export default function PerformancePage() {
                       : 'Weekly roll-up'
                   }
                 >
-                  <Heatmap data={oee.data} onOpen={openDay} />
+                  <div className="perf-body">
+                    <Heatmap data={oee.data} onOpen={openDay} />
+                  </div>
                 </Panel>
 
                 {losses.data && (
                   <div className="perf-grid three">
                     <Panel title="Downtime by reason" subtitle="Recorded downtime in shift time">
-                      <DowntimePareto rows={losses.data.pareto} />
+                      <div className="perf-body">
+                        <DowntimePareto rows={losses.data.pareto} />
+                      </div>
                     </Panel>
                     <Panel title="Six big losses" subtitle="Measured where the records allow">
-                      <SixLosses losses={losses.data.sixLosses} />
+                      <div className="perf-body">
+                        <SixLosses losses={losses.data.sixLosses} />
+                      </div>
                     </Panel>
                     <Panel title="Quality losses" subtitle="In process and after production">
-                      <QualityLosses quality={losses.data.quality} />
+                      <div className="perf-body">
+                        <QualityLosses quality={losses.data.quality} />
+                      </div>
                     </Panel>
                   </div>
                 )}
 
                 <Panel
+                  className="perf-section"
                   title="Utilization"
                   subtitle="Busy time (setup, changeover, run) against shift time and 24 hours"
                 >
@@ -234,10 +250,13 @@ export default function PerformancePage() {
                 </Panel>
 
                 <Panel
+                  className="perf-section"
                   title="Data coverage and quality"
                   subtitle="Why some days are not measured, and what to fix"
                 >
-                  <Warnings data={oee.data} onOpen={openDay} />
+                  <div className="perf-body">
+                    <Warnings data={oee.data} onOpen={openDay} />
+                  </div>
                 </Panel>
               </>
             )}

@@ -6,7 +6,6 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowDownToLine,
   ArrowUpRight,
-  Bell,
   CalendarDays,
   ChevronDown,
   ChevronRight,
@@ -37,7 +36,7 @@ import { request, session, SESSION_CHANGED, token } from '../lib/api';
 import { csv, text } from '../lib/format';
 import { PageTransition, spring, useMotionPreferences } from '../motion/motion';
 import NotFoundPage from '../pages/NotFoundPage';
-import { AttentionCenter } from './AttentionCenter';
+import { AttentionCenter, NotificationButton } from './AttentionCenter';
 import { CommandPalette } from './CommandPalette';
 import { HelpDialog } from './HelpDialog';
 import { preloadWhenIdle } from './lazyPage';
@@ -45,6 +44,7 @@ import { Login } from './Login';
 import { PageErrorBoundary, PageSkeleton } from './PageLoader';
 import { ProfileDialog } from './ProfileDialog';
 import { findRoute, navGroups, navItems, preloadRoute, routes } from './routes';
+import type { PageRoute } from './routes';
 import { useWorkspaceState, WorkspaceProvider } from './workspace';
 
 /** Delegated hover/focus handler: starts loading the page behind a navigation link before it is clicked. */
@@ -162,8 +162,21 @@ export default function App() {
   if (user.mustChangePassword)
     return <ForcePasswordChange user={user} onDone={() => qc.invalidateQueries({ queryKey: ['user'] })} />;
   const ws = { ...workspace, user };
-  const { active, shortages, pendingQc } = summary;
-  const pageRows = data && (current?.exportRows ? current.exportRows(data) : data.orders);
+  const { active, shortages } = summary;
+  // The heading's Export button: the route's rows (derived or fetched), manufacturing orders by default, none for null.
+  const exportRows: PageRoute['exportRows'] =
+    current?.exportRows === undefined ? (state) => state.orders : current.exportRows;
+  async function exportPage() {
+    if (!data || !exportRows) return;
+    try {
+      const rows = await exportRows(data);
+      if (!rows.length) return notify('There is nothing to export on this page yet.');
+      csv(title.replaceAll(' ', '-').replace(/[()&]/g, '').toLowerCase(), rows);
+      notify('CSV export downloaded.');
+    } catch (e) {
+      notify((e as Error).message);
+    }
+  }
   const action = current?.action;
 
   return (
@@ -222,7 +235,7 @@ export default function App() {
                     .map((n) => (
                       <NavLink key={n.path} to={n.path} end className="nav-item">
                         <Star size={16} />
-                        {n.label}
+                        <span className="nav-label">{n.label}</span>
                       </NavLink>
                     ))}
                 </div>
@@ -249,7 +262,7 @@ export default function App() {
                               />
                             )}
                             <n.icon size={17} strokeWidth={1.65} />
-                            <span>{n.label}</span>
+                            <span className="nav-label">{n.label}</span>
                             {n.path === '/manufacturing' && !!active.length && (
                               <span className="nav-count">{active.length}</span>
                             )}
@@ -336,17 +349,7 @@ export default function App() {
               >
                 {dark ? <Sun size={18} /> : <Moon size={18} />}
               </button>
-              <button
-                className={`icon-button notification-button ${pendingQc.length || shortages.length ? 'has-notification' : ''}`}
-                aria-label={
-                  pendingQc.length || shortages.length
-                    ? 'Open notifications (items need attention)'
-                    : 'Open notifications'
-                }
-                onClick={() => setNotifications(true)}
-              >
-                <Bell size={19} />
-              </button>
+              <NotificationButton onOpen={() => setNotifications(true)} />
               <button className="avatar" aria-label="Open profile menu" onClick={() => setProfile(true)}>
                 {user.name
                   .split(' ')
@@ -378,16 +381,12 @@ export default function App() {
                     <p>{current?.description || 'Manage your factory operations in one place.'}</p>
                   </div>
                   <div className="page-actions">
-                    <button
-                      className="button secondary export-button"
-                      onClick={() => {
-                        csv(title.replaceAll(' ', '-').toLowerCase(), pageRows || []);
-                        notify('CSV export downloaded.');
-                      }}
-                    >
-                      <ArrowDownToLine size={15} />
-                      Export
-                    </button>
+                    {exportRows && (
+                      <button className="button secondary export-button" onClick={() => void exportPage()}>
+                        <ArrowDownToLine size={15} />
+                        Export
+                      </button>
+                    )}
                     {action && ws.can(...action.roles) && (
                       <button className="button primary" onClick={() => action.run(ws)}>
                         <Plus size={16} />

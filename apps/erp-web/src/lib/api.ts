@@ -47,6 +47,10 @@ export type ScheduleSummary = {
   late_orders: number;
   unscheduled_orders: number;
   late: Row[];
+  /** V16: changes to orders, operations, maintenance windows and downtime since the published run was created. */
+  changes_since_publish?: number;
+  /** V16: the newest of those changes (ISO timestamp), or null. */
+  last_change_at?: string | null;
 };
 /** `performance` state key (V15): ratios 0..1; the Performance page reads `GET /performance/**`. */
 export type PlantOee = {

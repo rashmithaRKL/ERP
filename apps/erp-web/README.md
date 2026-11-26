@@ -59,7 +59,8 @@ src/
      group: 'MANUFACTURING',          // sidebar section from navGroups, or null to keep it out of the main nav
      page: MaintenancePage,
      description: 'Keep every machine ready for the next run.',
-     exportRows: (data) => data.machines,   // optional: rows for the heading's Export button (default: orders)
+     exportRows: (data) => data.machines,   // optional: rows for the heading's Export button (default: orders); may be
+                                            // async (fetch the page's own endpoint) or null (no Export button)
      action: { label: 'New plan', roles: ['PLANNER'], run: (ws) => createPlan(ws) }, // optional heading button
    },
    ```

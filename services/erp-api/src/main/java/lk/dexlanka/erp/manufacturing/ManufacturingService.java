@@ -320,6 +320,17 @@ public class ManufacturingService {
                 case "resume" -> {
                     a.allow("OPERATOR", "PLANNER");
                     require(state.equals("ON_HOLD"), "Order is not on hold");
+                    // V16: like starting it (and like resuming a routed operation), resuming an order without a routing
+                    // is refused while maintenance, which may start while the order is on hold, has its work center.
+                    require(
+                            operations.routed(a.tenant(), id)
+                                    || !s.one(
+                                                    "SELECT status FROM machines WHERE tenant_id=? AND id=?",
+                                                    a.tenant(),
+                                                    o.get("machine_id"))
+                                            .get("status")
+                                            .equals("MAINTENANCE"),
+                            "Machine is under maintenance");
                     next = "IN_PROGRESS";
                 }
                 case "close" -> {
@@ -352,6 +363,20 @@ public class ManufacturingService {
                 default -> throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Unknown manufacturing action");
             }
             s.db().update("UPDATE manufacturing_orders SET status=? WHERE tenant_id=? AND id=?", next, a.tenant(), id);
+            // V16: an order without a routing is one implicit operation on its work center, so it drives the work
+            // center between IDLE and RUNNING like routed operations do (recorded in the machine's status history).
+            if (Set.of("start", "resume", "pause").contains(action) && !operations.routed(a.tenant(), id)) {
+                String machine = str(o, "machine_id");
+                if (action.equals("pause"))
+                    operations.idleIfFree(a, machine, OperationPlanner.ORDER, num, "Order put on hold");
+                else
+                    operations.running(
+                            a,
+                            machine,
+                            OperationPlanner.ORDER,
+                            num,
+                            action.equals("start") ? "Production started" : "Production resumed");
+            }
             s.audit(a, "MO_" + action.toUpperCase(Locale.ROOT), num, state + " → " + next);
             return order(a, id);
         }
@@ -458,6 +483,9 @@ public class ManufacturingService {
                             state,
                             a.tenant(),
                             id);
+            // V16: the final output ends the implicit operation of an order without a routing.
+            if (!state.equals("PARTIALLY_COMPLETED") && !operations.routed(a.tenant(), id))
+                operations.idleIfFree(a, str(o, "machine_id"), OperationPlanner.ORDER, num, "Final output posted");
             s.audit(
                     a,
                     "PRODUCTION_POSTED",

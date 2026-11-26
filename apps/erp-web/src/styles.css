@@ -184,3 +184,13 @@ table { border-collapse: separate; border-spacing: 0; }
 @media (max-width: 420px) {
   .stat-value { font-size: 23px; }
 }
+
+/* V16: the sidebar navigation scrolls vertically only. With the extra Phase 2 pages it needs a vertical scrollbar;
+   labels shrink and truncate instead of widening the list, so it never scrolls sideways (both themes, mobile drawer). */
+.sidebar nav { overflow-x: hidden; }
+.nav-item { min-width: 0; }
+.nav-item > .nav-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+
+/* V16: the overview attention panel when nothing needs attention (spans both columns of the wide layout). */
+.attention-empty { grid-column: 1 / -1; display: flex; align-items: center; gap: 8px; padding: 18px 0; font-size: 12px; color: var(--muted); }
+.attention-empty svg { color: var(--tone-green); }

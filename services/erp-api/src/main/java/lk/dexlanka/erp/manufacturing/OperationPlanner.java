@@ -27,10 +27,19 @@ import org.springframework.stereotype.Component;
  *   <li>{@link #cancel}: cancelling the order cancels its operations.
  *   <li>{@link #checkOutput}: output posted for the order cannot exceed the last operation's good quantity, and the
  *       final output needs every operation done.
+ *   <li>{@link #running} / {@link #idleIfFree}: production drives a work center between IDLE and RUNNING (never into
+ *       or out of MAINTENANCE, which the maintenance workflow owns); since V16 every such change is recorded in
+ *       {@code machine_status_changes} with source {@code OPERATION} (routed operations) or {@code ORDER} (orders
+ *       without a routing), so the machine history is complete.
  * </ul>
  */
 @Component
 class OperationPlanner {
+    /** {@code machine_status_changes.source} of a change made by a routed operation (V16). */
+    static final String OPERATION = "OPERATION";
+    /** {@code machine_status_changes.source} of a change made by an order without a routing (V16). */
+    static final String ORDER = "ORDER";
+
     private final Store s;
 
     OperationPlanner(Store s) {
@@ -122,7 +131,12 @@ class OperationPlanner {
                             "UPDATE mo_operations SET status='PAUSED',activity=NULL,updated_at=now() WHERE tenant_id=? AND id=?",
                             a.tenant(),
                             op.get("id"));
-            idleIfFree(a.tenant(), str(op, "machine_id"));
+            idleIfFree(
+                    a,
+                    str(op, "machine_id"),
+                    OPERATION,
+                    str(order, "number"),
+                    "Op " + op.get("seq") + " " + str(op, "name") + " paused: order put on hold");
             s.audit(
                     a,
                     "OP_PAUSED",
@@ -179,10 +193,11 @@ class OperationPlanner {
 
     /**
      * A RUNNING work center becomes IDLE when nothing runs there any more: no running operation and no running order
-     * without operations. MAINTENANCE (owned by the maintenance workflow) is never changed here.
+     * without operations. MAINTENANCE (owned by the maintenance workflow) is never changed here. A change is recorded in
+     * the machine's status history ({@code source} OPERATION or ORDER, {@code reference} = the order number).
      */
-    void idleIfFree(String tenant, String machineId) {
-        s.db().update("""
+    void idleIfFree(Actor a, String machineId, String source, String reference, String reason) {
+        int changed = s.db().update("""
                         UPDATE machines SET status='IDLE'
                         WHERE tenant_id=? AND id=? AND status='RUNNING'
                           AND NOT EXISTS (SELECT 1 FROM mo_operations op
@@ -190,14 +205,31 @@ class OperationPlanner {
                           AND NOT EXISTS (SELECT 1 FROM manufacturing_orders o
                                           WHERE o.tenant_id=machines.tenant_id AND o.machine_id=machines.id
                                             AND o.status IN ('IN_PROGRESS','PARTIALLY_COMPLETED')
-                                            AND NOT EXISTS (SELECT 1 FROM mo_operations x WHERE x.tenant_id=o.tenant_id AND x.order_id=o.id))""", tenant, machineId);
+                                            AND NOT EXISTS (SELECT 1 FROM mo_operations x WHERE x.tenant_id=o.tenant_id AND x.order_id=o.id))""", a.tenant(), machineId);
+        if (changed > 0) history(a, machineId, "RUNNING", "IDLE", source, reference, reason);
     }
 
-    /** An IDLE work center becomes RUNNING (MAINTENANCE is never overridden). */
-    void running(String tenant, String machineId) {
-        s.db().update(
+    /** An IDLE work center becomes RUNNING (MAINTENANCE is never overridden); the change is recorded as above. */
+    void running(Actor a, String machineId, String source, String reference, String reason) {
+        int changed = s.db().update(
                         "UPDATE machines SET status='RUNNING' WHERE tenant_id=? AND id=? AND status='IDLE'",
-                        tenant,
+                        a.tenant(),
                         machineId);
+        if (changed > 0) history(a, machineId, "IDLE", "RUNNING", source, reference, reason);
+    }
+
+    private void history(
+            Actor a, String machineId, String from, String to, String source, String reference, String reason) {
+        s.db().update(
+                        "INSERT INTO machine_status_changes(id,tenant_id,machine_id,from_status,to_status,source,reference,reason,changed_by) VALUES(?,?,?,?,?,?,?,?,?)",
+                        id(),
+                        a.tenant(),
+                        machineId,
+                        from,
+                        to,
+                        source,
+                        reference,
+                        reason,
+                        a.id());
     }
 }

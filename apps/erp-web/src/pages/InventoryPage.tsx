@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useTabParam } from '../app/urlState';
 import { useStateData } from '../app/workspace';
 import { Panel } from '../components';
 import { AdjustmentsTab } from '../features/inventory/AdjustmentsTab';
@@ -21,10 +21,13 @@ const TABS = [
   { value: 'warehouses', label: 'Warehouses' },
 ];
 
-/** Route `/inventory`: lots, ledger, adjustments, transfers, cycle counts and warehouses. */
+/** Route `/inventory` (`?tab=ledger|adjustments|transfers|counts|warehouses`): lots, ledger, adjustments, transfers, cycle counts and warehouses. */
 export default function InventoryPage() {
   const data = useStateData();
-  const [tab, setTab] = useState('lots');
+  const [tab, setTab] = useTabParam(
+    TABS.map((t) => t.value),
+    'lots',
+  );
   const approvals = usePaged('adjustments', '/inventory/adjustments', {
     status: 'APPROVAL_REQUIRED',
     limit: 50,

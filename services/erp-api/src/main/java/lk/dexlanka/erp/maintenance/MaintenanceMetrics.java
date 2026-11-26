@@ -16,6 +16,7 @@ import java.util.List;
 import java.util.Map;
 import lk.dexlanka.erp.platform.Actor;
 import lk.dexlanka.erp.platform.Store;
+import lk.dexlanka.erp.routing.CalendarService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
@@ -29,8 +30,13 @@ import org.springframework.transaction.annotation.Transactional;
  *       now), split into planned and unplanned.
  *   <li><b>Failures</b>: BREAKDOWN events that started in the period.
  *   <li><b>MTTR</b>: the mean full duration of the closed failures, in minutes.
- *   <li><b>MTBF</b>: (period − all downtime in the period) / failures, in hours. Without shift calendars the period is
- *       calendar time; null without failures.
+ *   <li><b>MTBF</b> (V16: on working time): operating time / failures, in hours, null without failures. Operating time
+ *       = the machine's working time in the period ({@code routing.CalendarService} working intervals: shifts less
+ *       breaks, holidays, overtime) − the downtime that falls inside that working time. A work center without any
+ *       calendar works around the clock, so its operating time is calendar time less downtime (the V11 figure). The
+ *       fleet MTBF divides the summed operating time by all failures.
+ *   <li><b>Working / operating minutes</b> per machine and in total ({@code workingMinutes}, {@code operatingMinutes});
+ *       {@code periodMinutes} stays the calendar length of the period.
  *   <li><b>Pareto</b>: downtime minutes by reason, largest first, with share and cumulative share in percent.
  * </ul>
  */
@@ -38,9 +44,11 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
 public class MaintenanceMetrics {
     private final Store s;
+    private final CalendarService calendars;
 
-    MaintenanceMetrics(Store s) {
+    MaintenanceMetrics(Store s, CalendarService calendars) {
         this.s = s;
+        this.calendars = calendars;
     }
 
     public Map<String, Object> metrics(Actor a, String from, String to, String machine) {
@@ -62,7 +70,19 @@ public class MaintenanceMetrics {
                 "SELECT id,code,name,status FROM machines WHERE tenant_id=? AND (?::text IS NULL OR id=?) ORDER BY code",
                 a.tenant(),
                 machineId,
-                machineId)) machines.put(str(m, "id"), new Acc(m));
+                machineId)) {
+            var acc = new Acc(m);
+            // Working time of the period (shift calendar; around the clock without one).
+            if (start.toInstant().isBefore(until))
+                for (var interval : calendars.workingIntervals(a.tenant(), str(m, "id"), start.toInstant(), until))
+                    acc.working.add(new Instant[] {
+                        interval.start().toInstant(), interval.end().toInstant()
+                    });
+            acc.workingMinutes = acc.working.stream()
+                    .mapToDouble(w -> seconds(w[0], w[1]) / 60.0)
+                    .sum();
+            machines.put(str(m, "id"), acc);
+        }
         var reasons = new LinkedHashMap<String, double[]>(); // reason -> {minutes, events}
         for (var e : s.list(
                 """
@@ -84,6 +104,7 @@ public class MaintenanceMetrics {
             boolean planned = Boolean.TRUE.equals(e.get("planned"));
             acc.events++;
             acc.downtime += minutes;
+            acc.downtimeInShift += acc.inWorkingTime(from0, to0);
             if (planned) acc.planned += minutes;
             else acc.unplanned += minutes;
             if (e.get("reason").equals("BREAKDOWN") && !began.isBefore(start.toInstant())) {
@@ -101,7 +122,7 @@ public class MaintenanceMetrics {
         var rows = new ArrayList<Map<String, Object>>();
         var total = new Acc(Map.of());
         for (var acc : machines.values()) {
-            rows.add(acc.toMap(period));
+            rows.add(acc.toMap());
             total.events += acc.events;
             total.downtime += acc.downtime;
             total.planned += acc.planned;
@@ -109,6 +130,8 @@ public class MaintenanceMetrics {
             total.failures += acc.failures;
             total.repairs += acc.repairs;
             total.repairMinutes += acc.repairMinutes;
+            total.workingMinutes += acc.workingMinutes;
+            total.downtimeInShift += acc.downtimeInShift;
         }
         double totalMinutes = reasons.values().stream().mapToDouble(r -> r[0]).sum();
         var pareto = new ArrayList<Map<String, Object>>();
@@ -126,7 +149,7 @@ public class MaintenanceMetrics {
             pareto.add(row);
         }
         // Fleet MTBF: total operating time of the machines in scope over all failures.
-        var totals = total.figures(period * machines.size());
+        var totals = total.figures();
         var result = new LinkedHashMap<String, Object>();
         result.put("from", first.toString());
         result.put("to", last.toString());
@@ -146,30 +169,49 @@ public class MaintenanceMetrics {
         double planned;
         double unplanned;
         double repairMinutes;
+        /** Working intervals {@code [start, end)} of the period, in time order. */
+        final List<Instant[]> working = new ArrayList<>();
+
+        double workingMinutes;
+        double downtimeInShift;
 
         Acc(Map<String, Object> machine) {
             this.machine = machine;
         }
 
-        Map<String, Object> toMap(double period) {
+        /** Minutes of {@code [from, to)} that fall inside the machine's working time. */
+        double inWorkingTime(Instant from, Instant to) {
+            double minutes = 0;
+            for (var w : working) {
+                Instant a = from.isAfter(w[0]) ? from : w[0];
+                Instant b = to.isBefore(w[1]) ? to : w[1];
+                if (a.isBefore(b)) minutes += seconds(a, b) / 60.0;
+            }
+            return minutes;
+        }
+
+        Map<String, Object> toMap() {
             var m = new LinkedHashMap<String, Object>();
             m.put("id", machine.get("id"));
             m.put("code", machine.get("code"));
             m.put("name", machine.get("name"));
             m.put("status", machine.get("status"));
-            m.putAll(figures(period));
+            m.putAll(figures());
             return m;
         }
 
-        Map<String, Object> figures(double period) {
+        Map<String, Object> figures() {
+            double operating = Math.max(0, workingMinutes - downtimeInShift);
             var m = new LinkedHashMap<String, Object>();
             m.put("events", events);
             m.put("failures", failures);
             m.put("downtimeMinutes", round(downtime, 1));
             m.put("plannedMinutes", round(planned, 1));
             m.put("unplannedMinutes", round(unplanned, 1));
+            m.put("workingMinutes", round(workingMinutes, 1));
+            m.put("operatingMinutes", round(operating, 1));
             m.put("mttrMinutes", repairs == 0 ? null : round(repairMinutes / repairs, 1));
-            m.put("mtbfHours", failures == 0 ? null : round(Math.max(0, period - downtime) / 60.0 / failures, 2));
+            m.put("mtbfHours", failures == 0 ? null : round(operating / 60.0 / failures, 2));
             return m;
         }
     }

@@ -75,8 +75,20 @@ export function OperationQueue({ machine }: { machine: Row }) {
         ) : (
           <Panel>
             <Empty
-              title={`Nothing queued on ${text(machine.code)}`}
-              body="Operations appear here once their order is released and the previous operation is finished."
+              title={
+                num(machine.legacy_orders)
+                  ? `No routed operations on ${text(machine.code)}`
+                  : `Nothing queued on ${text(machine.code)}`
+              }
+              body={
+                num(machine.legacy_orders)
+                  ? `${fmt(machine.legacy_orders)} ${
+                      num(machine.legacy_orders) === 1 ? 'order' : 'orders'
+                    } without a routing on this work center ${
+                      num(machine.legacy_orders) === 1 ? 'is' : 'are'
+                    } worked below, under Orders without a routing.`
+                  : 'Operations appear here once their order is released and the previous operation is finished.'
+              }
             />
           </Panel>
         )}
@@ -172,7 +184,7 @@ function OperationCard({
       <div className="job-top">
         <span>
           <Flag size={15} />
-          Op {text(op.seq)} of {text(op.operation_count)}
+          Step {text(op.operation_position || op.seq)} of {text(op.operation_count)} · Op {text(op.seq)}
           {op.alternate && <span className="bom-chip inline-chip">alternate</span>}
         </span>
         <span className="op-status">

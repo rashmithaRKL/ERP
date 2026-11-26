@@ -32,10 +32,10 @@ export default function WorkCentersPage() {
         <div>
           <strong>Recorded machine states</strong>
           <p>
-            States are recorded by people and by maintenance work orders: starting maintenance takes a machine
-            out of production and completing it returns the machine to idle. Open a work center for its
-            downtime, maintenance and MTBF/MTTR. Automated telemetry and validated OEE are scheduled for a
-            later phase.
+            States follow recorded work, not machine sensors: a work center runs while an operation or an
+            order runs on it, starting maintenance takes it out of production and completing it returns it to
+            idle, and planners can correct a wrong state. Open a work center for its downtime, maintenance,
+            MTBF/MTTR on shift time, status history and 7-day OEE; Performance (OEE) has the full analysis.
           </p>
         </div>
       </div>

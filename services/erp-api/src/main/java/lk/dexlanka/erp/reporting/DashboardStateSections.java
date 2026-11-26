@@ -5,7 +5,10 @@ import java.util.Map;
 import lk.dexlanka.erp.platform.Store;
 import org.springframework.stereotype.Component;
 
-/** Dashboard series and KPIs for the requested period ({@link StateRequest#days()}); dates use Asia/Colombo. */
+/**
+ * Dashboard series and KPIs for the requested period ({@link StateRequest#days()}); dates use Asia/Colombo (V16: also
+ * the overdue-order count, so it matches the attention model, which compares due dates with the Colombo business day).
+ */
 @Component
 class DashboardStateSections implements StateContributor {
     private final Store s;
@@ -43,7 +46,7 @@ class DashboardStateSections implements StateContributor {
                         WHERE tenant_id=? AND created_at>=CURRENT_DATE-(? - 1)) AS scrap,
                        (SELECT COUNT(*) FROM inspections WHERE tenant_id=? AND status='PENDING') AS pending_qc,
                        (SELECT COUNT(*) FROM manufacturing_orders
-                        WHERE tenant_id=? AND due_date<CURRENT_DATE
+                        WHERE tenant_id=? AND due_date<(now() AT TIME ZONE 'Asia/Colombo')::date
                           AND status NOT IN ('CLOSED','CANCELLED','COMPLETED')) AS overdue""", t, t, days, t, days, t, t);
     }
 }

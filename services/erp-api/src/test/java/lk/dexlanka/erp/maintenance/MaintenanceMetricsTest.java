@@ -6,13 +6,19 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import java.util.List;
 import java.util.Map;
+import lk.dexlanka.erp.routing.CalendarCommands;
+import lk.dexlanka.erp.routing.ShiftCalendarService;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
 
 /**
  * MTBF, MTTR, downtime minutes and the reason Pareto over 10–11 March 2025 (Asia/Colombo, 2,880 minutes), with events
- * clipped at the period edges, an event outside the period and a corrected event.
+ * clipped at the period edges, an event outside the period and a corrected event. Without a shift calendar a work center
+ * works around the clock, so its working time is the whole period (V16: MTBF = working time less downtime in it).
  */
 class MaintenanceMetricsTest extends MaintenanceTestSupport {
+    @Autowired
+    ShiftCalendarService calendarAdmin;
 
     @SuppressWarnings("unchecked")
     private static List<Map<String, Object>> list(Map<String, Object> result, String key) {
@@ -61,6 +67,8 @@ class MaintenanceMetricsTest extends MaintenanceTestSupport {
         assertThat(dec(first.get("plannedMinutes"))).isEqualByComparingTo("20");
         assertThat(dec(first.get("unplannedMinutes"))).isEqualByComparingTo("120");
         assertThat(dec(first.get("mttrMinutes"))).isEqualByComparingTo("45");
+        assertThat(dec(first.get("workingMinutes"))).isEqualByComparingTo("2880");
+        assertThat(dec(first.get("operatingMinutes"))).isEqualByComparingTo("2740");
         assertThat(dec(first.get("mtbfHours"))).isEqualByComparingTo("22.83"); // (2880 − 140) / 60 / 2
         var second = machines.get(1);
         assertThat(((Number) second.get("failures")).intValue()).isZero();
@@ -86,6 +94,50 @@ class MaintenanceMetricsTest extends MaintenanceTestSupport {
         assertThat(dec(totals.get("downtimeMinutes"))).isEqualByComparingTo("165");
         assertThat(dec(totals.get("mttrMinutes"))).isEqualByComparingTo("45");
         assertThat(dec(totals.get("mtbfHours"))).isEqualByComparingTo("46.63"); // (2 × 2880 − 165) / 60 / 2
+    }
+
+    /**
+     * V16: MTBF on working time. A plant default calendar with one 06:00–18:00 shift every day (720 working minutes a
+     * day, 1,440 over the period): operating time = working time − the downtime inside it, so the overnight material
+     * shortage (00:00–00:30) and the UTILITIES stop (23:50–24:00) no longer reduce it, and the hours outside shifts are
+     * not counted as time between failures.
+     */
+    @Test
+    void mtbfUsesShiftWorkingTimeLessDowntimeInShift() throws Exception {
+        events();
+        String day = str(
+                calendarAdmin.createPattern(
+                        planner,
+                        new CalendarCommands.ShiftPattern(
+                                "DAY12", "Day shift", "06:00", "18:00", null, 0, List.of(1, 2, 3, 4, 5, 6, 7)),
+                        id()),
+                "id");
+        calendarAdmin.createCalendar(
+                planner, new CalendarCommands.Calendar("PLANT", "Plant calendar", List.of(day), true), id());
+
+        var result = metrics.metrics(viewer, "2025-03-10", "2025-03-11", null);
+        assertThat(dec(result.get("periodMinutes"))).isEqualByComparingTo("2880"); // calendar length is unchanged
+        var first = list(result, "machines").getFirst();
+        assertThat(dec(first.get("workingMinutes"))).isEqualByComparingTo("1440");
+        // In shift: breakdowns 60 + 30, changeover 20 (the 00:00–00:30 shortage is outside the shift).
+        assertThat(dec(first.get("operatingMinutes"))).isEqualByComparingTo("1330");
+        assertThat(dec(first.get("mtbfHours"))).isEqualByComparingTo("11.08"); // 1330 / 60 / 2
+        assertThat(dec(first.get("downtimeMinutes")))
+                .isEqualByComparingTo("140"); // downtime itself stays calendar time
+        assertThat(dec(first.get("mttrMinutes"))).isEqualByComparingTo("45"); // repairs: elapsed time, unchanged
+        var second = list(result, "machines").get(1);
+        assertThat(dec(second.get("operatingMinutes"))).isEqualByComparingTo("1425"); // 1440 − the corrected 15 min
+        assertThat(second.get("mtbfHours")).isNull();
+        @SuppressWarnings("unchecked")
+        var totals = (Map<String, Object>) result.get("totals");
+        assertThat(dec(totals.get("workingMinutes"))).isEqualByComparingTo("2880");
+        assertThat(dec(totals.get("operatingMinutes"))).isEqualByComparingTo("2755");
+        assertThat(dec(totals.get("mtbfHours"))).isEqualByComparingTo("22.96"); // 2755 / 60 / 2
+
+        // One day: 720 working minutes less the 30-minute breakdown.
+        var row = list(metrics.metrics(viewer, "2025-03-11", "2025-03-11", m1), "machines")
+                .getFirst();
+        assertThat(dec(row.get("mtbfHours"))).isEqualByComparingTo("11.5"); // (720 − 30) / 60
     }
 
     @Test

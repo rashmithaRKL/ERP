@@ -11,6 +11,28 @@ import { fmt, num, text } from '../lib/format';
 
 const STORAGE = 'dex-shopfloor-work-center';
 
+/**
+ * Work on a work center: routed operations plus its open orders without a routing (each one implicit operation: in
+ * progress = running, on hold = paused, released = ready), so the chip never says "0 running" while such an order runs.
+ */
+const load = (m: Row) => ({
+  running: num(m.running) + num(m.legacy_running),
+  paused: num(m.paused) + num(m.legacy_paused),
+  ready: num(m.ready) + num(m.legacy_ready),
+  unrouted: num(m.legacy_orders),
+});
+
+/** Why the registered status and the work disagree, in words (status is shown as a badge next to it). */
+function statusNote(m: Row) {
+  const w = load(m);
+  if (m.status === 'MAINTENANCE') return 'under maintenance: operations cannot start here';
+  if (m.status === 'RUNNING' && !w.running)
+    return 'marked running, but no operation or order is running here (a planner can correct the status in Work centers)';
+  if (m.status === 'IDLE' && w.running)
+    return 'work is in progress although the work center is registered idle';
+  return '';
+}
+
 function remembered() {
   try {
     return localStorage.getItem(STORAGE) || '';
@@ -28,10 +50,10 @@ export default function ShopFloorPage() {
   const centers = useWorkCenterSummary();
   const [picked, setPicked] = useState(remembered);
   const items = centers.data?.items || [];
-  const busy = (m: Row) => num(m.running) + num(m.paused) + num(m.ready) > 0;
+  const busy = (m: Row) => load(m).running + load(m).paused + load(m).ready > 0;
   const machine =
     items.find((m) => m.id === picked) ||
-    items.find((m) => num(m.running) > 0) ||
+    items.find((m) => load(m).running > 0) ||
     items.find(busy) ||
     items[0];
 
@@ -87,13 +109,16 @@ export default function ShopFloorPage() {
                   <Badge value={m.status} />
                 </span>
                 <span className="wc-option-counts">
-                  {fmt(m.running)} running · {fmt(m.paused)} paused · {fmt(m.ready)} ready
+                  {fmt(load(m).running)} running · {fmt(load(m).paused)} paused · {fmt(load(m).ready)} ready
                 </span>
                 <small>
                   {num(m.available_minutes_today)
                     ? `${hoursText(num(m.available_minutes_today))} today`
                     : 'Not working today'}
                   {m.calendar_code ? ` · ${text(m.calendar_code)}` : ''}
+                  {load(m).unrouted
+                    ? ` · incl. ${fmt(load(m).unrouted)} ${load(m).unrouted === 1 ? 'order' : 'orders'} without a routing`
+                    : ''}
                 </small>
               </button>
             ))}
@@ -106,9 +131,7 @@ export default function ShopFloorPage() {
                 </h2>
                 <span className="muted">
                   {text(machine.kind)}
-                  {machine.status === 'MAINTENANCE'
-                    ? ' · under maintenance: operations cannot start here'
-                    : ''}
+                  {statusNote(machine) ? ` · ${statusNote(machine)}` : ''}
                 </span>
               </div>
               <OperationQueue key={machine.id} machine={machine} />
@@ -121,7 +144,9 @@ export default function ShopFloorPage() {
       <section aria-label="Orders without a routing">
         <div className="floor-heading">
           <h2>Orders without a routing</h2>
-          <span className="muted">One implicit operation per order, as before routings.</span>
+          <span className="muted">
+            One implicit operation per order, as before routings; counted in the work-center chips above.
+          </span>
         </div>
         <FloorOrderCards />
       </section>
