@@ -44,6 +44,7 @@ import { Login } from './Login';
 import { PageErrorBoundary, PageSkeleton } from './PageLoader';
 import { ProfileDialog } from './ProfileDialog';
 import { findRoute, navGroups, navItems, preloadRoute, routes } from './routes';
+import type { PageRoute } from './routes';
 import { useWorkspaceState, WorkspaceProvider } from './workspace';
 
 /** Delegated hover/focus handler: starts loading the page behind a navigation link before it is clicked. */
@@ -162,7 +163,20 @@ export default function App() {
     return <ForcePasswordChange user={user} onDone={() => qc.invalidateQueries({ queryKey: ['user'] })} />;
   const ws = { ...workspace, user };
   const { active, shortages } = summary;
-  const pageRows = data && (current?.exportRows ? current.exportRows(data) : data.orders);
+  // The heading's Export button: the route's rows (derived or fetched), manufacturing orders by default, none for null.
+  const exportRows: PageRoute['exportRows'] =
+    current?.exportRows === undefined ? (state) => state.orders : current.exportRows;
+  async function exportPage() {
+    if (!data || !exportRows) return;
+    try {
+      const rows = await exportRows(data);
+      if (!rows.length) return notify('There is nothing to export on this page yet.');
+      csv(title.replaceAll(' ', '-').replace(/[()&]/g, '').toLowerCase(), rows);
+      notify('CSV export downloaded.');
+    } catch (e) {
+      notify((e as Error).message);
+    }
+  }
   const action = current?.action;
 
   return (
@@ -367,16 +381,12 @@ export default function App() {
                     <p>{current?.description || 'Manage your factory operations in one place.'}</p>
                   </div>
                   <div className="page-actions">
-                    <button
-                      className="button secondary export-button"
-                      onClick={() => {
-                        csv(title.replaceAll(' ', '-').toLowerCase(), pageRows || []);
-                        notify('CSV export downloaded.');
-                      }}
-                    >
-                      <ArrowDownToLine size={15} />
-                      Export
-                    </button>
+                    {exportRows && (
+                      <button className="button secondary export-button" onClick={() => void exportPage()}>
+                        <ArrowDownToLine size={15} />
+                        Export
+                      </button>
+                    )}
                     {action && ws.can(...action.roles) && (
                       <button className="button primary" onClick={() => action.run(ws)}>
                         <Plus size={16} />

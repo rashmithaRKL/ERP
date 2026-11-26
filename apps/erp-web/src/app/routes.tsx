@@ -20,7 +20,9 @@ import {
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { matchPath } from 'react-router-dom';
+import { request } from '../lib/api';
 import type { Row, State } from '../lib/api';
+import { isActive } from '../lib/rows';
 import type { Workspace } from './workspace';
 import { createOrder } from '../features/manufacturing/forms';
 import { createWorkCenter } from '../features/machines/forms';
@@ -75,8 +77,11 @@ export type PageRoute = {
   heading?: string;
   /** Overrides the eyebrow above the `<h1>` (defaults to the company name). */
   eyebrow?: string;
-  /** Rows downloaded by the heading's Export button (defaults to manufacturing orders). */
-  exportRows?: (data: State) => Row[];
+  /**
+   * Rows downloaded by the heading's Export button: derived from `/api/state`, or fetched from the page's own endpoint
+   * (async). Defaults to manufacturing orders; `null` hides the button on pages where no single export fits.
+   */
+  exportRows?: ((data: State) => Row[] | Promise<Row[]>) | null;
   action?: PageAction;
 };
 
@@ -85,6 +90,9 @@ const newOrder: PageAction = {
   roles: ['PLANNER'],
   run: (workspace) => createOrder(workspace),
 };
+/** First page (up to 200 rows) of a keyset-paged list endpoint, for the heading's Export button. */
+const pagedRows = (path: string) => async () => (await request<{ items: Row[] }>(path)).items;
+
 const newPurchase: PageAction = {
   label: 'New purchase order',
   roles: ['PLANNER', 'WAREHOUSE'],
@@ -183,6 +191,7 @@ export const routes: PageRoute[] = [
     group: 'MANUFACTURING',
     page: RoutingsPage,
     description: 'How every product is made, and when each work center can make it.',
+    exportRows: pagedRows('/routings?limit=200'),
     action: {
       label: 'New routing',
       roles: ['PLANNER'],
@@ -199,13 +208,12 @@ export const routes: PageRoute[] = [
     group: 'MANUFACTURING',
     page: SchedulePage,
     description: 'Every operation on finite capacity: who runs what, when, and what will be late.',
-    action: {
-      label: 'Run scheduler',
-      roles: ['PLANNER'],
-      // Loaded on demand so the schedule feature stays out of the entry chunk.
-      run: (workspace) => {
-        void import('../features/schedule/forms').then((forms) => forms.runScheduler(workspace));
-      },
+    // The published run's orders (projected start/end, lateness). "Run scheduler" lives in the page's run toolbar and
+    // empty state, so the heading has no second copy of it.
+    exportRows: async () => {
+      const overview = await request<{ published: Row | null }>('/schedule');
+      if (!overview.published) return [];
+      return (await request<{ orders: Row[] }>(`/schedule/runs/${overview.published.id}`)).orders;
     },
   },
   {
@@ -215,6 +223,7 @@ export const routes: PageRoute[] = [
     group: 'MANUFACTURING',
     page: ShopFloorPage,
     description: 'Keep your next operation front and center.',
+    exportRows: (data) => data.orders.filter(isActive),
     action: newOrder,
   },
   {
@@ -233,7 +242,7 @@ export const routes: PageRoute[] = [
     group: 'MANUFACTURING',
     page: TraceabilityPage,
     description: 'Where every lot came from, where it went, and how to get it back.',
-    exportRows: (data) => data.recalls?.active ?? [],
+    exportRows: pagedRows('/recalls?limit=200'),
   },
   {
     path: '/machines',
@@ -242,6 +251,7 @@ export const routes: PageRoute[] = [
     group: 'MANUFACTURING',
     page: WorkCentersPage,
     description: 'A shared view of your machines and work centers.',
+    exportRows: (data) => data.machines,
     action: { label: 'New work center', roles: ['PLANNER'], run: (workspace) => createWorkCenter(workspace) },
   },
   {
@@ -252,15 +262,8 @@ export const routes: PageRoute[] = [
     group: 'MANUFACTURING',
     page: MaintenancePage,
     description: 'Keep every machine ready for the next run.',
-    exportRows: (data) => [...(data.maintenance?.breakdowns || []), ...(data.maintenance?.overdue || [])],
-    action: {
-      label: 'Request maintenance',
-      roles: ['OPERATOR', 'PLANNER', 'MAINTENANCE'],
-      // Loaded on demand so the maintenance feature stays out of the entry chunk.
-      run: (workspace) => {
-        void import('../features/maintenance/forms').then((forms) => forms.requestMaintenance(workspace));
-      },
-    },
+    // Work orders. Each tab's toolbar owns its primary action (request maintenance, new plan, report downtime).
+    exportRows: pagedRows('/maintenance/work-orders?limit=200'),
   },
   {
     path: '/performance',
@@ -271,6 +274,7 @@ export const routes: PageRoute[] = [
     page: PerformancePage,
     heading: 'Performance (OEE)',
     description: 'Availability, performance and quality of every work center, measured from real records.',
+    exportRows: null,
     action: {
       label: 'Close a day',
       roles: ['PLANNER'],
@@ -307,6 +311,7 @@ export const routes: PageRoute[] = [
     group: null,
     page: AdministrationPage,
     description: 'Your organization, deployment and operational history.',
+    exportRows: null,
   },
 ];
 

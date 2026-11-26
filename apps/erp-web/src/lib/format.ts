@@ -154,8 +154,15 @@ export function humanizeText(x: unknown): string {
 export function csv(name: string, rows: Row[]) {
   if (!rows.length) return;
   const keys = Object.keys(rows[0]).filter((k) => !k.endsWith('_id') && k !== 'id' && k !== 'tenant_id');
+  // Lists and nested objects from paged endpoints (alternates, warnings, …) are written as readable text.
+  const flat = (x: unknown): string =>
+    Array.isArray(x)
+      ? x.map((v) => (v && typeof v === 'object' ? JSON.stringify(v) : text(v))).join('; ')
+      : x && typeof x === 'object'
+        ? JSON.stringify(x)
+        : text(x);
   const esc = (x: unknown) => {
-    const raw = text(x);
+    const raw = flat(x);
     return `"${(/^[=+@\-\t\r]/.test(raw) ? "'" : '') + raw.replaceAll('"', '""')}"`;
   };
   const blob = new Blob(
