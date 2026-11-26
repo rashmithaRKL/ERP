@@ -13,16 +13,21 @@ import org.springframework.stereotype.Component;
  * {@code /api/state} key {@code schedule} (order 2300, every role): the published run ({@code published}: id, number,
  * published_at, horizon_end; null when none), the number of its orders that are projected late and still open
  * ({@code late_orders}), unscheduled orders ({@code unscheduled_orders}) and up to five late orders ({@code late}) for
- * the overview and the attention center. Screens read {@code /api/schedule/**} for everything else.
+ * the overview and the attention center. V16 adds {@code changes_since_publish} and {@code last_change_at}: changes to
+ * orders, operations, maintenance windows, downtime and calendars after the published run was created ({@link
+ * ScheduleChanges}), so the overview, attention center and schedule page can say it may be out of date. Screens read
+ * {@code /api/schedule/**} for everything else.
  */
 @Component
 class ScheduleStateSections implements StateContributor {
     private static final String STILL_OPEN = "o.status NOT IN ('QUALITY_REVIEW','COMPLETED','CLOSED','CANCELLED')";
 
     private final Store s;
+    private final ScheduleChanges changes;
 
-    ScheduleStateSections(Store s) {
+    ScheduleStateSections(Store s, ScheduleChanges changes) {
         this.s = s;
+        this.changes = changes;
     }
 
     @Override
@@ -33,17 +38,22 @@ class ScheduleStateSections implements StateContributor {
     private Map<String, Object> schedule(StateRequest r) {
         var result = new LinkedHashMap<String, Object>();
         var runs = s.list(
-                "SELECT id,number,published_at,horizon_start,horizon_end FROM schedule_runs WHERE tenant_id=? AND status='PUBLISHED'",
+                "SELECT id,number,created_at,published_at,horizon_start,horizon_end FROM schedule_runs WHERE tenant_id=? AND status='PUBLISHED'",
                 r.tenant());
         if (runs.isEmpty()) {
             result.put("published", null);
             result.put("late_orders", 0);
             result.put("unscheduled_orders", 0);
             result.put("late", List.of());
+            result.put("changes_since_publish", 0);
+            result.put("last_change_at", null);
             return result;
         }
         var run = runs.getFirst();
         result.put("published", run);
+        var stale = changes.since(r.tenant(), run);
+        result.put("changes_since_publish", stale.get("changes"));
+        result.put("last_change_at", stale.get("last_change_at"));
         result.put(
                 "late_orders",
                 s.db().queryForObject(

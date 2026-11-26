@@ -62,6 +62,8 @@ export type CapacityData = {
 };
 export type Overview = {
   published: Row | null;
+  /** V16: changes a new run would see since the published run was created (null without a published run). */
+  stale?: { changes: number; last_change_at: string | null } | null;
   draft?: Row | null;
   pins?: number;
   defaults: { horizonDays: number; breakdownHours: number; useAlternates: boolean; includeDrafts: boolean };

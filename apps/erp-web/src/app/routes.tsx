@@ -204,7 +204,8 @@ export const routes: PageRoute[] = [
     path: '/schedule',
     label: 'Production schedule',
     icon: CalendarRange,
-    roles: ['ADMIN', 'PLANNER', 'OPERATOR', 'VIEWER'],
+    // Maintenance reads the published schedule to plan windows around production (V16).
+    roles: ['ADMIN', 'PLANNER', 'OPERATOR', 'MAINTENANCE', 'VIEWER'],
     group: 'MANUFACTURING',
     page: SchedulePage,
     description: 'Every operation on finite capacity: who runs what, when, and what will be late.',
@@ -258,7 +259,8 @@ export const routes: PageRoute[] = [
     path: '/maintenance',
     label: 'Maintenance',
     icon: Wrench,
-    roles: ['ADMIN', 'PLANNER', 'MAINTENANCE', 'OPERATOR'],
+    // VIEWER reads it like the other operational pages (V16); writes stay with the roles the server allows.
+    roles: ['ADMIN', 'PLANNER', 'MAINTENANCE', 'OPERATOR', 'VIEWER'],
     group: 'MANUFACTURING',
     page: MaintenancePage,
     description: 'Keep every machine ready for the next run.',

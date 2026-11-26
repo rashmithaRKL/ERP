@@ -46,11 +46,13 @@ public class ScheduleQuery {
     private final Store s;
     private final CalendarService calendars;
     private final ObjectMapper json;
+    private final ScheduleChanges changes;
 
-    ScheduleQuery(Store s, CalendarService calendars, ObjectMapper json) {
+    ScheduleQuery(Store s, CalendarService calendars, ObjectMapper json, ScheduleChanges changes) {
         this.s = s;
         this.calendars = calendars;
         this.json = json;
+        this.changes = changes;
     }
 
     private static boolean planner(Actor a) {
@@ -72,10 +74,16 @@ public class ScheduleQuery {
 
     // ------------------------------------------------------------------ overview and runs
 
-    /** {@code GET /api/schedule}: the published run, the newest draft (planners), active pins and the defaults. */
+    /**
+     * {@code GET /api/schedule}: the published run, the newest draft (planners), active pins, the defaults and (V16)
+     * {@code stale}: changes to orders, operations, maintenance windows, downtime and calendars since the published run
+     * was created ({@code {changes, last_change_at}}, see {@link ScheduleChanges}; null without a published run).
+     */
     public Map<String, Object> overview(Actor a) {
         var out = new LinkedHashMap<String, Object>();
-        out.put("published", published(a.tenant()));
+        var published = published(a.tenant());
+        out.put("published", published);
+        out.put("stale", published == null ? null : changes.since(a.tenant(), published));
         if (planner(a)) {
             var drafts = s.list(
                     HEADER + " WHERE r.tenant_id=? AND r.status='DRAFT' ORDER BY r.created_at DESC,r.id DESC LIMIT 1",

@@ -145,6 +145,22 @@ export default function SchedulePage() {
   const isDraft = run?.status === 'DRAFT';
   const stale = isDraft && o?.draft?.id !== run?.id;
   const published = o?.published;
+  // V16: orders, operations, maintenance windows, downtime or calendars changed after the published run was created.
+  const changes = num(o?.stale?.changes);
+  const outdated =
+    published && changes > 0
+      ? `The published schedule ${text(published.number)} may be out of date: ${fmt(changes)} ${
+          changes === 1 ? 'change' : 'changes'
+        } to orders, operations, maintenance windows, downtime or calendars since it was run${
+          o?.stale?.last_change_at ? ` (latest ${when(o.stale.last_change_at)})` : ''
+        }. ${
+          !planner
+            ? 'A planner can run the scheduler again.'
+            : isDraft && !stale && run && Date.parse(text(run.created_at)) > Date.parse(text(o?.stale?.last_change_at))
+              ? 'This draft already includes them; publish it to replace the published schedule.'
+              : 'Run the scheduler again and publish the new run.'
+        }`
+      : '';
   return (
     <>
       <div className="summary-strip">
@@ -248,6 +264,11 @@ export default function SchedulePage() {
             </div>
           )}
         </div>
+        {outdated && (
+          <p className="sched-note" role="status">
+            {outdated}
+          </p>
+        )}
         {stale && <p className="sched-note">A newer run exists. Only the newest run can be published.</p>}
         {run?.status === 'SUPERSEDED' && (
           <p className="sched-note">This run was superseded; it is kept unchanged for comparison.</p>

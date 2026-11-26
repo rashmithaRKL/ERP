@@ -91,7 +91,12 @@ public class OperationService {
                             a.tenant(),
                             id);
             openLog(a, op, machineId, activity, override);
-            planner.running(a.tenant(), machineId);
+            planner.running(
+                    a,
+                    machineId,
+                    OperationPlanner.OPERATION,
+                    str(order, "number"),
+                    label(op) + ": " + activity.toLowerCase() + " started");
             s.audit(
                     a,
                     "OP_STARTED",
@@ -114,7 +119,8 @@ public class OperationService {
                             "UPDATE mo_operations SET status='PAUSED',activity=NULL,updated_at=now() WHERE tenant_id=? AND id=?",
                             a.tenant(),
                             id);
-            planner.idleIfFree(a.tenant(), str(op, "machine_id"));
+            planner.idleIfFree(
+                    a, str(op, "machine_id"), OperationPlanner.OPERATION, str(order, "number"), label(op) + " paused");
             s.audit(
                     a,
                     "OP_PAUSED",
@@ -147,7 +153,12 @@ public class OperationService {
                             a.tenant(),
                             id);
             openLog(a, op, machineId, activity, override);
-            planner.running(a.tenant(), machineId);
+            planner.running(
+                    a,
+                    machineId,
+                    OperationPlanner.OPERATION,
+                    str(order, "number"),
+                    label(op) + ": " + activity.toLowerCase() + " resumed");
             s.audit(
                     a,
                     "OP_RESUMED",
@@ -224,7 +235,12 @@ public class OperationService {
                             UPDATE mo_operations SET status='READY',ready_at=now(),updated_at=now()
                             WHERE tenant_id=? AND order_id=? AND status='PENDING'
                               AND seq=(SELECT MIN(seq) FROM mo_operations WHERE tenant_id=? AND order_id=? AND status='PENDING')""", a.tenant(), order.get("id"), a.tenant(), order.get("id"));
-            planner.idleIfFree(a.tenant(), str(op, "machine_id"));
+            planner.idleIfFree(
+                    a,
+                    str(op, "machine_id"),
+                    OperationPlanner.OPERATION,
+                    str(order, "number"),
+                    label(op) + " finished");
             s.audit(
                     a,
                     "OP_FINISHED",

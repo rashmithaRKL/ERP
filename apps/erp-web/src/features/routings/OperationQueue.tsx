@@ -172,7 +172,7 @@ function OperationCard({
       <div className="job-top">
         <span>
           <Flag size={15} />
-          Op {text(op.seq)} of {text(op.operation_count)}
+          Step {text(op.operation_position || op.seq)} of {text(op.operation_count)} · Op {text(op.seq)}
           {op.alternate && <span className="bom-chip inline-chip">alternate</span>}
         </span>
         <span className="op-status">
