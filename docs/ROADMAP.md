@@ -20,7 +20,7 @@ Status language: **verified** means executed evidence exists; **implemented** me
 - [ ] Full role/field access policy; current operational read model includes costs for tenant members.
 - [ ] Server cursor pagination, background reports/exports, query plans and load evidence on realistic ledger volume.
 - [ ] Multi-line procurement/sales, unit conversion and stock variance controls validated with actual manufacturing operators.
-- [ ] Quality rework/recall/authorized disposition and warehouse reconciliation procedures. (V12: authorized disposition, rework and CAPA implemented and integration-tested; recall and operator validation remain.)
+- [ ] Quality rework/recall/authorized disposition and warehouse reconciliation procedures. (V12: authorized disposition, rework and CAPA; V14: genealogy explorer and recalls with containment, customer notification and close rules — implemented and integration-tested; operator validation and recall drills remain.)
 - [ ] Configurable taxes, invoicing/financial controls and localization reviewed with qualified accounting/privacy professionals; no certification claimed.
 - [ ] Encrypted backup/restore drill with agreed RPO/RTO, recovery runbook, retention/key custody and offsite copies.
 - [ ] Accessibility assessment including contrast, keyboard and screen readers; comprehensive automated browser regression suite.

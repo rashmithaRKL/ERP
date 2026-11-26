@@ -35,7 +35,8 @@ run by `target/surefire-reports/*.xml`.
 | `routing` | V10 master data and working time: versioned routings (`RoutingService` draft/approve/copy/make-current, `RoutingQuery` list/detail/compare), shift calendars (`ShiftCalendarService` patterns/calendars/exceptions/assignment, `CalendarQuery`, and **`CalendarService`**, the public working-time service: `availableMinutes(tenant, machineId, date)`, `workingIntervals(tenant, machineId, from, to)`, `availability(...)`), skills (`SkillService`, `SkillQuery`, public `SkillRules.check`) |
 | `reporting` | `GET /api/state` (`StateQuery` + the `StateContributor` contract), `GET /api/manufacturing/{id}` (`OrderDetailsQuery`), cross-domain sections: inventory (lots, ledger), MRP, dashboard, audit/sync, finance; multi-level MRP (V7: `MrpPlanner` engine, `PlanningStateSections` with the isolated `incomingPurchaseSupply(tenant)` query, `PlanningQuery`); Costs & reports (V9: `ReportQuery` paged cost register and journal, `ReportsController`) |
 | `maintenance` | V11 maintenance and downtime: `DowntimeService` (report/close/correct downtime), `WorkOrderService` (corrective request, independent approval, schedule, start/progress/labour/complete, cancel, labour-rate settings), `SparePartService` (FIFO issue and returns of `SPARE_PART` items), `PlanService` (preventive plans, idempotent generation, run-hour meter), `MachineStatusService` (planner status correction), `MaintenanceRules` (shared rules: machine MAINTENANCE/IDLE transitions and their history, downtime insert/close, checklists), `MaintenanceQuery` + `MaintenanceMetrics` (paged read model, MTBF/MTTR/Pareto), `MaintenanceStateSections` |
-| `demo` | `DemoDatabase` (embedded PostgreSQL for the `demo`/`test` profiles), `DemoSeed` (demo tenant, or first-start bootstrap tenant outside demo), `DemoPersonas` (V11 adds `MAINTENANCE`), `IntegrationDemoSeed` (V9), `RoutingDemoSeed` (V10), `MaintenanceDemoSeed` (V11) |
+| `traceability` | V14 genealogy and recalls: **`TraceService`**, the trace engine and the one public read service recalls use (`forward`/`backward` lot closures over the `lot_genealogy_links` view with depth-limited, cycle-safe recursive CTEs, `origins`, `supplierLots`, plus the `search` and `trace` graph/tree read endpoints), `RecallService` (open/refresh/contain/notify/close/cancel, `outstanding` close check, audited export), `RecallQuery` (paged list, detail, notification CSV), `RecallStateSections`, `TraceController`, `RecallController` |
+| `demo` | `DemoDatabase` (embedded PostgreSQL for the `demo`/`test` profiles), `DemoSeed` (demo tenant, or first-start bootstrap tenant outside demo), `DemoPersonas` (V11 adds `MAINTENANCE`), `IntegrationDemoSeed` (V9), `RoutingDemoSeed` (V10), `MaintenanceDemoSeed` (V11), `QualityDemoSeed` (V12), `TraceabilityDemoSeed` (V14) |
 | `admin` | V8 administration (ADMIN only): `UserAdminService` + `UserQuery` (edit, deactivate/reactivate, temporary passwords, directory), `ApprovalPolicyService` (public `evaluate(tenant, documentType, amount, creatorId)` → `Decision`, `approverDecision`, `autoApproval`; used by `inventory` for stock adjustments and, since V9, by `manufacturing` and `procurement` for order approval) + `ApprovalPolicyController` (`GET /api/approval-policies` for every role), `ImportService` with `ImportKind`s `ItemImport`, `PartnerImport`, `OpeningStockImport` and the `CsvFile` reader, `AuditQuery` (paged trail, facets, streamed CSV export), `PeriodService` (close/reopen accounting periods), `AdminController` |
 
 A domain package contains, by convention:
@@ -54,7 +55,10 @@ Dependency direction: domain packages → `platform` and `reporting` (contract o
 tenant-scoped schema inside the same transaction (for example, `quality` completes a manufacturing order).
 `maintenance` writes `machines.status` (only the transitions into and out of `MAINTENANCE` and planner corrections) and reads `manufacturing_orders` and `mo_operations` (refuses to start maintenance while an order without a routing, or an operation of a routed order, is in progress on the machine) through SQL in its own transactions. Deliberate exceptions: `admin` imports call the public `catalog.ItemService` / `catalog.CatalogService#partner`
 commands (joining the import's transaction); `quality.NcrService` posts a RETURN_TO_SUPPLIER disposition through
-`procurement.SupplierReturnService#returnToSupplier` (V12, same transaction, warehouse actor); and domains that require approvals ask `admin.ApprovalPolicyService`
+`procurement.SupplierReturnService#returnToSupplier` (V12, same transaction, warehouse actor); `traceability.RecallService#contain`
+holds affected stock by calling the public `quality.NcrService#raise` (V14, `source RECALL`, joining the recall's
+transaction with a nested idempotency key per recall and lot; the NCR quarantines the lot — `traceability` never writes
+`lots.status`) and reads NCR statuses for its close rule through SQL; and domains that require approvals ask `admin.ApprovalPolicyService`
 (non-transactional reads inside the caller's transaction: `inventory` for stock adjustments, `manufacturing` for orders, `procurement` for purchase orders).
 V10 adds read-only calls from `manufacturing` to `routing.SkillRules` (operation skill check) and `routing.CalendarService`
 (today's available minutes on the shop floor); V13 scheduling and V15 OEE call `CalendarService` the same way. The routing
@@ -87,6 +91,8 @@ Route ownership:
 | `reporting.ReportingController` | `GET /state`, `GET /manufacturing/{id}` |
 | `reporting.PlanningController` | `GET /planning/mrp` |
 | `reporting.ReportsController` | `GET /reports/costs`, `/reports/journal` (V9, ADMIN/PLANNER) |
+| `traceability.TraceController` | V14: `GET /traceability/search`, `/traceability/trace` |
+| `traceability.RecallController` | V14: `GET /recalls`, `/recalls/{id}`, `/recalls/{id}/notifications/export`; `POST /recalls`, `/recalls/{id}/refresh`, `/contain`, `/customers/{customerId}/notify`, `/close`, `/cancel` |
 | `maintenance.MaintenanceController` | V11: `GET /maintenance/work-orders`, `/maintenance/work-orders/{id}`, `/maintenance/plans`, `/maintenance/plans/{id}`, `/maintenance/downtime`, `/maintenance/machines`, `/maintenance/machines/{id}`, `/maintenance/machines/{id}/history`, `/maintenance/metrics`, `/maintenance/spare-parts`, `/maintenance/technicians`, `/maintenance/settings`; `POST /maintenance/work-orders`, `/maintenance/work-orders/{id}/approve`, `/schedule`, `/start`, `/progress`, `/labour`, `/parts`, `/parts/{movementId}/return`, `/complete`, `/cancel`, `/maintenance/plans`, `/maintenance/plans/{id}`, `/maintenance/plans/generate`, `/maintenance/downtime`, `/maintenance/downtime/{id}/close`, `/maintenance/downtime/{id}/correct`, `/maintenance/machines/{id}/status`, `/maintenance/machines/{id}/meter`, `/maintenance/settings` |
 
 ## How to add a feature module
@@ -293,6 +299,7 @@ annotate contributors with `@Transactional`. Existing keys, in order:
 | 1700 | `bomCosts` (multi-level standard-cost roll-up per revision; V7) | catalog |
 | 2100 | `maintenance` (V11: `open_breakdowns`, `open_downtime`, `overdue_plans`, `awaiting_approval`, `in_progress` and up to five rows each of open `breakdowns` and `overdue` plans, for the overview and attention center) | maintenance |
 | 2200 | `qualityAlerts` (one object of attention counts: `open_ncrs`, `open_critical_ncrs`, `pending_concessions`, `awaiting_returns`, `open_rework`, `overdue_capa_actions`, `my_overdue_capa_actions`; V12) | quality |
+| 2400 | `recalls` (V14: `open` = not yet contained, `contained`, `pending_customers` on contained recalls, and up to five `active` recalls with `pending_customers`, most severe first) | traceability |
 
 V9 removed keys no screen reads any more: `users` (110), `receipts` (240, `GET /api/purchases/receipts`), `ledger` (250, `GET /api/inventory/ledger`) and `journal` (320, `GET /api/reports/journal`). The Manufacturing orders, Shop floor, Quality control and Costs & reports screens read the V9 paged endpoints; `orders` and `inspections` stay for the dashboard and attention counts. V9 contributes no new keys (range 1900–1999 unused). V10 contributes no keys either (range 2000–2099 unused): routings,
 calendars, skills and operations are read from their own endpoints; `orders` rows gain the columns `routing_id` and
@@ -346,6 +353,8 @@ The database, not the Java code, is the last line of defence:
 | `maintenance_work_order_immutable` (V11) | Completed and cancelled maintenance work orders cannot be changed or deleted. |
 | `maintenance_labour_immutable`, `maintenance_part_movements_immutable`, `machine_meter_readings_immutable`, `machine_status_changes_immutable` (V11) | `reject_history_mutation()`: labour entries, spare-part issues/returns, meter readings and machine status history are append-only. |
 | `tenant_default_defect_codes` (V12) | `AFTER INSERT ON tenants`: seeds the default defect codes (`seed_default_defect_codes`: system `INSP` plus DIM, VIS, LEAK, CONT, MAT, PACK, DOC, OTHER). |
+| `recall_guard` (V14) | `protect_recall()`: recalls are never deleted; CLOSED/CANCELLED recalls are immutable; a CONTAINED recall may only become CLOSED (closing fields), everything defining its scope and affected set is frozen. A `CHECK` requires an override reason to come from someone other than the recall's creator. |
+| `recall_suspects_immutable`, `recall_lots_immutable`, `recall_shipments_immutable`, `recall_customers_guard` (V14) | `protect_recall_snapshot()`: the suspect/affected-lot/shipment snapshot changes only while the recall is OPEN; `protect_recall_customer()`: customers are added/removed only while OPEN, a notification is recorded once (NOTIFIED rows never change), nothing changes after CLOSED/CANCELLED. |
 | `inspection_measurements_immutable`, `inspection_readings_immutable`, `rework_materials_immutable`, `rework_lot_links_immutable` (V12) | Measurements recorded with an inspection decision, rework material issues and rework lot links (genealogy) are posted history (`reject_history_mutation()`). `CHECK`s keep rework value conservation (`output_value = input_value + material_cost + labour_cost`) and a closed CAPA verified by someone other than its owner. |
 
 Ledger reasons and journal accounts written by V12 (`quality.QualityRules`): `QUALITY_SCRAP` (reference = NCR number;
@@ -382,7 +391,13 @@ spare part, labour and a closed breakdown, and a corrective order in progress on
 `demo.QualityDemoSeed` (`ORDER + 120`, own transaction, keys `demo-v12-…`) the V12
 quality data: bottle (final) and HDPE (incoming) inspection plans, a resin receipt released with measurements, a returned
 bottle lot failed on wall thickness whose NCR is partly scrapped and partly reworked (rework lot re-inspected and
-released), an open critical leak NCR, and a CAPA with one done and one overdue action. A feature that needs
+released), an open critical leak NCR, and a CAPA with one done and one overdue action, and
+`demo.TraceabilityDemoSeed` (`ORDER + 140`, own transaction, keys `demo-v14-…`) the V14 recall walkthrough on its own
+rPET product line (so FIFO consumption of the other seeds' stock is untouched): items `RM-010` rPET resin, `SF-010`
+preform and `FG-010` 1.5 L bottle (+ the existing label) with approved R01 BOMs and no routing or inspection plan, a
+Lanka Polymer Trading receipt as supplier lot `LPT-R2611-31`, preform (IM-02) and bottle (BM-02) orders run to released
+output, bottles shipped to Ceylon Beverage Industries and Island Consumer Products, and a CRITICAL recall of the resin
+lot, contained (resin, preform and bottle lots held by RECALL NCRs) with Ceylon notified and Island pending. A feature that needs
 demo data adds its own runner, ordered after the base seed and idempotent (it also runs against an existing
 `.local/postgres` demo database on the next start):
 

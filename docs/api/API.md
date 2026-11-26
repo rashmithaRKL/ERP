@@ -261,6 +261,44 @@ Inspection decisions with a plan: `POST /quality/{id}/inspect` takes `measuremen
 {"outputQuantity":"200","labourCost":"1800","materials":[{"lotId":"opaque-label-lot","quantity":"200"}],"note":"Relabelled"}
 ```
 
+### Genealogy and recalls (`/traceability/*`, `/recalls/*`, V14)
+
+Every signed-in role may trace and read recalls; recall commands are QUALITY (ADMIN also allowed). The trace engine
+(`traceability.TraceService`) walks the `lot_genealogy_links` view with depth-limited, cycle-safe recursive CTEs.
+
+| Method | Path | Purpose / allowed roles (ADMIN also allowed) |
+|---|---|---|
+| GET | `/traceability/search?q=` | Entry points matching `q` (≥ 2 characters): lots (number), manufacturing orders, goods receipts (GRN number), purchase orders (approved or later), sales orders (number or customer reference), delivery references, suppliers (name) — `{items:[{type, id, label, detail}]}`, a few of each type |
+| GET | `/traceability/trace?type=&id=&direction=&depth=&from=&to=` | The genealogy around an entry point. `type` LOT (default; `id` = lot id or number), MO (id or number), RECEIPT (GRN number), PO, SO, DELIVERY (delivery reference) or SUPPLIER (+ receipt dates `from`/`to`, Asia/Colombo, default the last 90 days); `direction` BOTH (default)/BACKWARD/FORWARD; `depth` 1–30 lot-to-lot hops (default 12). Returns `{root, direction, depth, truncated, nodes, edges, tree:{backward, forward}, summary}` (see below); 404 for another tenant's record |
+| GET | `/recalls?status=&severity=&q=&limit=&before=` | Recalls, newest first, keyset-paged; `status` `all`/`active` (OPEN + CONTAINED)/a status, `q` matches number, title, reason and suspect lot numbers; rows add `pending_customers`, `suspect_lots`, `created_by_name`, `overridden` |
+| GET | `/recalls/{id}` | Header (defect, supplier, item, user names) + `suspects`, `lots` (snapshot `quantity`/`lot_status`, `relation` SUSPECT/DOWNSTREAM/SOURCE/SIBLING, `depth`, `containment`, `ncr`/`ncr_status`, live `current_status`/`current_quantity`), `shipments`, `customers` (contact, notification), `closeCheck {pendingCustomers, unsettledLots, releasedSinceContainment}` |
+| GET | `/recalls/{id}/notifications/export` | Notification list as CSV (UTF-8 BOM; one row per affected delivery with the customer's contact and notification status); the download is audited (`RECALL_NOTIFICATIONS_EXPORTED`) |
+| POST | `/recalls` | Open `{title, reason, severity, scope FORWARD\|FORWARD_AND_SIBLINGS, basis LOTS\|SUPPLIER, lotIds?, supplierId?, itemId?, receivedFrom?, receivedTo?, defectCode, depth?}`: LOTS takes 1–200 suspect lots; SUPPLIER takes the supplier and receipt dates (409 when nothing was received). Computes and stores the affected set; returns `{id, number, status, suspectLots, affectedLots, inStockLots, shipments, customers, truncated}`; QUALITY |
+| POST | `/recalls/{id}/refresh` | Recompute the affected set of an OPEN recall (supplier recalls also re-resolve their suspect lots); QUALITY |
+| POST | `/recalls/{id}/contain` | OPEN → CONTAINED: recompute, then raise a `source RECALL` NCR (recall severity and defect code, quantity = the lot's balance) through `quality.NcrService#raise` on every affected **released** lot in stock — the NCR puts it on hold. Lots already quarantined/rejected (ALREADY_HELD), under an open NCR (UNDER_NCR) or awaiting an inspection (AWAITING_INSPECTION) are skipped and listed. The snapshot is frozen afterwards. Returns `{heldLots, skippedLots, …}`; QUALITY |
+| POST | `/recalls/{id}/customers/{customerId}/notify` | `{notifiedOn, contact, notes?}`: PENDING → NOTIFIED (once, never changed); CONTAINED recalls only; the date may not be in the future; QUALITY |
+| POST | `/recalls/{id}/close` | `{note?, overrideReason?}`: CONTAINED → CLOSED when every customer is notified and every lot the recall held has its RECALL NCR DISPOSITIONED or CLOSED. Otherwise `overrideReason` is required and the closing user must differ from the one who opened the recall (also a database `CHECK`); QUALITY |
+| POST | `/recalls/{id}/cancel` | `{reason}`: OPEN → CANCELLED (nothing was held); QUALITY |
+
+Trace payload: `nodes[]` carry `id` (`lot:…`, `mo:…`, `rw:…`, `receipt:…`, `delivery:…`, `origin:…`, `out:<kind>:<reference>`,
+and for document roots `grn:…`, `po:…`, `so:…`, `dref:…`, `supplier:…`), `kind` (LOT, MANUFACTURING_ORDER, REWORK_ORDER,
+RECEIPT, DELIVERY, SUPPLIER_RETURN, SCRAP, MAINTENANCE, ADJUSTMENT, OPENING, FOUND, GOODS_RECEIPT, PURCHASE_ORDER,
+SALES_ORDER, DELIVERY_NOTE, SUPPLIER), `label`, `detail`, `level` (root 0, backward negative, forward positive: the
+left-to-right column), `side` (ROOT/BACKWARD/FORWARD), `ref` and kind-specific fields (lots: item, warehouse, `onHand`,
+`status`, `openNcr`, `more` = links beyond the depth limit; orders: status and quantities; receipts: PO and supplier;
+deliveries: sales order, customer, quantity, returned). `edges[]` always point in the direction the material moved:
+`{from, to, kind RECEIVED|ISSUED|PRODUCED|TRANSFERRED|REWORK_INPUT|REWORK_MATERIAL|REWORKED|DELIVERED|RETURNED|SUPPLIER_RETURN|SCRAP|MAINTENANCE|ADJUSTMENT|OPENING|FOUND, quantity, uom, at, reference}`.
+`tree.backward`/`tree.forward` are pre-order rows `{node, indent, edge, quantity, uom, at, reference, repeated}` (a node
+reached again is listed once more as `repeated` and not expanded). At most 2,000 lots per direction (`truncated`).
+
+`/state` key `recalls` (order 2400, every role): `{open, contained, pending_customers, active:[{id, number, title, severity, status, created_at, pending_customers}]}` (pending customers counted on contained recalls; up to five active recalls, most severe first).
+
+```json
+{"title":"rPET resin LPT-R2611-31 · non-food-grade flake","reason":"Supplier notice","severity":"CRITICAL",
+ "scope":"FORWARD","basis":"LOTS","lotIds":["<lot id>"],"supplierId":null,"itemId":null,"receivedFrom":null,
+ "receivedTo":null,"defectCode":"CONT","depth":null}
+```
+
 ### Administration (`/admin/*`, ADMIN only)
 
 | Method | Path | Purpose |
