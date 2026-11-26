@@ -1,5 +1,6 @@
-import { lazy, Suspense, useState } from 'react';
+import { lazy, Suspense } from 'react';
 import { LoaderCircle } from 'lucide-react';
+import { useTabParam } from '../app/urlState';
 import { useWorkspace } from '../app/workspace';
 import '../features/admin/admin.css';
 import { OrganizationTab } from '../features/admin/OrganizationTab';
@@ -34,7 +35,10 @@ const TABS = [
  */
 export default function AdministrationPage() {
   const { can } = useWorkspace();
-  const [tab, setTab] = useState('organization');
+  const [tab, setTab] = useTabParam(
+    TABS.map((t) => t.value),
+    'organization',
+  );
   if (!can()) return <OrganizationTab />;
   return (
     <>

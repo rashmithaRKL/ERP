@@ -12,8 +12,8 @@ import {
 } from 'recharts';
 import { fmt } from '../../lib/format';
 import type { Figures, Period } from './api';
-import { hours, pct, waterfallBars } from './format';
-import type { WaterfallStep } from './format';
+import { hours, pct, trendRows, waterfallBars } from './format';
+import type { TrendRow, WaterfallStep } from './format';
 import './performance.css';
 
 const LINES = [
@@ -23,21 +23,17 @@ const LINES = [
   { key: 'quality', label: 'Quality', color: 'var(--tone-green)', width: 1.5 },
 ] as const;
 
-type TrendPoint = { label: string; partial: boolean } & Record<string, number | null | string | boolean>;
-
-const percentOf = (value: number | null | undefined) =>
-  value == null ? null : Math.round(value * 1000) / 10;
-
-/** Plant OEE, availability, performance and quality per day or week; days without a measured OEE leave a gap. */
-export function TrendChart({ series }: { series: (Figures & Period)[] }) {
-  const points: TrendPoint[] = series.map((p) => ({
-    label: p.label,
-    partial: p.partial,
-    oee: percentOf(p.oee),
-    availability: percentOf(p.availability),
-    performance: percentOf(p.performance),
-    quality: percentOf(p.quality),
-  }));
+/** Plant OEE, availability, performance and quality per day or week; days without a measured OEE leave a gap. An open
+ * last period (today so far, or this week so far) is drawn dashed to a hollow point (see `trendRows`). */
+export function TrendChart({
+  series,
+  bucket = 'day',
+}: {
+  series: (Figures & Period)[];
+  bucket?: 'day' | 'week';
+}) {
+  const points = trendRows(series);
+  const open = points.at(-1)?.partial ? points.at(-1) : undefined;
   const measured = series.filter((p) => p.oee != null);
   if (!measured.length)
     return (
@@ -46,7 +42,8 @@ export function TrendChart({ series }: { series: (Figures & Period)[] }) {
         <p>OEE appears once operations log run time and report quantities on a scheduled day.</p>
       </div>
     );
-  const summary = measured.map((p) => `${p.label} ${pct(p.oee)}`).join(', ');
+  const soFar = bucket === 'week' ? 'this week so far' : 'today so far';
+  const summary = measured.map((p) => `${p.label}${p.partial ? ` (${soFar})` : ''} ${pct(p.oee)}`).join(', ');
   return (
     <>
       <div className="perf-legend" aria-hidden="true">
@@ -56,6 +53,12 @@ export function TrendChart({ series }: { series: (Figures & Period)[] }) {
             {l.label}
           </span>
         ))}
+        {open && (
+          <span>
+            <i className="legend-dot partial" />
+            {bucket === 'week' ? 'This week, so far' : 'Today, so far'} (dashed)
+          </span>
+        )}
       </div>
       <div className="perf-chart" role="img" aria-label={`Plant OEE by period: ${summary}.`}>
         <ResponsiveContainer width="100%" height="100%">
@@ -80,20 +83,23 @@ export function TrendChart({ series }: { series: (Figures & Period)[] }) {
             <Tooltip
               cursor={{ stroke: 'var(--border)' }}
               content={({ active, payload }) => {
-                const point = active ? (payload?.[0]?.payload as TrendPoint | undefined) : undefined;
+                const point = active ? (payload?.[0]?.payload as TrendRow | undefined) : undefined;
                 return (
                   point && (
                     <div className="chart-tooltip">
                       <strong>
                         {point.label}
-                        {point.partial && <em> · so far</em>}
+                        {point.partial && <em> · {soFar}</em>}
                       </strong>
-                      {LINES.map((l) => (
-                        <span key={l.key}>
-                          <i className="legend-dot" style={{ background: l.color }} />
-                          {l.label} <b>{point[l.key] == null ? '—' : `${fmt(point[l.key], 1)}%`}</b>
-                        </span>
-                      ))}
+                      {LINES.map((l) => {
+                        const value = point[`${l.key}Value`];
+                        return (
+                          <span key={l.key}>
+                            <i className="legend-dot" style={{ background: l.color }} />
+                            {l.label} <b>{value == null ? '—' : `${fmt(value, 1)}%`}</b>
+                          </span>
+                        );
+                      })}
                     </div>
                   )
                 );
@@ -112,6 +118,36 @@ export function TrendChart({ series }: { series: (Figures & Period)[] }) {
                 connectNulls={false}
               />
             ))}
+            {open &&
+              LINES.map((l) => (
+                <Line
+                  key={`${l.key}-open`}
+                  isAnimationActive={false}
+                  type="linear"
+                  dataKey={`${l.key}Open`}
+                  stroke={l.color}
+                  strokeOpacity={0.75}
+                  strokeWidth={Math.max(l.width - 0.5, 1)}
+                  strokeDasharray="3 4"
+                  activeDot={false}
+                  connectNulls={false}
+                  dot={({ cx, cy, index }) =>
+                    l.key === 'oee' && index === points.length - 1 && cy != null ? (
+                      <circle
+                        key="open"
+                        cx={cx}
+                        cy={cy}
+                        r={4}
+                        fill="var(--surface)"
+                        stroke={l.color}
+                        strokeWidth={2}
+                      />
+                    ) : (
+                      <g key={`none-${index}`} />
+                    )
+                  }
+                />
+              ))}
           </LineChart>
         </ResponsiveContainer>
       </div>

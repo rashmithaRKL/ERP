@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { businessDay, cellText, hours, oeeBand, pct, waterfallBars } from './format';
+import { businessDay, cellText, hours, oeeBand, pct, trendRows, waterfallBars } from './format';
 import type { WaterfallStep } from './format';
 
 describe('OEE formatting', () => {
@@ -56,5 +56,29 @@ describe('OEE formatting', () => {
     // 2026-11-25T19:00Z is 00:30 on 26 November in Colombo.
     expect(businessDay(0, Date.UTC(2026, 10, 25, 19, 0))).toBe('2026-11-26');
     expect(businessDay(-1, Date.UTC(2026, 10, 25, 19, 0))).toBe('2026-11-25');
+  });
+});
+
+describe('OEE trend rows', () => {
+  it('draws an open last period only as a dashed segment from the previous period', () => {
+    const rows = trendRows([
+      { label: '24 Nov', partial: false, oee: 0.61, availability: 0.8, performance: 0.8, quality: 0.95 },
+      { label: '25 Nov', partial: false, oee: 0.5534, availability: 0.7, performance: 0.81, quality: 0.97 },
+      { label: '26 Nov', partial: true, oee: 0.02, availability: 0.05, performance: 0.4, quality: 1 },
+    ]);
+    expect(rows.map((r) => r.oee)).toEqual([61, 55.3, null]);
+    expect(rows.map((r) => r.oeeOpen)).toEqual([null, 55.3, 2]);
+    expect(rows.map((r) => r.oeeValue)).toEqual([61, 55.3, 2]);
+    expect(rows.map((r) => r.quality)).toEqual([95, 97, null]);
+    expect(rows[2].partial).toBe(true);
+  });
+
+  it('keeps every period solid when the range ends with a complete day; unmeasured days stay gaps', () => {
+    const rows = trendRows([
+      { label: '20 Nov', partial: false, oee: null },
+      { label: '21 Nov', partial: false, oee: 0.7 },
+    ]);
+    expect(rows.map((r) => r.oee)).toEqual([null, 70]);
+    expect(rows.map((r) => r.oeeOpen)).toEqual([null, null]);
   });
 });

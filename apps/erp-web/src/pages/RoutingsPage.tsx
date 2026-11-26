@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { AnimatePresence } from 'motion/react';
 import { CalendarClock, Route } from 'lucide-react';
+import { useTabParam } from '../app/urlState';
 import { useWorkspace } from '../app/workspace';
 import type { RoutingDetail } from '../features/routings/api';
 import { CalendarsTab } from '../features/routings/CalendarsTab';
@@ -21,7 +22,7 @@ type Editor = { draft?: RoutingDetail } | undefined;
  */
 export default function RoutingsPage() {
   const { can } = useWorkspace();
-  const [tab, setTab] = useState('routings');
+  const [tab, setTab] = useTabParam(['routings', 'calendars', 'skills'], 'routings');
   const [open, setOpen] = useState<string>();
   const [editor, setEditor] = useState<Editor>();
   const [compare, setCompare] = useState<{ from: string; to: string }>();
@@ -31,7 +32,7 @@ export default function RoutingsPage() {
         setTab('routings');
         setEditor({});
       }),
-    [],
+    [setTab],
   );
   return (
     <>

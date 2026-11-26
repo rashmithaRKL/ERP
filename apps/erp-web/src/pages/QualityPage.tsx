@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useState } from 'react';
 import { AnimatePresence } from 'motion/react';
+import { useTabParam, useUrlParams } from '../app/urlState';
 import { useStateData } from '../app/workspace';
 import { Panel } from '../components';
 import { useCursorPage } from '../features/lists/cursorPage';
@@ -24,24 +24,17 @@ const VIEWS = ['inspections', 'ncrs', 'rework', 'capa', 'plans'];
 
 /**
  * Route `/quality`: inspection queue with plan-driven measurements (V9 paged list), nonconformances with
- * dispositions, rework orders, CAPA and inspection plans (V12). `?tab=` and `?ncr=` / `?capa=` deep-link.
+ * dispositions, rework orders, CAPA and inspection plans (V12). `?tab=` and `?ncr=` / `?rework=` / `?capa=` deep-link (V16: the
+ * URL follows the tab and the open drawer).
  */
 export default function QualityPage() {
   const data = useStateData();
-  const [params] = useSearchParams();
-  const [view, setView] = useState(
-    VIEWS.includes(params.get('tab') ?? '') ? params.get('tab')! : 'inspections',
-  );
-  const [ncr, setNcr] = useState<string | undefined>(params.get('ncr') ?? undefined);
-  const [rework, setRework] = useState<string>();
-  const [capa, setCapa] = useState<string | undefined>(params.get('capa') ?? undefined);
-  // Deep links from the attention center and the lot drawer also work while this page is open.
-  useEffect(() => {
-    const tab = params.get('tab');
-    if (tab && VIEWS.includes(tab)) setView(tab);
-    if (params.get('ncr')) setNcr(params.get('ncr')!);
-    if (params.get('capa')) setCapa(params.get('capa')!);
-  }, [params]);
+  // Tab and open drawer live in the URL (`?tab=ncrs&ncr=…`), so links work while the page is open and can be shared.
+  const [view, setView] = useTabParam(VIEWS, 'inspections');
+  const [params, update] = useUrlParams();
+  const ncr = params.get('ncr') || undefined;
+  const rework = params.get('rework') || undefined;
+  const capa = params.get('capa') || undefined;
   // The inspection queue's filters live here: the summary strip reads its tenant-wide counts.
   const [tab, setTab] = useState('all');
   const [type, setType] = useState('');
@@ -58,11 +51,12 @@ export default function QualityPage() {
   const alerts = data.qualityAlerts as QualityAlerts | undefined;
   const counts = inspections.query.data?.counts || {};
   const s = summary.data;
-  const open = (kind: 'ncr' | 'rework' | 'capa', id: string) => {
-    setNcr(kind === 'ncr' ? id : undefined);
-    setRework(kind === 'rework' ? id : undefined);
-    setCapa(kind === 'capa' ? id : undefined);
-  };
+  const open = (kind: 'ncr' | 'rework' | 'capa', id: string) =>
+    update({
+      ncr: kind === 'ncr' ? id : null,
+      rework: kind === 'rework' ? id : null,
+      capa: kind === 'capa' ? id : null,
+    });
   return (
     <>
       <div className="summary-strip">
@@ -148,7 +142,7 @@ export default function QualityPage() {
             key={`ncr-${ncr}`}
             id={ncr}
             people={people}
-            onClose={() => setNcr(undefined)}
+            onClose={() => update({ ncr: null })}
             onOpenRework={(id) => open('rework', id)}
             onOpenCapa={(id) => open('capa', id)}
           />
@@ -157,7 +151,7 @@ export default function QualityPage() {
           <ReworkDrawer
             key={`rework-${rework}`}
             id={rework}
-            onClose={() => setRework(undefined)}
+            onClose={() => update({ rework: null })}
             onOpenNcr={(id) => open('ncr', id)}
           />
         )}
@@ -166,7 +160,7 @@ export default function QualityPage() {
             key={`capa-${capa}`}
             id={capa}
             people={people}
-            onClose={() => setCapa(undefined)}
+            onClose={() => update({ capa: null })}
             onOpenNcr={(id) => open('ncr', id)}
           />
         )}

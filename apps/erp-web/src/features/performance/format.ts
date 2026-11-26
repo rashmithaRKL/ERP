@@ -112,3 +112,34 @@ export function businessDay(offset = 0, now = Date.now()) {
     day: '2-digit',
   }).format(new Date(now + offset * 86_400_000));
 }
+
+/** The four trend series, in drawing order. */
+export const TREND_KEYS = ['oee', 'availability', 'performance', 'quality'] as const;
+export type TrendKey = (typeof TREND_KEYS)[number];
+type TrendInput = { label: string; partial: boolean } & Partial<Record<TrendKey, number | null>>;
+export type TrendRow = { label: string; partial: boolean } & Record<
+  TrendKey | `${TrendKey}Open` | `${TrendKey}Value`,
+  number | null
+>;
+
+/**
+ * Rows for the OEE trend chart, in percent (1 dp). Complete periods draw the solid series (`oee`, …). An open last period
+ * (today so far, or the current week) is left out of the solid series and drawn only as the dashed `oeeOpen` segment
+ * from the previous period, like the overview's production chart, so a day that has only just started never reads as a
+ * collapse. `oeeValue` keeps every period's figure for the tooltip.
+ */
+export function trendRows(series: TrendInput[]): TrendRow[] {
+  const last = series.length - 1;
+  const open = last >= 0 && series[last].partial;
+  const percent = (v: number | null | undefined) => (v == null ? null : Math.round(v * 1000) / 10);
+  return series.map((p, i) => {
+    const row = { label: p.label, partial: p.partial } as TrendRow;
+    for (const key of TREND_KEYS) {
+      const value = percent(p[key]);
+      row[`${key}Value`] = value;
+      row[key] = !open || i < last ? value : null;
+      row[`${key}Open`] = open && i >= last - 1 ? value : null;
+    }
+    return row;
+  });
+}
