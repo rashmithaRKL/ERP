@@ -145,7 +145,7 @@
 .sched-columns { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 20px; align-items: start; }
 .sched-orders-panel .table-wrap, .sched-orders-panel .empty { margin: 0; }
 .sched-warning { display: inline-block; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; }
-.sched-heat-scroll { overflow-x: auto; padding: 4px 20px 0; }
+.sched-heat-scroll { position: relative; overflow-x: auto; padding: 4px 20px 0; }
 .sched-heat-scroll:focus-visible { outline-offset: -3px; }
 .sched-heat { border-collapse: separate; border-spacing: 3px; font-size: 11px; min-width: 100%; }
 .sched-heat th { font-weight: 600; color: var(--table-head); white-space: nowrap; padding: 4px 6px; text-align: center; }
