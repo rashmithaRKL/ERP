@@ -13,6 +13,7 @@ import {
   Cpu,
   Factory,
   ListChecks,
+  Network,
   Package,
   ShieldAlert,
   ShieldCheck,
@@ -109,6 +110,10 @@ export default function OverviewPage() {
   // V13 scheduling: open orders the published schedule projects to finish after their due date.
   const lateScheduled = num(data.schedule?.late_orders);
   const firstLate = data.schedule?.late?.[0];
+  // V14 recalls: not yet contained, and customers still to notify (`recalls` state key).
+  const openRecalls = num(data.recalls?.open);
+  const recallCustomers = num(data.recalls?.pending_customers);
+  const recallAttention = openRecalls + recallCustomers;
   return (
     <>
       <motion.div className="stats-grid" variants={stagger} initial="hidden" animate="visible">
@@ -435,12 +440,51 @@ export default function OverviewPage() {
                 (maintenanceAttention ? 1 : 0) +
                 (criticalNcrs ? 1 : 0) +
                 (overdueCapa ? 1 : 0) +
-                (lateScheduled ? 1 : 0)}
+                (lateScheduled ? 1 : 0) +
+                (recallAttention ? 1 : 0)}
             </span>
           }
           className="attention-panel"
         >
           <div className="attention-list">
+            {recallAttention > 0 && (
+              <button
+                className="attention-item"
+                onClick={() =>
+                  navigate(
+                    data.recalls?.active.length === 1
+                      ? `/traceability?tab=recalls&recall=${encodeURIComponent(data.recalls.active[0].id)}`
+                      : '/traceability?tab=recalls',
+                  )
+                }
+              >
+                <span className={`attention-symbol ${openRecalls ? 'red' : 'amber'}`}>
+                  <Network size={16} />
+                </span>
+                <div>
+                  <strong>
+                    {openRecalls
+                      ? plural(openRecalls, 'recall is not contained yet', 'recalls are not contained yet')
+                      : plural(
+                          recallCustomers,
+                          'recalled customer to notify',
+                          'recalled customers to notify',
+                        )}
+                  </strong>
+                  <p>
+                    {openRecalls && recallCustomers
+                      ? `${plural(recallCustomers, 'customer still needs', 'customers still need')} to be notified.`
+                      : openRecalls
+                        ? 'Put the affected stock on hold before it moves on.'
+                        : 'Record each customer notification to close the recall.'}
+                  </p>
+                  <span>
+                    Open recalls
+                    <ArrowRight size={11} />
+                  </span>
+                </div>
+              </button>
+            )}
             {maintenanceAttention > 0 && (
               <button
                 className="attention-item"

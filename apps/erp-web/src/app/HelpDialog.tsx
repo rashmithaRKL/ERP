@@ -68,6 +68,13 @@ export function HelpDialog({ onClose }: { onClose: () => void }) {
           time or records are shown as not measured, never as 0 %, and planners close completed days so later
           calendar changes do not rewrite them.
         </p>
+        <p>
+          Traceability & recalls: trace any lot, manufacturing order, goods receipt, purchase or sales order,
+          delivery or supplier backward to its suppliers and forward to the customers who received it, as a
+          graph or an indented tree. Quality opens a recall from suspect lots or a supplier’s deliveries,
+          contains it (affected stock in hand goes on hold through recall nonconformances), records each
+          customer notification, exports the notification list and closes it once everything is dispositioned.
+        </p>
         <h3>What remains on the roadmap</h3>
         <p>
           Full finance and tax localization, personnel workflows, extended onboarding, MFA, cloud

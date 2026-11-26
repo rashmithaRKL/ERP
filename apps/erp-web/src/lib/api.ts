@@ -37,6 +37,9 @@ export type State = {
   schedule?: ScheduleSummary;
   /** V15: yesterday's measured plant OEE (null when no work center has a measured OEE that day). */
   performance?: PlantOee | null;
+  /** V14 recall attention: open (not contained) and contained recalls, customers still to notify on contained
+   * recalls, and up to five active recalls (most severe first); screens read `GET /recalls`. */
+  recalls?: RecallSummary;
 };
 /** `schedule` state key (V13): published run (null when none), late and unscheduled open orders, five latest late orders. */
 export type ScheduleSummary = {
@@ -60,6 +63,8 @@ export type PlantOee = {
   warningCount: number;
   workCenters: number;
 };
+/** `recalls` state key (V14). */
+export type RecallSummary = { open: number; contained: number; pending_customers: number; active: Row[] };
 /** `maintenance` state key (V11): counts plus up to five open breakdowns and overdue preventive plans. */
 export type MaintenanceSummary = {
   open_breakdowns: number;

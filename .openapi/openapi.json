@@ -10784,6 +10784,495 @@
           }
         }
       }
+    },
+    "/traceability/search": {
+      "get": {
+        "summary": "Entry points for a trace matching q (at least 2 characters): lots, manufacturing orders, goods receipts (GRN), purchase orders, sales orders, delivery references and suppliers: {items:[{type, id, label, detail}]}; every role",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Lot number, MO/PO/SO/GRN number, customer reference, delivery reference or supplier name"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Result object"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "Fewer than two characters"
+          }
+        }
+      }
+    },
+    "/traceability/trace": {
+      "get": {
+        "summary": "Genealogy graph around an entry point: {root, direction, depth, truncated, nodes:[{id, kind, label, detail, level, side, ...}], edges:[{from, to, kind, quantity, uom, at, reference}], tree:{backward, forward}, summary}. Backward follows receipts, producing manufacturing orders and their issued lots, transfers, rework and customer returns; forward follows material issues, output lots, transfers, rework, deliveries, customer returns and terminal outflows (supplier returns, scrap, maintenance issues, adjustments). Every role",
+        "parameters": [
+          {
+            "name": "type",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "LOT (default), MO, RECEIPT (GRN number), PO, SO, DELIVERY (delivery reference) or SUPPLIER"
+          },
+          {
+            "name": "id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Id (or number) of the entry point; GRN number for RECEIPT, reference for DELIVERY"
+          },
+          {
+            "name": "direction",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "BOTH (default), BACKWARD or FORWARD"
+          },
+          {
+            "name": "depth",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 30,
+              "default": 12
+            },
+            "description": "Lot-to-lot hops per direction"
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "SUPPLIER only: first receipt date (yyyy-MM-dd, Asia/Colombo; default 90 days before to)"
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "SUPPLIER only: last receipt date (default today)"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Result object"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "Unknown type/direction or depth outside 1-30"
+          }
+        }
+      }
+    },
+    "/recalls": {
+      "get": {
+        "summary": "Recalls, newest first, keyset-paged: {items, next, total}; rows add pending_customers, suspect_lots, created_by_name, overridden; every role",
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "all (default), active (OPEN + CONTAINED), OPEN, CONTAINED, CLOSED or CANCELLED"
+          },
+          {
+            "name": "severity",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "MINOR, MAJOR or CRITICAL"
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Recall number, title, reason or suspect lot number"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200,
+              "default": 25
+            }
+          },
+          {
+            "name": "before",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Cursor: the previous page's next value"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Result object"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "Unknown filter or page size outside 1-200"
+          }
+        }
+      },
+      "post": {
+        "summary": "Open a recall from suspect lots (basis LOTS) or a supplier and receipt dates (basis SUPPLIER); computes and stores the affected-lot, shipment and customer snapshot; QUALITY",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RecallOpen"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Committed result; retry with same key returns prior result"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Role/CSRF denied"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "State/stock/period/idempotency conflict"
+          }
+        }
+      }
+    },
+    "/recalls/{id}": {
+      "get": {
+        "summary": "One recall: header (defect, supplier, item, user names) plus suspects, lots (snapshot quantity/status, relation, depth, containment, NCR number/status, current status/quantity), shipments, customers (contact, notification) and closeCheck {pendingCustomers, unsettledLots, releasedSinceContainment}; every role",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Result object"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "Conflict"
+          }
+        }
+      }
+    },
+    "/recalls/{id}/notifications/export": {
+      "get": {
+        "summary": "Customer notification list as CSV (UTF-8 with BOM, one row per affected delivery: customer contact, notification status/date/contact/notes, sales order, delivery, lot, item, quantity, returned); the download is audited (RECALL_NOTIFICATIONS_EXPORTED); every role",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "text/csv attachment",
+            "content": {
+              "text/csv": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          }
+        }
+      }
+    },
+    "/recalls/{id}/refresh": {
+      "post": {
+        "summary": "Recompute the affected set of an OPEN recall; QUALITY",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Committed result; retry with same key returns prior result"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Role/CSRF denied"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "State/stock/period/idempotency conflict"
+          }
+        }
+      }
+    },
+    "/recalls/{id}/contain": {
+      "post": {
+        "summary": "OPEN -> CONTAINED: recomputes the affected set, raises a RECALL NCR (quality.NcrService) on every released lot in stock (lots already on hold, under an open NCR or awaiting inspection are skipped and listed) and freezes the snapshot; QUALITY",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Committed result; retry with same key returns prior result"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Role/CSRF denied"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "State/stock/period/idempotency conflict"
+          }
+        }
+      }
+    },
+    "/recalls/{id}/customers/{customerId}/notify": {
+      "post": {
+        "summary": "Record that an affected customer was notified (PENDING -> NOTIFIED, once; CONTAINED recalls only; date not in the future); QUALITY",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "customerId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RecallNotify"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Committed result; retry with same key returns prior result"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Role/CSRF denied"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "State/stock/period/idempotency conflict"
+          }
+        }
+      }
+    },
+    "/recalls/{id}/close": {
+      "post": {
+        "summary": "CONTAINED -> CLOSED. Needs every customer notified and every lot the recall held dispositioned (its NCR DISPOSITIONED/CLOSED), or an overrideReason from a QUALITY/ADMIN user other than the one who opened the recall; QUALITY",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RecallClose"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Committed result; retry with same key returns prior result"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Role/CSRF denied"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "State/stock/period/idempotency conflict"
+          }
+        }
+      }
+    },
+    "/recalls/{id}/cancel": {
+      "post": {
+        "summary": "OPEN -> CANCELLED (nothing was held); QUALITY",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RecallCancel"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Committed result; retry with same key returns prior result"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Role/CSRF denied"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "State/stock/period/idempotency conflict"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -14857,6 +15346,134 @@
             "nullable": true,
             "maxLength": 400,
             "description": "Why the day is recalculated (at least 5 characters)"
+          }
+        }
+      },
+      "RecallOpen": {
+        "type": "object",
+        "required": [
+          "title",
+          "reason",
+          "severity",
+          "scope",
+          "basis",
+          "defectCode"
+        ],
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 160
+          },
+          "reason": {
+            "type": "string",
+            "maxLength": 4000
+          },
+          "severity": {
+            "type": "string",
+            "enum": [
+              "MINOR",
+              "MAJOR",
+              "CRITICAL"
+            ]
+          },
+          "scope": {
+            "type": "string",
+            "enum": [
+              "FORWARD",
+              "FORWARD_AND_SIBLINGS"
+            ],
+            "description": "FORWARD: the suspects and everything made from them. FORWARD_AND_SIBLINGS: also the lots the suspects were made from and every lot made from their origin lots (purchased, opening or found stock)"
+          },
+          "basis": {
+            "type": "string",
+            "enum": [
+              "LOTS",
+              "SUPPLIER"
+            ]
+          },
+          "lotIds": {
+            "type": "array",
+            "maxItems": 200,
+            "items": {
+              "type": "string"
+            },
+            "description": "LOTS basis only"
+          },
+          "supplierId": {
+            "type": "string",
+            "description": "SUPPLIER basis only"
+          },
+          "itemId": {
+            "type": "string",
+            "description": "SUPPLIER basis only, optional"
+          },
+          "receivedFrom": {
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+            "description": "SUPPLIER basis only (Asia/Colombo)"
+          },
+          "receivedTo": {
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+            "description": "SUPPLIER basis only"
+          },
+          "defectCode": {
+            "type": "string",
+            "maxLength": 20,
+            "description": "Active defect code of the RECALL NCRs"
+          },
+          "depth": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 30,
+            "description": "Lot-to-lot hops (default 30)"
+          }
+        }
+      },
+      "RecallNotify": {
+        "type": "object",
+        "required": [
+          "notifiedOn",
+          "contact"
+        ],
+        "properties": {
+          "notifiedOn": {
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+          },
+          "contact": {
+            "type": "string",
+            "maxLength": 200
+          },
+          "notes": {
+            "type": "string",
+            "maxLength": 2000
+          }
+        }
+      },
+      "RecallClose": {
+        "type": "object",
+        "properties": {
+          "note": {
+            "type": "string",
+            "maxLength": 2000
+          },
+          "overrideReason": {
+            "type": "string",
+            "maxLength": 2000,
+            "description": "Required while customers are pending or held lots are not dispositioned"
+          }
+        }
+      },
+      "RecallCancel": {
+        "type": "object",
+        "required": [
+          "reason"
+        ],
+        "properties": {
+          "reason": {
+            "type": "string",
+            "maxLength": 2000
           }
         }
       }
