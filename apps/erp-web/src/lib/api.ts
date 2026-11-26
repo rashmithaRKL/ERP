@@ -33,7 +33,12 @@ export type State = {
   /** V12 quality attention counts (open / open critical NCRs, pending concessions and supplier returns, open rework,
    * overdue CAPA actions, the caller's overdue CAPA actions). */
   qualityAlerts?: Record<string, number>;
+  /** V14 recall attention: open (not contained) and contained recalls, customers still to notify on contained
+   * recalls, and up to five active recalls (most severe first); screens read `GET /recalls`. */
+  recalls?: RecallSummary;
 };
+/** `recalls` state key (V14). */
+export type RecallSummary = { open: number; contained: number; pending_customers: number; active: Row[] };
 /** `maintenance` state key (V11): counts plus up to five open breakdowns and overdue preventive plans. */
 export type MaintenanceSummary = {
   open_breakdowns: number;

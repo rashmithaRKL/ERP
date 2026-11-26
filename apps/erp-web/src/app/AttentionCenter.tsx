@@ -4,7 +4,10 @@ import { Empty, Overlay } from '../components';
 import { fmt, num, text, today } from '../lib/format';
 import { useWorkspace } from './workspace';
 
-/** Bell-icon notifications: shortages, pending inspections, overdue orders, open breakdowns and overdue preventive work. */
+/**
+ * Bell-icon notifications: shortages, pending inspections, overdue orders, open breakdowns and overdue preventive work,
+ * quality alerts and active recalls (V14).
+ */
 export function AttentionCenter({ onClose }: { onClose: () => void }) {
   const navigate = useNavigate();
   const { data, summary } = useWorkspace();
@@ -46,6 +49,17 @@ export function AttentionCenter({ onClose }: { onClose: () => void }) {
                 },
               ]
             : []),
+          // V14 recalls (`recalls` state key): not yet contained, and contained with customers still to notify.
+          ...(data?.recalls?.active ?? [])
+            .filter((r) => r.status === 'OPEN' || num(r.pending_customers) > 0)
+            .map((r) => ({
+              title:
+                r.status === 'OPEN'
+                  ? `Recall ${text(r.number)} is not contained yet`
+                  : `Recall ${text(r.number)}: ${fmt(r.pending_customers)} customer(s) to notify`,
+              body: `${text(r.severity).toLowerCase()} · ${text(r.title)}`,
+              path: `/traceability?tab=recalls&recall=${encodeURIComponent(r.id)}`,
+            })),
           ...(num(data?.qualityAlerts?.overdue_capa_actions)
             ? [
                 {
@@ -91,7 +105,9 @@ export function AttentionCenter({ onClose }: { onClose: () => void }) {
           !breakdowns.length &&
           !overduePlans.length &&
           !num(data?.qualityAlerts?.open_critical_ncrs) &&
-          !num(data?.qualityAlerts?.overdue_capa_actions) && <Empty title="You’re all caught up" />}
+          !num(data?.qualityAlerts?.overdue_capa_actions) &&
+          !num(data?.recalls?.open) &&
+          !num(data?.recalls?.pending_customers) && <Empty title="You’re all caught up" />}
       </div>
     </Overlay>
   );

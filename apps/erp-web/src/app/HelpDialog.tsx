@@ -55,6 +55,13 @@ export function HelpDialog({ onClose }: { onClose: () => void }) {
           supplier, rework into a new re-inspected lot) and CAPA with root-cause analysis and independent
           effectiveness checks.
         </p>
+        <p>
+          Traceability & recalls: trace any lot, manufacturing order, goods receipt, purchase or sales order,
+          delivery or supplier backward to its suppliers and forward to the customers who received it, as a
+          graph or an indented tree. Quality opens a recall from suspect lots or a supplier’s deliveries,
+          contains it (affected stock in hand goes on hold through recall nonconformances), records each
+          customer notification, exports the notification list and closes it once everything is dispositioned.
+        </p>
         <h3>What remains on the roadmap</h3>
         <p>
           Finite-capacity scheduling, validated OEE, full finance and tax localization, personnel workflows,

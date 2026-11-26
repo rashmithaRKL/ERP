@@ -7,6 +7,7 @@ import {
   GitBranch,
   Layers,
   LayoutDashboard,
+  Network,
   Package,
   Settings2,
   ShieldCheck,
@@ -43,6 +44,7 @@ const ReportsPage = lazyPage(() => import('../pages/ReportsPage'));
 const RoutingsPage = lazyPage(() => import('../pages/RoutingsPage'));
 const SalesPage = lazyPage(() => import('../pages/SalesPage'));
 const ShopFloorPage = lazyPage(() => import('../pages/ShopFloorPage'));
+const TraceabilityPage = lazyPage(() => import('../pages/TraceabilityPage'));
 const WorkCentersPage = lazyPage(() => import('../pages/WorkCentersPage'));
 
 /** Sidebar sections, in display order. */
@@ -202,6 +204,15 @@ export const routes: PageRoute[] = [
     page: QualityPage,
     description: 'The right quality decision, before stock moves forward.',
     exportRows: (data) => data.inspections,
+  },
+  {
+    path: '/traceability',
+    label: 'Traceability & recalls',
+    icon: Network,
+    group: 'MANUFACTURING',
+    page: TraceabilityPage,
+    description: 'Where every lot came from, where it went, and how to get it back.',
+    exportRows: (data) => data.recalls?.active ?? [],
   },
   {
     path: '/machines',

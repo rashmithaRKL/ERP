@@ -1,3 +1,5 @@
+import { useNavigate } from 'react-router-dom';
+import { Network } from 'lucide-react';
 import { Overlay, Table } from '../../components';
 import { labelState, money, num, text } from '../../lib/format';
 import { ProductMark } from '../products/ProductMark';
@@ -16,6 +18,7 @@ export function LotDrawer({
   onClose: () => void;
   onOpen: (id: string) => void;
 }) {
+  const navigate = useNavigate();
   const detail = useDetail<LotDetail>('lot', `/inventory/lots/${id}`);
   const lot = detail.data?.lot;
   return (
@@ -80,6 +83,17 @@ export function LotDrawer({
             {lot.source_type !== 'TRANSFER' && (
               <p className="inv-small muted">Source: {labelState(lot.source_type)}</p>
             )}
+            <p>
+              <button
+                className="button secondary small"
+                onClick={() => {
+                  navigate(`/traceability?lot=${encodeURIComponent(id)}`);
+                  onClose();
+                }}
+              >
+                <Network size={13} /> Trace genealogy
+              </button>
+            </p>
             {lot.open_count && (
               <p className="inv-small muted">Included in open cycle count {text(lot.open_count)}.</p>
             )}
