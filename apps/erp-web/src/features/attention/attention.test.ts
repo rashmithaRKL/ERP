@@ -243,7 +243,7 @@ describe('the shared attention model', () => {
     expect(planner.total).toBe(3);
     expect(planner.groups[0].items[0].body).toBe('Bottle · due 2026-11-26 · projected late by 3 h');
     expect(planner.groups[0].items.at(-1)?.title).toBe('1 more late order');
-    expect(planner.groups[1].items[0].body).toBe('4 changes since SCH-3 was published');
+    expect(planner.groups[1].items[0].body).toBe('4 changes since SCH-3 was run');
     const operator = buildAttention(input(data, { user: { id: 'u-op', role: 'OPERATOR' } }));
     expect(operator.groups.map((g) => g.key)).toEqual(['schedule-late']);
   });

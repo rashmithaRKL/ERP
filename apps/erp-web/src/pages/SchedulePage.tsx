@@ -156,7 +156,10 @@ export default function SchedulePage() {
         }. ${
           !planner
             ? 'A planner can run the scheduler again.'
-            : isDraft && !stale && run && Date.parse(text(run.created_at)) > Date.parse(text(o?.stale?.last_change_at))
+            : isDraft &&
+                !stale &&
+                run &&
+                Date.parse(text(run.created_at)) > Date.parse(text(o?.stale?.last_change_at))
               ? 'This draft already includes them; publish it to replace the published schedule.'
               : 'Run the scheduler again and publish the new run.'
         }`

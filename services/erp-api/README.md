@@ -303,7 +303,7 @@ annotate contributors with `@Transactional`. Existing keys, in order:
 | 1700 | `bomCosts` (multi-level standard-cost roll-up per revision; V7) | catalog |
 | 2100 | `maintenance` (V11: `open_breakdowns`, `open_downtime`, `overdue_plans`, `awaiting_approval`, `in_progress` and up to five rows each of open `breakdowns` and `overdue` plans, for the overview and attention center) | maintenance |
 | 2200 | `qualityAlerts` (one object of attention counts: `open_ncrs`, `open_critical_ncrs`, `pending_concessions`, `awaiting_returns`, `open_rework`, `overdue_capa_actions`, `my_overdue_capa_actions`; V12) | quality |
-| 2300 | `schedule` (V13, every role: `published` run header or null, `late_orders` and `unscheduled_orders` of the published run that are still open, up to five `late` rows for the overview and attention center) | scheduling |
+| 2300 | `schedule` (V13, every role: `published` run header or null, `late_orders` and `unscheduled_orders` of the published run that are still open, up to five `late` rows for the overview and attention center; V16 adds `changes_since_publish` and `last_change_at`, the stale-schedule hint counted by `scheduling.ScheduleChanges`) | scheduling |
 | 2400 | `recalls` (V14: `open` = not yet contained, `contained`, `pending_customers` on contained recalls, and up to five `active` recalls with `pending_customers`, most severe first) | traceability |
 | 2500 | `performance` (V15: yesterday's time-weighted plant OEE `{day, oee, availability, performance, quality, timeCoverage, outputCoverage, utilization, measuredDays, closedDays, warningCount, workCenters}`, or `null` when no work center has a measured OEE that day) | performance |
 

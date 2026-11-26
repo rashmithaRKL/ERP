@@ -12,10 +12,11 @@ import org.springframework.stereotype.Component;
  *
  * <ul>
  *   <li><b>Orders and operations</b>: manufacturing-order lifecycle and output, operation start/pause/resume/setup
- *       done/finish, duration estimates, for orders that are still open or were part of the run (an order created and
- *       finished after the run never affected it);
+ *       done/quantity report/finish, duration estimates, for orders that are still open or were part of the run (an
+ *       order created and finished after the run never affected it);
  *   <li><b>Maintenance windows</b>: maintenance work orders approved, scheduled, generated, started, completed or
- *       cancelled, unless their window ended before the run's start;
+ *       cancelled when they have a window that ends after the run's start (an approval without a window blocks no
+ *       capacity); started or completed orders without a window count too (they open or close downtime);
  *   <li><b>Downtime</b>: downtime reported, closed, corrected or withdrawn, unless the event ended before the run's
  *       start;
  *   <li><b>Capacity and planner input</b>: shift patterns, calendars, holidays/overtime, calendar assignments, new work
@@ -42,7 +43,7 @@ class ScheduleChanges {
                   AND (
                     (e.action IN ('MO_CREATED','MO_AUTO_APPROVED','MO_APPROVE','MO_RESERVE','MO_ISSUE','MO_START','MO_PAUSE',
                                   'MO_RESUME','MO_CLOSE','MO_CANCEL','MO_CHILDREN_CREATED','PRODUCTION_POSTED',
-                                  'OP_STARTED','OP_PAUSED','OP_RESUMED','OP_SETUP_DONE','OP_FINISHED',
+                                  'OP_STARTED','OP_PAUSED','OP_RESUMED','OP_SETUP_DONE','OP_REPORTED','OP_FINISHED',
                                   'SCHEDULE_ESTIMATE_SET','SCHEDULE_ESTIMATE_REMOVED')
                      AND EXISTS (SELECT 1 FROM manufacturing_orders o WHERE o.tenant_id=e.tenant_id AND o.number=e.reference
                                    AND (o.status NOT IN ('QUALITY_REVIEW','COMPLETED','CLOSED','CANCELLED')
@@ -50,7 +51,7 @@ class ScheduleChanges {
                                                    WHERE ro.tenant_id=o.tenant_id AND ro.run_id=? AND ro.order_id=o.id))))
                     OR (e.action IN ('MWO_APPROVED','MWO_SCHEDULED','MWO_GENERATED','MWO_STARTED','MWO_COMPLETED','MWO_CANCELLED')
                      AND EXISTS (SELECT 1 FROM maintenance_work_orders w WHERE w.tenant_id=e.tenant_id AND w.number=e.reference
-                                   AND (w.scheduled_end IS NULL OR w.scheduled_end>?)))
+                                   AND (w.scheduled_end>? OR (w.scheduled_end IS NULL AND e.action IN ('MWO_STARTED','MWO_COMPLETED')))))
                     OR (e.action IN ('DOWNTIME_REPORTED','DOWNTIME_CLOSED','DOWNTIME_CORRECTED','DOWNTIME_VOIDED')
                      AND EXISTS (SELECT 1 FROM downtime_events d WHERE d.tenant_id=e.tenant_id AND d.number=e.reference
                                    AND COALESCE(d.ended_at,'infinity'::timestamptz)>?))

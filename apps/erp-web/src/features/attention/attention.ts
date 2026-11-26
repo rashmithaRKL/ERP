@@ -376,14 +376,14 @@ export function buildAttention({ data, user, today, purchaseApprovers, canOpen }
       icon: CalendarClock,
       count: schedule?.published && changes > 0 ? 1 : 0,
       title: 'The published schedule may be out of date',
-      body: `${plural(changes, 'change', 'changes')} to orders, operations, maintenance or downtime since it was published. Run the scheduler again.`,
+      body: `${plural(changes, 'change', 'changes')} to orders, operations, maintenance, downtime or calendars since it was run. Run the scheduler again.`,
       action: 'Open production schedule',
       path: '/schedule',
       rows: [
         {
           key: 'schedule-stale:summary',
           title: 'The published schedule may be out of date',
-          body: `${plural(changes, 'change', 'changes')} since ${text(schedule?.published?.number)} was published`,
+          body: `${plural(changes, 'change', 'changes')} since ${text(schedule?.published?.number)} was run`,
           path: '/schedule',
         },
       ],

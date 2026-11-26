@@ -11,6 +11,7 @@ import java.util.Map;
 import lk.dexlanka.erp.RoutingTestBase;
 import lk.dexlanka.erp.maintenance.DowntimeService;
 import lk.dexlanka.erp.maintenance.MaintenanceCommands;
+import lk.dexlanka.erp.maintenance.WorkOrderService;
 import lk.dexlanka.erp.manufacturing.OperationCommands;
 import lk.dexlanka.erp.platform.Actor;
 import lk.dexlanka.erp.routing.CalendarCommands;
@@ -31,6 +32,13 @@ class ScheduleStalenessTest extends RoutingTestBase {
 
     @Autowired
     ShiftCalendarService calendarAdmin;
+
+    @Autowired
+    WorkOrderService workOrders;
+
+    private MaintenanceCommands.RequestWorkOrder workOrder(String title) {
+        return new MaintenanceCommands.RequestWorkOrder(bm1, title, "", "NORMAL", false, null, null, null);
+    }
 
     @SuppressWarnings("unchecked")
     private Map<String, Object> scheduleKey(Actor actor) throws Exception {
@@ -71,7 +79,8 @@ class ScheduleStalenessTest extends RoutingTestBase {
         assertThat(changes(viewer)).isZero();
         assertThat(scheduleKey(viewer).get("last_change_at")).isNull();
 
-        // The planned order starts its first operation: MO_START + OP_STARTED.
+        // The planned order starts its first operation: MO_START + OP_STARTED; a quantity report changes the remaining
+        // run time.
         command(
                         operator,
                         "/api/operations/" + operation(planned, 10) + "/start",
@@ -79,14 +88,20 @@ class ScheduleStalenessTest extends RoutingTestBase {
                 .andExpect(status().isOk());
         assertThat(changes(viewer)).isEqualTo(2);
         assertThat(scheduleKey(viewer).get("last_change_at")).isNotNull();
+        command(
+                        operator,
+                        "/api/operations/" + operation(planned, 10) + "/report",
+                        new OperationCommands.Quantities(bd("40"), bd("0"), ""))
+                .andExpect(status().isOk());
+        assertThat(changes(viewer)).isEqualTo(3);
 
         // A new open order is work the published schedule does not know about.
         String added = order("50", bm2, "HIGH");
-        assertThat(changes(planner)).isEqualTo(3);
+        assertThat(changes(planner)).isEqualTo(4);
         // An order created and cancelled after the run never affected it.
         String dropped = order("50", bm2, "NORMAL");
         mo.transition(planner, dropped, "cancel", id());
-        assertThat(changes(planner)).isEqualTo(3);
+        assertThat(changes(planner)).isEqualTo(4);
 
         // Downtime that ended before the run's start is history; open downtime blocks capacity ahead.
         var yesterday = OffsetDateTime.now(ZoneOffset.ofHoursMinutes(5, 30)).minusDays(1);
@@ -101,10 +116,29 @@ class ScheduleStalenessTest extends RoutingTestBase {
                         null,
                         ""),
                 id());
-        assertThat(changes(planner)).isEqualTo(3);
+        assertThat(changes(planner)).isEqualTo(4);
         downtime.report(
                 operator, new MaintenanceCommands.ReportDowntime(bm2, "BREAKDOWN", null, null, null, null, ""), id());
-        assertThat(changes(planner)).isEqualTo(4);
+        assertThat(changes(planner)).isEqualTo(5);
+
+        // A maintenance window ahead blocks capacity; a request, or an approval without a window, does not.
+        String unscheduled = str(workOrders.request(planner, workOrder("Check the guard"), id()), "id");
+        workOrders.approve(otherPlanner, unscheduled, new MaintenanceCommands.Approve(null, null, null), id());
+        assertThat(changes(planner)).isEqualTo(5);
+        String windowed = str(workOrders.request(planner, workOrder("Replace the mould heater"), id()), "id");
+        var windowStart = OffsetDateTime.now(ZoneOffset.ofHoursMinutes(5, 30))
+                .plusDays(2)
+                .withHour(8)
+                .withMinute(0)
+                .withSecond(0)
+                .withNano(0);
+        workOrders.approve(
+                otherPlanner,
+                windowed,
+                new MaintenanceCommands.Approve(
+                        windowStart.toString(), windowStart.plusHours(4).toString(), null),
+                id());
+        assertThat(changes(planner)).isEqualTo(6);
 
         // Working time changes capacity: a new plant calendar and a holiday.
         String day = str(
@@ -124,13 +158,13 @@ class ScheduleStalenessTest extends RoutingTestBase {
                 new CalendarCommands.DateException(
                         LocalDate.now().plusDays(3).toString(), "CLOSED", null, null, "Holiday"),
                 id());
-        assertThat(changes(planner)).isEqualTo(6); // CALENDAR_CREATED + CALENDAR_EXCEPTION_ADDED
+        assertThat(changes(planner)).isEqualTo(8); // CALENDAR_CREATED + CALENDAR_EXCEPTION_ADDED
 
         // Another tenant's activity never counts.
         var other = createTenant();
-        var otherPlanner = createUser(other.id(), "PLANNER");
-        query(otherPlanner, "/api/state?days=7").andExpect(status().isOk());
-        assertThat(changes(planner)).isEqualTo(6);
+        var outsider = createUser(other.id(), "PLANNER");
+        calendarAdmin.createCalendar(outsider, new CalendarCommands.Calendar("PLANT", "Plant", List.of(), true), id());
+        assertThat(changes(planner)).isEqualTo(8);
 
         // A new published run starts from a clean slate.
         publishRun();
