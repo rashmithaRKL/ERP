@@ -62,11 +62,17 @@ export function HelpDialog({ onClose }: { onClose: () => void }) {
           center and time. Everyone sees the published Gantt, late orders and capacity load; the Shop floor
           lists the next scheduled operations of each work center.
         </p>
+        <p>
+          Performance (OEE) measures availability, performance and quality per work center and business day
+          from the shift calendar, operation time logs, quantity reports and downtime; days without planned
+          time or records are shown as not measured, never as 0 %, and planners close completed days so later
+          calendar changes do not rewrite them.
+        </p>
         <h3>What remains on the roadmap</h3>
         <p>
-          Validated OEE, full finance and tax localization, personnel workflows, extended onboarding, MFA,
-          cloud synchronization, signed Windows installation, SaaS billing and AI services. The repository
-          documents acceptance criteria and readiness gaps.
+          Full finance and tax localization, personnel workflows, extended onboarding, MFA, cloud
+          synchronization, signed Windows installation, SaaS billing and AI services. The repository documents
+          acceptance criteria and readiness gaps.
         </p>
         <div className="help-callout">
           <ShieldCheck size={18} />

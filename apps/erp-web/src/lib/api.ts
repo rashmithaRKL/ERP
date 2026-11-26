@@ -35,6 +35,8 @@ export type State = {
   qualityAlerts?: Record<string, number>;
   /** V13: the published schedule run and its late/unscheduled order counts with up to five late orders. */
   schedule?: ScheduleSummary;
+  /** V15: yesterday's measured plant OEE (null when no work center has a measured OEE that day). */
+  performance?: PlantOee | null;
 };
 /** `schedule` state key (V13): published run (null when none), late and unscheduled open orders, five latest late orders. */
 export type ScheduleSummary = {
@@ -42,6 +44,21 @@ export type ScheduleSummary = {
   late_orders: number;
   unscheduled_orders: number;
   late: Row[];
+};
+/** `performance` state key (V15): ratios 0..1; the Performance page reads `GET /performance/**`. */
+export type PlantOee = {
+  day: string;
+  oee: number | null;
+  availability: number | null;
+  performance: number | null;
+  quality: number | null;
+  timeCoverage: number | null;
+  outputCoverage: number | null;
+  utilization: number | null;
+  measuredDays: number;
+  closedDays: number;
+  warningCount: number;
+  workCenters: number;
 };
 /** `maintenance` state key (V11): counts plus up to five open breakdowns and overdue preventive plans. */
 export type MaintenanceSummary = {

@@ -26,6 +26,7 @@ import {
   requestMaintenance,
 } from '../maintenance/forms';
 import { ReasonChip, StatusChip, TypeChip } from '../maintenance/shared';
+import { MachineOee } from '../performance/Snippets';
 
 const KIND_ICON = { DOWNTIME: Timer, WORK_ORDER: Wrench, STATUS: Gauge, METER: History } as const;
 
@@ -144,6 +145,11 @@ export function MachineDrawer({
                   <strong>{duration(metrics.downtimeMinutes)}</strong>
                 </div>
               </div>
+
+              <h3 className="mnt-section">
+                <Gauge size={15} /> OEE · last 7 days
+              </h3>
+              <MachineOee machineId={id} />
 
               <h3 className="mnt-section">
                 <Wrench size={15} /> Open and scheduled work

@@ -26,6 +26,7 @@ import { useStateData, useWorkspace } from '../app/workspace';
 import { Badge, Panel, Stat, Table } from '../components';
 import { useApprovalPolicy } from '../features/approvals/policies';
 import { useOrderColumns } from '../features/manufacturing/orderColumns';
+import { OverviewOee } from '../features/performance/Snippets';
 import type { State } from '../lib/api';
 import { fmt, num, text, today } from '../lib/format';
 import { stagger, Tabs } from '../motion/motion';
@@ -372,6 +373,8 @@ export default function OverviewPage() {
               </div>
             ))}
           </div>
+          {/* V15: yesterday's measured plant OEE (null = not measured; never a fabricated figure). */}
+          <OverviewOee performance={data.performance} />
           <button className="floor-link" onClick={() => navigate('/shopfloor')}>
             Open shop floor
             <ArrowRight size={14} />

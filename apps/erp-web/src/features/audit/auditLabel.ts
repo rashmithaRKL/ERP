@@ -183,6 +183,10 @@ const LABELS: Record<string, string> = {
   MACHINE_METER_RECORDED: 'Run-hour meter recorded',
   MACHINE_STATUS_CORRECTED: 'Machine status corrected',
   MAINTENANCE_SETTINGS_UPDATED: 'Maintenance labour rate updated',
+  // OEE and utilization (V15).
+  OEE_DAY_CLOSED: 'OEE day closed',
+  OEE_DAY_RECALCULATED: 'OEE day recalculated',
+  DEMO_OEE_HISTORY_ADDED: 'Demo OEE history added',
 };
 
 /** Fallback: a trailing bare verb (e.g. the `CANCEL` in `PO_CANCEL`) is shown in the past tense. */
