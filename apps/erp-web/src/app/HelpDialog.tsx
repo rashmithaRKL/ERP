@@ -79,9 +79,17 @@ export function HelpDialog({ onClose }: { onClose: () => void }) {
           contains it (affected stock in hand goes on hold through recall nonconformances), records each
           customer notification, exports the notification list and closes it once everything is dispositioned.
         </p>
+        <p>
+          Taxes: administrators keep tax codes with stacked (optionally compound) components and effective-dated
+          rate history under Administration → Taxes, apply a country template (Sri Lanka VAT first: a starting
+          point to be verified by a qualified accountant; no certification is claimed), record partner tax
+          registration and exemptions and item default codes. Sales and purchase order drawers show an
+          estimated tax breakdown; tax is not posted yet, so the tax register and VAT return summary stay empty
+          until invoicing arrives.
+        </p>
         <h3>What remains on the roadmap</h3>
         <p>
-          Full finance and tax localization, personnel workflows, machine telemetry, extended onboarding, MFA,
+          Full finance (invoicing, ledger and tax posting), personnel workflows, machine telemetry, extended onboarding, MFA,
           cloud synchronization, signed Windows installation, SaaS billing and AI services. The repository
           documents acceptance criteria and readiness gaps.
         </p>
