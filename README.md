@@ -54,6 +54,10 @@ database with tests; limits are listed in [the feature register](docs/FEATURES.m
 - **Traceability & recalls** (V14): a genealogy explorer (graph or tree) from any lot, order, receipt, delivery or supplier, backward to suppliers and forward to customers through every level, transfer, rework and return; recalls that compute affected stock and shipments, contain them through RECALL nonconformances, track customer notifications and close only when everything is notified and dispositioned (or by an independent override).
 - **Performance (OEE)** (V15): OEE per work center and business day from records only (shift time, downtime, operation time logs and reports), never a fabricated 0 %; time-weighted roll-ups, loss waterfall, heatmap, six big losses, utilization, data-coverage warnings and closed days that later calendar edits never rewrite.
 
+### Finance core (Phase 4)
+
+- **Taxes** (V25): tax codes with stacked, optionally compound components and effective-dated rate history (a rate used by recorded tax is locked); a Sri Lanka VAT country template (18 % from 1 Jan 2024 and its history, zero-rated and exempt codes; *a starting point to be verified by a qualified accountant; no certification is claimed*) applied idempotently without overwriting edited codes; prices inclusive or exclusive of tax and rounding per line or per document; partner tax registration and exemption certificates, partner and item default codes; exact-decimal `TaxService` calculation with an estimated tax block on sales and purchase orders (nothing is posted yet), and an empty-until-invoicing tax register and VAT return summary with CSV export under **Administration → Taxes**.
+
 ## Try the complete workflow
 
 1. Create a customer and a multi-line sales order under **Sales orders**, then confirm it.
