@@ -22,8 +22,8 @@ import org.springframework.transaction.support.TransactionTemplate;
  */
 @Component
 @Order(DemoSeed.ORDER + 250)
-class TaxDemoSeed implements ApplicationRunner {
-    static final String EXEMPTION = "VAT-EXM-DEMO-0142";
+public class TaxDemoSeed implements ApplicationRunner {
+    public static final String EXEMPTION = "VAT-EXM-DEMO-0142";
     private static final Logger log = LoggerFactory.getLogger(TaxDemoSeed.class);
     private static final String T = DemoPersonas.TENANT;
 
@@ -32,7 +32,7 @@ class TaxDemoSeed implements ApplicationRunner {
     private final TransactionTemplate tx;
     private final boolean demo;
 
-    TaxDemoSeed(
+    public TaxDemoSeed(
             Store s,
             TaxAdminService admin,
             PlatformTransactionManager transactions,
