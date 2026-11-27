@@ -24,6 +24,7 @@ services:
       DATABASE_PASSWORD: ${DATABASE_PASSWORD:?Generate a unique database password}
       BOOTSTRAP_EMAIL: ${BOOTSTRAP_EMAIL:?Set the initial administrator email}
       BOOTSTRAP_PASSWORD: ${BOOTSTRAP_PASSWORD:?Generate an initial administrator password of at least 16 characters}
+      MFA_ENCRYPTION_KEY: ${MFA_ENCRYPTION_KEY:?Generate a two-step sign-in key with openssl rand -base64 32}
       COOKIE_SECURE: "true"
       TZ: Asia/Colombo
     depends_on:

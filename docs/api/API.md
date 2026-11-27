@@ -2,9 +2,9 @@
 
 Base: `/api`, same origin. Machine-readable OpenAPI: `.openapi/openapi.json` in the repository root.
 
-Authentication uses an HTTP-only session cookie. Fetch `GET /auth/csrf` to receive `{token,headerName}` and attach that header on every unsafe request, including login/logout. Form login is `POST /auth/login` with URL-encoded `email` and `password`; it answers `{authenticated:true, mustChangePassword}` and records the account's last sign-in. Only active accounts can sign in. Refresh the CSRF token after login/logout. `GET /auth/me` returns the authenticated identity and organization plus `mustChangePassword`, `lastLoginAt` and `passwordChangedAt`. The explicit demo profile additionally supports `POST /auth/demo?role=admin|planner|warehouse|operator|quality|maintenance`; this returns 404 outside demo (409 when an administrator deactivated that persona).
+Authentication uses an HTTP-only session cookie. Fetch `GET /auth/csrf` to receive `{token,headerName}` and attach that header on every unsafe request, including login/logout. Form login is `POST /auth/login` with URL-encoded `email` and `password`; it answers `{authenticated:true, mfaRequired, mustChangePassword}` and records the account's last sign-in. V17: when the account has two-step sign-in on, `mfaRequired` is `true`, the last sign-in is not yet recorded and the session waits for the code step (see Two-step sign-in below). Only active accounts can sign in. Refresh the CSRF token after login/logout. `GET /auth/me` returns the authenticated identity and organization plus `mustChangePassword`, `lastLoginAt` and `passwordChangedAt`; V17 adds `mfaEnabled`, `mfaEnabledAt`, `mfaRequired` (the policy requires two-step sign-in for this account), `recoveryCodesLeft` (0 when off), `mfaPending` (the code step of this sign-in is still due) and `mfaSetupRequired` (a password session of an account the policy requires to use two-step sign-in, without it set up). The explicit demo profile additionally supports `POST /auth/demo?role=admin|planner|warehouse|operator|quality|maintenance`; this returns 404 outside demo (409 when an administrator deactivated that persona).
 
-Every authenticated request is revalidated against the account (`platform.SessionGuard`): a deactivated account, or a session older than the account's last password reset/change, is signed out (401 on that request); a role or name change made by an administrator applies to the user's next request. While `mustChangePassword` is true (after an administrator reset, and for accounts created through `POST /users`), every route except `/auth/me`, `/auth/csrf`, `/auth/config`, `/auth/logout`, `/auth/password` and `/health` answers 403 `{"message":"Change your temporary password to continue","code":"PASSWORD_CHANGE_REQUIRED"}`.
+Every authenticated request is revalidated against the account (`platform.SessionGuard`): a deactivated account, or a session older than the account's last password reset/change, is signed out (401 on that request); a role or name change made by an administrator applies to the user's next request. While `mustChangePassword` is true (after an administrator reset, and for accounts created through `POST /users`), every route except `/auth/me`, `/auth/csrf`, `/auth/config`, `/auth/logout`, `/auth/password` and `/health` answers 403 `{"message":"Change your temporary password to continue","code":"PASSWORD_CHANGE_REQUIRED"}`. V17 adds two more gates, checked before (`MFA_REQUIRED`) and after (`MFA_SETUP_REQUIRED`) the password-change gate; see Two-step sign-in.
 
 | Method | Path | Purpose |
 |---|---|---|
@@ -303,10 +303,11 @@ reached again is listed once more as `repeated` and not expanded). At most 2,000
 
 | Method | Path | Purpose |
 |---|---|---|
-| GET | `/admin/users?q&role&status&limit&before` | Users by name (keyset on `lower(name), id`); `q` matches name/email, `status` `ACTIVE`/`INACTIVE`. Rows: `id, email, name, role, active, created_at, last_login_at, password_changed_at, deactivated_at, must_change_password`; `summary` = `{total, active, inactive, admins, pending_password}` |
+| GET | `/admin/users?q&role&status&limit&before` | Users by name (keyset on `lower(name), id`); `q` matches name/email, `status` `ACTIVE`/`INACTIVE`. Rows: `id, email, name, role, active, created_at, last_login_at, password_changed_at, deactivated_at, must_change_password, mfa_enabled, mfa_enabled_at` (the last two V17); `summary` = `{total, active, inactive, admins, pending_password}` |
 | POST | `/admin/users/{id}` | `{name, role}`; a role change applies to the user's next request; the last active ADMIN cannot be demoted (409); audited `USER_UPDATED` |
 | POST | `/admin/users/{id}/deactivate`, `/reactivate` | Deactivation blocks sign-in and signs out open sessions; not yourself, not the last active ADMIN (409); audited |
 | POST | `/admin/users/{id}/reset-password` | Issues a one-time temporary password, returned once as `temporaryPassword` (an idempotent replay returns `null`; the password is never stored in clear text); the user must change it at the next sign-in and open sessions end; not for yourself; audited `USER_PASSWORD_RESET` |
+| POST | `/admin/users/{id}/reset-mfa` | V17: turns off another user's two-step sign-in (lost phone): removes the encrypted secret and every recovery code and signs out the user's open sessions; returns the user row (`mfa_enabled: false`). Not for yourself (409, use the profile menu), 409 when two-step sign-in is not on, 404 for a user of another tenant; an administrator must set it up again at the next password sign-in; audited `USER_MFA_RESET` |
 | GET | `/admin/approval-policies` | `{items}`: one policy per `MANUFACTURING_ORDER`, `PURCHASE_ORDER`, `STOCK_ADJUSTMENT` with `approvalRequired, amountThreshold, approverRoles, customized, wired, updatedAt, updatedBy` (`wired` is true for all three since V9) |
 | POST | `/admin/approval-policies/{documentType}` | `{approvalRequired, amountThreshold (null = every document), approverRoles ⊆ PLANNER, WAREHOUSE, QUALITY, SALES, OPERATOR}`; ADMIN always approves, a creator never approves their own document; audited `APPROVAL_POLICY_UPDATED`. In effect for every document type (V9): stock adjustments and count variances when posted (gross value), manufacturing orders when created (estimated cost), purchase orders when submitted (order total). A document at or below the threshold, or any document while approval is off, takes effect directly (`MO_AUTO_APPROVED` / `PO_AUTO_APPROVED` / posted adjustment); approve rights always follow the current approver roles, so a document already waiting is never stranded |
 | POST | `/admin/imports/{kind}/validate` | `kind` = `items`, `partners` or `opening-stock`. Dry run of `{fileName, content}` (CSV text): runs the whole import in a rolled-back transaction and returns `{rows, validRows, valid, errors:[{row, column, message}], preview, summary, alreadyImported}`; no Idempotency-Key needed, nothing is kept |
@@ -436,6 +437,34 @@ Reads are open to every signed-in role of the tenant; closing days is PLANNER (A
 
 `/state` key `performance` (order 2500, every role): yesterday's plant roll-up `{day, oee, availability, performance, quality, timeCoverage, outputCoverage, utilization, measuredDays, closedDays, warningCount, workCenters}`, or `null` when no work center has a measured OEE that day.
 
+### Two-step sign-in (`/auth/mfa/*`, V17)
+
+Authenticator-app codes (TOTP, RFC 6238: HMAC-SHA1, 6 digits, 30-second steps, one step either side of the server clock accepted). Each time step is accepted once per account (`users.mfa_last_step`), so a code that already signed someone in is refused until the next one. The secret is stored encrypted (AES-256-GCM under `MFA_ENCRYPTION_KEY`, the user id as associated data, `v1:` + base64), never in clear text. Ten one-time recovery codes (`abcde-fghij`, lower case without `0 o 1 l i`; stored as SHA-256 digests) are issued when two-step sign-in is turned on and when they are replaced; they are returned once only. Recovery codes are accepted case-insensitively and with or without the hyphen.
+
+Sign-in: after a correct password of an account with two-step sign-in on, `POST /auth/login` answers `{"authenticated":true,"mfaRequired":true,"mustChangePassword":…}` and the session is limited to `/auth/me`, `/auth/csrf`, `/auth/config`, `/auth/demo`, `/auth/logout`, `/auth/mfa/verify` and `/health`; everything else answers 403 `{"message":"Enter the code from your authenticator app to finish signing in","code":"MFA_REQUIRED"}`. A waiting sign-in expires 5 minutes after the password was accepted (the session ends; 401). This gate is checked before the temporary-password gate.
+
+Policy (`platform.MfaPolicy`): administrators (role `ADMIN`) of a workspace that is not the demo must use two-step sign-in (`app.mfa.required-for-admins` / `MFA_REQUIRED_FOR_ADMINS`, default `true`). A session that began with a password sign-in of such an administrator without two-step sign-in, including one promoted to ADMIN mid-session, is limited to `/auth/me`, `/auth/csrf`, `/auth/config`, `/auth/demo`, `/auth/logout`, `/auth/password`, `/auth/mfa/setup`, `/auth/mfa/enable` and `/health`; everything else answers 403 `{"message":"Set up two-step sign-in to continue","code":"MFA_SETUP_REQUIRED"}`. Demo workspaces and the demo persona switch (`POST /auth/demo`, not a password sign-in) are not held; anyone may still turn it on. Other roles opt in.
+
+Wrong or reused codes answer 409; after 5 wrong codes (authenticator or recovery) for one account within 15 minutes, further attempts, even correct ones, get 429 until the oldest failure is 15 minutes old (in memory per process, like the password-change limit); a correct code clears the failures. A wrong current password answers 409 and counts toward the password-change attempt limit (V9).
+
+| Method | Path | Purpose |
+|---|---|---|
+| POST | `/auth/mfa/setup` | Any signed-in role. Starts a set-up: `{secret, uri, issuer, account}` — a new 160-bit Base32 secret, the `otpauth://totp/…` URI (issuer `DexLanka Manufacturing Pro`, account = email, SHA1, 6 digits, 30 s), kept in this session until `/enable` confirms it; nothing is stored in the database. 409 when two-step sign-in is already on. No `Idempotency-Key` needed |
+| POST | `/auth/mfa/enable` | `{currentPassword, code}` with an authenticator code for the secret from `/setup` in this session (409 without a set-up in progress). Stores the encrypted secret, issues 10 recovery codes, signs out the user's other sessions and keeps this one (new session id). Answers `{status:"ENABLED", recoveryCodes:[…10]}`; an idempotent replay answers `recoveryCodes: null`. Audited `MFA_ENABLED`. Requires `Idempotency-Key` |
+| POST | `/auth/mfa/verify` | `{code}` (authenticator code or unused recovery code), only while a sign-in is waiting for its code (409 otherwise). Completes the sign-in under a new session id and records the last sign-in. Answers `{method:"TOTP"\|"RECOVERY_CODE", recoveryCodesLeft, authenticated:true, mustChangePassword}`. A recovery code is spent and audited `MFA_RECOVERY_CODE_USED`. No `Idempotency-Key` needed |
+| POST | `/auth/mfa/recovery-codes` | `{currentPassword, code}` (authenticator or recovery code); two-step sign-in must be on. The unused codes stop working and 10 new ones are returned once: `{status:"REGENERATED", recoveryCodes}` (`null` on an idempotent replay). Audited `MFA_RECOVERY_CODES_REGENERATED`. Requires `Idempotency-Key` |
+| POST | `/auth/mfa/disable` | `{currentPassword, code}` (authenticator or recovery code). Removes the secret and recovery codes, signs out the user's other sessions and keeps this one: `{status:"DISABLED"}`. 409 while the policy requires two-step sign-in for the account ("Administrators must keep two-step sign-in on…"). Audited `MFA_DISABLED`. Requires `Idempotency-Key` |
+
+An administrator resets another user's two-step sign-in with `POST /admin/users/{id}/reset-mfa` (see Administration). `MFA_ENCRYPTION_KEY` (the base64 of 32 random bytes) is required: the API refuses to start without a valid key; the demo and test profiles ship fixed keys. There is no key rotation: if the key is lost or changed, stored secrets cannot be decrypted and the code step of every affected user fails until an administrator resets their two-step sign-in.
+
+```json
+{"currentPassword":"the-current-password","code":"492039"}
+```
+
+```json
+{"code":"k7m2q-x9wde"}
+```
+
 Lifecycle actions: `approve` (an approver role of the `MANUFACTURING_ORDER` policy — default PLANNER, ADMIN always — distinct from the creator; orders the policy auto-approves are created APPROVED); `reserve` (PLANNER/WAREHOUSE); `issue` (WAREHOUSE); `start`, `pause`, `resume` (OPERATOR/PLANNER); `close`, `cancel` (PLANNER). Cancellation is available only before material issue, with reservations safely released. Issued order cancellation is blocked until a controlled return/variance procedure exists.
 
 Examples:
@@ -472,7 +501,7 @@ Sales lines (V9) store the entered `quantity`, `unit`, `factor` (base units per 
 
 Units: stock, BOM quantities and documents are stored in the item's base unit. `GET /items/{id}/convert?quantity=3&unit=bag` returns `{"baseQuantity":75,"baseUnit":"kg","exact":true,...}`. Other features convert with `catalog.UnitService.toBase(actor, itemId, quantity, unit)` (or `toBaseExact`, which refuses rounding) inside their own transaction; purchase-order lines and goods receipts use it since V6, sales-order lines since V9 (supplier invoice lines are still entered in the base unit).
 
-Errors use HTTP 400 (invalid input), 401 (unauthenticated), 403 (role/CSRF/password change required), 404 (missing/unowned record), 409 (business state/quantity/reference conflict), 429 (login limit; repeated wrong current passwords), and sanitized 500s. The body depends on where the error is raised:
+Errors use HTTP 400 (invalid input), 401 (unauthenticated), 403 (role/CSRF/password change required/two-step sign-in code or set-up required), 404 (missing/unowned record), 409 (business state/quantity/reference conflict), 429 (login limit; repeated wrong current passwords; repeated wrong two-step sign-in codes), and sanitized 500s. The body depends on where the error is raised:
 
 | Cause | Status | Body |
 |---|---|---|
@@ -483,9 +512,12 @@ Errors use HTTP 400 (invalid input), 401 (unauthenticated), 403 (role/CSRF/passw
 | Role not allowed | 403 | `{"message":"Your role cannot perform this action"}` |
 | Missing/expired CSRF token | 403 | `{"message":"Access denied or session token expired. Refresh and try again."}` |
 | Temporary password not yet replaced | 403 | `{"message":"Change your temporary password to continue","code":"PASSWORD_CHANGE_REQUIRED"}` |
+| Two-step sign-in code still due (V17) | 403 | `{"message":"Enter the code from your authenticator app to finish signing in","code":"MFA_REQUIRED"}` |
+| Administrator without two-step sign-in (V17) | 403 | `{"message":"Set up two-step sign-in to continue","code":"MFA_SETUP_REQUIRED"}` |
 | Not signed in, or session revoked | 401 | `{"message":"Please sign in"}` |
 | Login rate limit | 429 | `{"message":"Too many sign-in attempts. Try again in one minute."}` |
 | Password change attempt limit (V9) | 429 | `application/problem+json`; `detail` "Too many incorrect current passwords. Try again in N minutes." |
+| Two-step sign-in code attempt limit (V17) | 429 | `application/problem+json`; `detail` "Too many incorrect codes. Try again in N minutes." |
 
 Clients should show `message`, falling back to `detail`. A lost response is resolved by retrying with the same key, not creating another logical transaction.
 

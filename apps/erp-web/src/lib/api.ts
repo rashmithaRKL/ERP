@@ -105,6 +105,14 @@ export type User = {
   mustChangePassword?: boolean;
   lastLoginAt?: string | null;
   passwordChangedAt?: string | null;
+  /** V17 two-step sign-in: the code step of this sign-in is still due (the app shows the code screen). */
+  mfaPending?: boolean;
+  /** V17: an administrator who must set up two-step sign-in before using the workspace. */
+  mfaSetupRequired?: boolean;
+  mfaEnabled?: boolean;
+  mfaEnabledAt?: string | null;
+  mfaRequired?: boolean;
+  recoveryCodesLeft?: number;
 };
 /** Window event fired by `request` when the server signed this session out or requires a password change. */
 export const SESSION_CHANGED = 'dex:session-changed';
@@ -132,8 +140,11 @@ export async function request<T>(url: string, body?: unknown, key?: string): Pro
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
     // The server ended this session (deactivated account, password changed or reset elsewhere) or wants a new
-    // password first: let the app shell re-check the session instead of showing errors on every request.
-    if ((res.status === 401 && !url.startsWith('/auth/')) || err.code === 'PASSWORD_CHANGE_REQUIRED')
+    // password or the two-step sign-in code first: let the app shell re-check the session instead of showing errors on every request.
+    if (
+      (res.status === 401 && !url.startsWith('/auth/')) ||
+      ['PASSWORD_CHANGE_REQUIRED', 'MFA_REQUIRED', 'MFA_SETUP_REQUIRED'].includes(err.code)
+    )
       window.dispatchEvent(new Event(SESSION_CHANGED));
     throw new Error(err.message || err.detail || `Request failed (${res.status})`);
   }

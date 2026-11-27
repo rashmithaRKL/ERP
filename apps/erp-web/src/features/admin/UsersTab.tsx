@@ -16,7 +16,7 @@ import {
   useDebounced,
   useInvalidateAdmin,
 } from './api';
-import { LoadMore, QueryState, SearchBox, UserStatus } from './shared';
+import { LoadMore, QueryState, SearchBox, Tone, UserStatus } from './shared';
 import { UserDialog } from './UserDialog';
 
 const STATUSES = [
@@ -129,6 +129,17 @@ export function UsersTab() {
             },
             { label: 'Role', render: (r) => <Badge value={ROLE_LABELS[text(r.role)] ?? r.role} /> },
             { label: 'Status', render: (r) => <UserStatus user={r} /> },
+            {
+              label: 'Two-step',
+              render: (r) =>
+                r.mfa_enabled ? (
+                  <Tone tone="green">On</Tone>
+                ) : r.role === 'ADMIN' && me.mfaRequired ? (
+                  <Tone tone="amber">Required</Tone>
+                ) : (
+                  <span className="muted">Off</span>
+                ),
+            },
             {
               label: 'Last sign-in',
               render: (r) =>

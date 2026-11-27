@@ -1,5 +1,8 @@
 app:
   demo: true
+  mfa:
+    # Demo only (loopback, sample data): a fixed published key. Never use it for a customer workspace.
+    encryption-key: SwRttkCU3eIIyKzMZui+QG61ipfFXb5gJT7clvyGOG8=
 server:
   servlet:
     session:

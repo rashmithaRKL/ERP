@@ -30,3 +30,7 @@ app:
   demo: false
   bootstrap-password: ${BOOTSTRAP_PASSWORD:}
   bootstrap-email: ${BOOTSTRAP_EMAIL:}
+  mfa:
+    # V17: base64 of 32 random bytes (openssl rand -base64 32); the API refuses to start without it.
+    encryption-key: ${MFA_ENCRYPTION_KEY:}
+    required-for-admins: ${MFA_REQUIRED_FOR_ADMINS:true}

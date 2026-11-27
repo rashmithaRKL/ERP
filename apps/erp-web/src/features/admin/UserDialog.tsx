@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 import type { FormEvent } from 'react';
-import { Check, Copy, KeyRound, LoaderCircle, ShieldAlert, UserCheck, UserX } from 'lucide-react';
+import { Check, Copy, KeyRound, LoaderCircle, ShieldAlert, ShieldOff, UserCheck, UserX } from 'lucide-react';
 import { useWorkspace } from '../../app/workspace';
 import { Overlay } from '../../components';
 import type { Row } from '../../lib/api';
@@ -9,10 +9,10 @@ import { text } from '../../lib/format';
 import { dateTime, ROLE_LABELS, ROLES } from './api';
 import { UserStatus } from './shared';
 
-type Pending = 'edit' | 'reset' | 'deactivate' | 'reactivate';
+type Pending = 'edit' | 'reset' | 'deactivate' | 'reactivate' | 'mfa';
 
 /**
- * One user: details, name/role edit, one-time temporary password, deactivate/reactivate. Each action keeps its own
+ * One user: details, name/role edit, one-time temporary password, two-step sign-in reset (V17), deactivate/reactivate. Each action keeps its own
  * idempotency key for the dialog's lifetime, so a retry after a network error cannot run twice.
  */
 export function UserDialog({
@@ -28,7 +28,7 @@ export function UserDialog({
   const self = user.id === me.id;
   const [busy, setBusy] = useState<Pending>();
   const [error, setError] = useState('');
-  const [confirm, setConfirm] = useState<'reset' | 'deactivate'>();
+  const [confirm, setConfirm] = useState<'reset' | 'deactivate' | 'mfa'>();
   const [temporary, setTemporary] = useState<string | null>();
   const [copied, setCopied] = useState(false);
   const keys = useRef<Record<Pending, string>>({
@@ -36,6 +36,7 @@ export function UserDialog({
     reset: crypto.randomUUID(),
     deactivate: crypto.randomUUID(),
     reactivate: crypto.randomUUID(),
+    mfa: crypto.randomUUID(),
   });
 
   async function run(kind: Pending, url: string, body: unknown, success: string) {
@@ -91,6 +92,8 @@ export function UserDialog({
           </dd>
           <dt>Last sign-in</dt>
           <dd>{user.last_login_at ? dateTime(user.last_login_at) : 'Never'}</dd>
+          <dt>Two-step sign-in</dt>
+          <dd>{user.mfa_enabled ? `On since ${dateTime(user.mfa_enabled_at)}` : 'Off'}</dd>
           <dt>Password last set</dt>
           <dd>{dateTime(user.password_changed_at)}</dd>
           <dt>Account created</dt>
@@ -190,6 +193,34 @@ export function UserDialog({
             </div>
           </div>
         )}
+        {confirm === 'mfa' && (
+          <div className="adm-confirm">
+            <p>
+              Turn off two-step sign-in for <strong>{text(user.name)}</strong>? Use this when they lost their
+              phone. Their recovery codes stop working and every open session signs out; an administrator must
+              set it up again at the next sign-in.
+            </p>
+            <div className="adm-buttons">
+              <button
+                className="button secondary small"
+                onClick={() => setConfirm(undefined)}
+                disabled={!!busy}
+              >
+                Cancel
+              </button>
+              <button
+                className="button primary small"
+                disabled={!!busy}
+                onClick={() =>
+                  run('mfa', `/admin/users/${user.id}/reset-mfa`, {}, 'Two-step sign-in was reset.')
+                }
+              >
+                {busy === 'mfa' && <LoaderCircle className="spin" size={13} />}
+                Reset two-step sign-in
+              </button>
+            </div>
+          </div>
+        )}
         {confirm === 'deactivate' && (
           <div className="adm-confirm">
             <p>
@@ -232,8 +263,8 @@ export function UserDialog({
 
         {self ? (
           <p className="adm-muted">
-            To change your own password use <strong>Change password</strong> in the profile menu. You cannot
-            deactivate your own account.
+            To change your own password or two-step sign-in use the profile menu. You cannot deactivate your
+            own account.
           </p>
         ) : (
           <div className="adm-buttons">
@@ -250,6 +281,16 @@ export function UserDialog({
                   <KeyRound size={13} />
                   Reset password
                 </button>
+                {!!user.mfa_enabled && (
+                  <button
+                    className="button secondary small"
+                    disabled={!!busy || !!confirm}
+                    onClick={() => setConfirm('mfa')}
+                  >
+                    <ShieldOff size={13} />
+                    Reset two-step sign-in
+                  </button>
+                )}
                 <button
                   className="button danger-ghost small"
                   disabled={!!busy || !!confirm}

@@ -1,18 +1,20 @@
 import { useQueryClient } from '@tanstack/react-query';
-import { Check, KeyRound, LogOut, Users } from 'lucide-react';
+import { Check, KeyRound, LogOut, ShieldCheck, Users } from 'lucide-react';
 import { Badge, Overlay } from '../components';
 import '../features/admin/admin.css';
 import { request, token } from '../lib/api';
 import { useWorkspace } from './workspace';
 
-/** Avatar menu: the signed-in user, the demo persona switcher, password change and sign-out. */
+/** Avatar menu: the signed-in user, the demo persona switcher, password change, two-step sign-in and sign-out. */
 export function ProfileDialog({
   onChangeRole,
   onChangePassword,
+  onTwoStep,
   onClose,
 }: {
   onChangeRole: (role: string) => void;
   onChangePassword: () => void;
+  onTwoStep: () => void;
   onClose: () => void;
 }) {
   const qc = useQueryClient();
@@ -65,6 +67,10 @@ export function ProfileDialog({
           <button className="button secondary" onClick={onChangePassword}>
             <KeyRound size={15} />
             Change password
+          </button>
+          <button className="button secondary" onClick={onTwoStep}>
+            <ShieldCheck size={15} />
+            Two-step sign-in{user.mfaEnabled ? ' · on' : ''}
           </button>
           <button
             className="button secondary"

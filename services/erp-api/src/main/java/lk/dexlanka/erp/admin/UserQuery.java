@@ -16,7 +16,8 @@ import org.springframework.transaction.annotation.Transactional;
 public class UserQuery {
     static final String COLUMNS = """
             SELECT u.id,u.email,u.name,u.role,u.active,u.created_at,u.updated_at,u.last_login_at,
-                   u.password_changed_at,u.deactivated_at,u.must_change_password
+                   u.password_changed_at,u.deactivated_at,u.must_change_password,
+                   u.mfa_enabled_at IS NOT NULL AS mfa_enabled,u.mfa_enabled_at
             FROM users u""";
 
     private final Store s;

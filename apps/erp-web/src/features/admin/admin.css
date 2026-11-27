@@ -144,3 +144,11 @@
 .adm-password-fields { grid-template-columns: 1fr; }
 .login-form > .text-button { margin-top: 4px; }
 .profile-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+
+/* Two-step sign-in (V17) */
+.mfa-setup, .mfa-codes { display: flex; flex-direction: column; gap: 14px; }
+.mfa-steps { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 10px; font-size: 13px; color: var(--text); }
+.mfa-steps .adm-secret { margin: 8px 0 4px; }
+.mfa-codes ol { margin: 0; padding: 0; list-style: none; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 16px; }
+.mfa-codes code { font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace; font-size: 15px; letter-spacing: .5px; color: var(--heading); user-select: all; }
+@media (max-width: 420px) { .mfa-codes ol { grid-template-columns: minmax(0, 1fr); } }

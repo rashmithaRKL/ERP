@@ -155,6 +155,12 @@ const LABELS: Record<string, string> = {
   USER_REACTIVATED: 'User reactivated',
   USER_PASSWORD_RESET: 'Temporary password issued',
   PASSWORD_CHANGED: 'Password changed',
+  // Two-step sign-in (V17).
+  MFA_ENABLED: 'Two-step sign-in turned on',
+  MFA_DISABLED: 'Two-step sign-in turned off',
+  MFA_RECOVERY_CODES_REGENERATED: 'Recovery codes replaced',
+  MFA_RECOVERY_CODE_USED: 'Recovery code used to sign in',
+  USER_MFA_RESET: 'Two-step sign-in reset by an administrator',
   APPROVAL_POLICY_UPDATED: 'Approval policy updated',
   INVENTORY_SETTINGS_UPDATED: 'Adjustment threshold updated',
   IMPORT_COMMITTED: 'CSV import committed',
