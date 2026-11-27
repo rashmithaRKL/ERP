@@ -50,6 +50,7 @@ export function ProfileDialog({
                 { role: 'operator', name: 'Kasun Silva', title: 'Machine operator' },
                 { role: 'quality', name: 'Tharushi Senanayake', title: 'Quality officer' },
                 { role: 'maintenance', name: 'Ruwan Wickramasinghe', title: 'Maintenance technician' },
+                { role: 'finance', name: 'Sanduni Rajapaksa', title: 'Accountant' },
               ].map((r) => (
                 <button key={r.role} onClick={() => onChangeRole(r.role)}>
                   <Users size={17} />

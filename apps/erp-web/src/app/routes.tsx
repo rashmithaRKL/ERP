@@ -1,5 +1,6 @@
 import {
   Activity,
+  BookOpenCheck,
   Boxes,
   CalendarRange,
   Cpu,
@@ -34,6 +35,7 @@ import { lazyPage } from './lazyPage';
 import type { LazyPage } from './lazyPage';
 
 // Each page is its own chunk, downloaded on first visit or earlier (hover/focus in navigation, idle time).
+const AccountingPage = lazyPage(() => import('../pages/AccountingPage'));
 const AdministrationPage = lazyPage(() => import('../pages/AdministrationPage'));
 const BomsPage = lazyPage(() => import('../pages/BomsPage'));
 const InventoryPage = lazyPage(() => import('../pages/InventoryPage'));
@@ -301,10 +303,32 @@ export const routes: PageRoute[] = [
     path: '/reports',
     label: 'Costs & reports',
     icon: FileChartColumn,
-    roles: ['ADMIN', 'PLANNER'],
+    // FINANCE (V24) reads the cost register and the posted journal too.
+    roles: ['ADMIN', 'PLANNER', 'FINANCE'],
     group: 'BUSINESS',
     page: ReportsPage,
     description: 'Understand where every rupee goes.',
+  },
+  {
+    path: '/accounting',
+    label: 'Accounting',
+    icon: BookOpenCheck,
+    roles: ['ADMIN', 'FINANCE'],
+    group: 'BUSINESS',
+    page: AccountingPage,
+    description: 'Chart of accounts, manual journals and the trial balance, from every posting.',
+    // The trial balance as of today (one row per account with activity).
+    exportRows: async () =>
+      (await request<{ items: Row[] }>('/accounting/trial-balance')).items.map((r) => ({
+        id: r.id,
+        code: r.code,
+        account: r.name,
+        type: r.type,
+        debit: r.debit,
+        credit: r.credit,
+        balance_debit: r.closing_debit,
+        balance_credit: r.closing_credit,
+      })),
   },
   {
     path: '/settings',

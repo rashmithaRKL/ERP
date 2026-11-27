@@ -21,7 +21,7 @@ import { QueryState, Tone } from './shared';
 
 type Periods = { items: Row[]; today: string; latestClosed: string | null; postingBlocked: boolean };
 
-/** Accounting periods: close in order, reopen the latest closed period with a reason. ADMIN only. */
+/** Accounting periods: close in order, reopen the latest closed period with a reason. ADMIN and (V24) FINANCE. */
 export function PeriodsTab() {
   const { notify, refresh } = useWorkspace();
   const invalidate = useInvalidateAdmin();
@@ -67,7 +67,7 @@ export function PeriodsTab() {
           <>
             <Panel
               title="Close a period"
-              subtitle="Postings are always dated today. A closed period that covers today stops every posting until it is reopened."
+              subtitle="System postings are dated today; manual journals and reversals carry their own posting date. Nothing can be posted into a closed period, and a closed period that covers today stops every posting until it is reopened."
             >
               <form className="adm-period-form" onSubmit={close}>
                 {data.postingBlocked ? (

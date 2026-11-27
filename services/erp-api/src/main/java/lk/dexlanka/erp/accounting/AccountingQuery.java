@@ -391,6 +391,12 @@ public class AccountingQuery {
                 SELECT l.id,l.account,g.id AS account_id,g.name AS account_name,l.debit,l.credit,l.memo
                 FROM journal_lines l LEFT JOIN gl_accounts g ON g.tenant_id=l.tenant_id AND g.code=l.account
                 WHERE l.tenant_id=? AND l.entry_id=? ORDER BY l.debit DESC,l.id""", a.tenant(), id));
+        e.put(
+                "total",
+                sum(
+                        "SELECT COALESCE(SUM(debit),0) FROM journal_lines WHERE tenant_id=? AND entry_id=?",
+                        a.tenant(),
+                        id));
         boolean finance = a.role().equals("ADMIN") || a.role().equals(FINANCE);
         e.put(
                 "can_reverse",

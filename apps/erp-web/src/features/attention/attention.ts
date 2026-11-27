@@ -1,4 +1,5 @@
 import {
+  BookOpenCheck,
   CalendarClock,
   ClipboardCheck,
   ListChecks,
@@ -346,6 +347,34 @@ export function buildAttention({ data, user, today, purchaseApprovers, canOpen }
     more: ['purchase order to approve', 'purchase orders to approve'],
   });
 
+  // V24: manual journals the viewer may approve (the server applies the MANUAL_JOURNAL policy and independence).
+  const accounting = data.accounting;
+  const journals = accounting?.awaiting ?? [];
+  add({
+    key: 'journal-approvals',
+    tone: 'amber',
+    icon: BookOpenCheck,
+    count: num(accounting?.awaiting_my_approval),
+    title: plural(
+      num(accounting?.awaiting_my_approval),
+      'manual journal awaits your approval',
+      'manual journals await your approval',
+    ),
+    body: 'Approve them to post their entries, or return them to draft.',
+    action: 'Open journals',
+    path:
+      num(accounting?.awaiting_my_approval) === 1 && journals.length === 1
+        ? `/accounting?tab=journals&journal=${encodeURIComponent(journals[0].id)}`
+        : '/accounting?tab=journals',
+    rows: journals.map((j) => ({
+      key: `journal-approval:${j.id}`,
+      title: `${text(j.number)} awaits approval`,
+      body: `${text(j.narration)} · Rs. ${fmt(j.total_debit, 2)} · dated ${day(j.posting_date)}`,
+      path: `/accounting?tab=journals&journal=${encodeURIComponent(j.id)}`,
+    })),
+    more: ['journal to approve', 'journals to approve'],
+  });
+
   const late = data.purchases.filter(
     (p) => ['APPROVED', 'PARTIAL'].includes(text(p.status)) && p.due_date && day(p.due_date) < today,
   );
@@ -412,6 +441,36 @@ export function buildAttention({ data, user, today, purchaseApprovers, canOpen }
       path: '/quality',
     })),
     more: ['inspection waiting', 'inspections waiting'],
+  });
+
+  // V24: accounts created from codes found in posted data, waiting for a finance user's review.
+  add({
+    key: 'accounts-review',
+    tone: 'blue',
+    icon: BookOpenCheck,
+    count: num(data.accounting?.needs_review),
+    title: plural(
+      num(data.accounting?.needs_review),
+      'ledger account needs review',
+      'ledger accounts need review',
+    ),
+    body: 'Check the name, type and parent of accounts found in posted entries.',
+    action: 'Open the chart of accounts',
+    path: '/accounting',
+    rows: [
+      {
+        key: 'accounts-review:summary',
+        title: plural(
+          num(data.accounting?.needs_review),
+          'ledger account needs review',
+          'ledger accounts need review',
+        ),
+        body: 'Created from codes found in posted entries',
+        path: '/accounting',
+        covers: num(data.accounting?.needs_review),
+      },
+    ],
+    more: ['account to review', 'accounts to review'],
   });
 
   const total = groups.reduce((sum, g) => sum + g.count, 0);

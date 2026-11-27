@@ -22,7 +22,7 @@ export type State = {
   trend: { day: string; completed: number; scrap: number }[];
   metrics: Row;
   sync: Row;
-  /** ADMIN and PLANNER only. */
+  /** ADMIN, PLANNER and (V24) FINANCE only. */
   financial?: Row;
   // Removed in V9 (screens read them server-paged): `users` (GET /admin/users), `receipts` (GET /purchases/receipts),
   // `ledger` (GET /inventory/ledger) and `journal` (GET /reports/journal).
@@ -40,6 +40,17 @@ export type State = {
   /** V14 recall attention: open (not contained) and contained recalls, customers still to notify on contained
    * recalls, and up to five active recalls (most severe first); screens read `GET /recalls`. */
   recalls?: RecallSummary;
+  /** V24 general-ledger attention counts (ADMIN and FINANCE only); the Accounting page reads `GET /accounting/**`. */
+  accounting?: AccountingSummary;
+};
+/** `accounting` state key (V24): manual journals awaiting approval (all, and those the viewer may approve, with up to
+ * five of them), drafts, and active accounts flagged for review. */
+export type AccountingSummary = {
+  awaiting_approval: number;
+  awaiting_my_approval: number;
+  drafts: number;
+  needs_review: number;
+  awaiting: Row[];
 };
 /** `schedule` state key (V13): published run (null when none), late and unscheduled open orders, five latest late orders. */
 export type ScheduleSummary = {

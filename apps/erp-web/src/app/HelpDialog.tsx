@@ -79,11 +79,19 @@ export function HelpDialog({ onClose }: { onClose: () => void }) {
           contains it (affected stock in hand goes on hold through recall nonconformances), records each
           customer notification, exports the notification list and closes it once everything is dispositioned.
         </p>
+        <p>
+          Accounting (finance and administrators): every posting lands in a chart of accounts with asset,
+          liability, equity, income and expense accounts, header accounts and balances as of any date. Manual
+          journals (accruals, reclassifications, corrections) balance to the cent, post on their own posting
+          date in an open period and need a second person&apos;s approval under the manual-journal policy; any
+          posted entry can be reversed once with a reason. The trial balance, as of a date or for a period,
+          exports to CSV, and each account opens its ledger with opening and running balances.
+        </p>
         <h3>What remains on the roadmap</h3>
         <p>
-          Full finance and tax localization, personnel workflows, machine telemetry, extended onboarding, MFA,
-          cloud synchronization, signed Windows installation, SaaS billing and AI services. The repository
-          documents acceptance criteria and readiness gaps.
+          Taxes, receivables and payables, financial statements, tax localization, personnel workflows,
+          machine telemetry, extended onboarding, MFA, cloud synchronization, signed Windows installation,
+          SaaS billing and AI services. The repository documents acceptance criteria and readiness gaps.
         </p>
         <div className="help-callout">
           <ShieldCheck size={18} />

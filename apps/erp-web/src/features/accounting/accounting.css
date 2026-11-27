@@ -1,0 +1,95 @@
+/* General ledger (V24): pages/AccountingPage.tsx and features/accounting/*. Built on the shared tokens in styles.css;
+   every selector is scoped to acc- names. */
+
+.acc-panel .mini-tabs { border-top: 1px solid var(--border); }
+.acc-attention { color: var(--tone-amber); }
+
+/* Chart of accounts */
+.acc-code { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.acc-code > strong { font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.acc-code .acc-header-code { color: var(--heading); text-transform: none; }
+.acc-name { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.acc-name > span { overflow-wrap: anywhere; }
+.acc-name > small { color: var(--muted); font-size: 11px; }
+.acc-header-row { font-weight: 600; color: var(--heading); }
+.acc-tags { display: inline-flex; flex-wrap: wrap; gap: 4px; }
+.acc-tag {
+  display: inline-flex; align-items: center; gap: 4px; font-size: 10px; font-weight: 600; letter-spacing: 0.01em;
+  border: 1px solid var(--border); background: var(--soft); color: var(--secondary); border-radius: 4px; padding: 1px 6px;
+  white-space: nowrap;
+}
+.acc-tag.review { color: var(--tone-amber); border-color: color-mix(in srgb, var(--tone-amber) 35%, var(--border)); }
+.acc-tag.inactive { color: var(--tone-gray); }
+.acc-tag.system { color: var(--tone-blue); }
+.acc-amount { font-variant-numeric: tabular-nums; white-space: nowrap; text-align: right; display: block; }
+.acc-amount.muted { color: var(--muted); }
+
+/* Manual journal editor */
+.acc-editor-head { display: grid; grid-template-columns: 180px 1fr; gap: 18px; padding: 22px 22px 6px; }
+.acc-lines { padding: 10px 22px 6px; display: flex; flex-direction: column; gap: 8px; }
+.acc-line {
+  display: grid; grid-template-columns: 28px minmax(0, 2.2fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.6fr) 34px;
+  gap: 8px; align-items: center;
+}
+.acc-line.head { font-size: 11px; color: var(--muted); padding: 0 0 2px; }
+.acc-line.head > span:nth-child(3), .acc-line.head > span:nth-child(4) { text-align: right; }
+.acc-line > .acc-line-no { font-size: 12px; color: var(--muted); text-align: right; }
+.acc-line select, .acc-line input {
+  height: 34px; border: 1px solid var(--border); background: var(--surface); color: var(--text);
+  border-radius: 5px; padding: 0 9px; font-size: 13px; min-width: 0; width: 100%;
+}
+.acc-line input[inputmode='decimal'] { text-align: right; font-variant-numeric: tabular-nums; }
+.acc-line input[aria-invalid='true'] { border-color: var(--red); }
+.acc-line-label { display: none; }
+.acc-editor-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; padding: 4px 22px 14px; }
+.acc-balance-bar {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 6px 18px; margin: 0 22px 18px; padding: 11px 14px;
+  border: 1px solid var(--border); background: var(--soft); border-radius: 6px; font-size: 13px;
+}
+.acc-balance-bar strong { font-variant-numeric: tabular-nums; color: var(--heading); }
+.acc-balance-bar .acc-state { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; margin-left: auto; }
+.acc-balance-bar .acc-state.ok { color: var(--tone-green); }
+.acc-balance-bar .acc-state.off { color: var(--tone-red); }
+
+/* Journal drawer and entry dialog */
+.acc-totals-row td { font-weight: 600; color: var(--heading); }
+.acc-policy {
+  display: flex; align-items: flex-start; gap: 10px; margin: 0 18px 14px; padding: 11px 14px; font-size: 12px;
+  line-height: 1.55; color: var(--secondary); background: var(--soft); border: 1px solid var(--border); border-radius: 6px;
+}
+.acc-policy > div { flex: 1; min-width: 0; }
+.acc-policy strong { color: var(--heading); }
+.acc-reason { padding: 20px 22px 4px; display: flex; flex-direction: column; gap: 16px; }
+.acc-reversal-note { margin-top: 12px; }
+
+/* Trial balance */
+.acc-tb-toolbar { align-items: flex-end; }
+.acc-tb-status { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; }
+.acc-tb-status.ok { color: var(--tone-green); }
+.acc-tb-status.off { color: var(--tone-red); }
+.acc-tb-totals {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 0; border-top: 1px solid var(--border);
+}
+.acc-tb-totals > div { padding: 14px 18px; border-right: 1px solid var(--border); }
+.acc-tb-totals > div:last-child { border-right: 0; }
+.acc-tb-totals span { display: block; font-size: 11px; color: var(--muted); margin-bottom: 4px; }
+.acc-tb-totals strong { font-variant-numeric: tabular-nums; color: var(--heading); font-size: 15px; }
+
+@media (max-width: 650px) {
+  .acc-editor-head { grid-template-columns: 1fr; padding: 18px 18px 4px; }
+  .acc-lines { padding: 8px 18px 4px; gap: 12px; }
+  .acc-line {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 34px;
+    border: 1px solid var(--border); border-radius: 8px; padding: 10px; background: var(--surface);
+  }
+  .acc-line.head { display: none; }
+  .acc-line > .acc-line-no { grid-column: 1 / 3; text-align: left; font-weight: 600; color: var(--heading); }
+  .acc-line > .acc-line-account, .acc-line > .acc-line-memo { grid-column: 1 / -1; }
+  .acc-line > .acc-line-remove { grid-column: 3; grid-row: 1; }
+  .acc-line-label { display: block; font-size: 10px; color: var(--muted); margin-bottom: 3px; }
+  .acc-editor-actions { padding: 4px 18px 12px; }
+  .acc-balance-bar { margin: 0 18px 16px; }
+  .acc-balance-bar .acc-state { margin-left: 0; flex-basis: 100%; }
+  .acc-policy { margin: 0 14px 12px; }
+  .acc-tb-totals > div { border-right: 0; border-bottom: 1px solid var(--border); }
+}

@@ -19,6 +19,7 @@ export const ROLES = [
   'SALES',
   'VIEWER',
   'MAINTENANCE',
+  'FINANCE',
 ] as const;
 /** Roles that can be named approvers in an approval policy (ADMIN always approves). */
 export const APPROVER_ROLES = ['PLANNER', 'WAREHOUSE', 'QUALITY', 'SALES', 'OPERATOR'] as const;
@@ -31,6 +32,7 @@ export const ROLE_LABELS: Record<string, string> = {
   SALES: 'Sales',
   VIEWER: 'Viewer',
   MAINTENANCE: 'Maintenance',
+  FINANCE: 'Finance',
 };
 export const PASSWORD_MIN = 16;
 export const PASSWORD_MAX = 128;

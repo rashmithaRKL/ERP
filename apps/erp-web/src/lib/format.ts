@@ -73,6 +73,7 @@ const STATUS_WORDS = new Set([
   'DISPATCHED',
   'DRAFT',
   'FAILED',
+  'FINANCE',
   'IDLE',
   'INACTIVE',
   'ISSUED',
