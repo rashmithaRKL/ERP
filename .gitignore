@@ -15,5 +15,18 @@ playwright-report/
 *.tsbuildinfo
 *.age
 
-# Agent worktrees
-.claude/worktrees/
+# Claude Code project setup: skills, agents, settings, hooks and agent worktrees (private, local only)
+.claude/
+.mcp.json
+CLAUDE.md
+CLAUDE.local.md
+
+# graphify knowledge graph (local, rebuilt with `graphify update .`)
+graphify-out/
+# Added by code-review-graph
+.code-review-graph/
+# token-savior-recall caches (local)
+.token-savior-cache/
+.token-savior-checkpoints/
+# rtk project filters (local)
+.rtk/
