@@ -964,7 +964,7 @@
         "summary": "Authenticated user and organization",
         "responses": {
           "200": {
-            "description": "Current principal and organization, with mustChangePassword, lastLoginAt and passwordChangedAt"
+            "description": "Current principal and organization, with mustChangePassword, lastLoginAt and passwordChangedAt; V17: mfaEnabled, mfaEnabledAt, mfaRequired, recoveryCodesLeft, mfaPending (the code step of this sign-in is due) and mfaSetupRequired (an administrator must set up two-step sign-in)"
           },
           "401": {
             "description": "No session"
@@ -1005,7 +1005,7 @@
         },
         "responses": {
           "200": {
-            "description": "Authenticated; refresh CSRF"
+            "description": "Authenticated: `{authenticated: true, mfaRequired, mustChangePassword}`; refresh CSRF. V17: with mfaRequired true the session is limited until POST /auth/mfa/verify (403 MFA_REQUIRED elsewhere, expires after 5 minutes)"
           },
           "401": {
             "description": "Invalid credentials"
@@ -4654,6 +4654,184 @@
         }
       }
     },
+    "/auth/mfa/setup": {
+      "post": {
+        "summary": "V17: start a two-step sign-in set-up (any role); the secret is kept in this session until /auth/mfa/enable confirms it",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "`{secret, uri, issuer, account}`: a new Base32 secret (160 bits) and its `otpauth://totp/...` URI (SHA1, 6 digits, 30 s); nothing is stored in the database yet"
+          },
+          "401": {
+            "description": "No session"
+          },
+          "409": {
+            "description": "Two-step sign-in is already on"
+          }
+        }
+      }
+    },
+    "/auth/mfa/enable": {
+      "post": {
+        "summary": "V17: turn on two-step sign-in with the current password and an authenticator code; signs out the user's other sessions",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MfaConfirm"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "`{status: ENABLED, recoveryCodes}`: 10 one-time recovery codes, shown once (null on an idempotent replay); this session continues under a new session id"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "401": {
+            "description": "No session"
+          },
+          "409": {
+            "description": "No set-up in progress in this session, already on, current password incorrect, wrong code or idempotency conflict"
+          },
+          "429": {
+            "description": "5 wrong current passwords or 5 wrong codes within 15 minutes; retry after the window (problem+json detail)"
+          }
+        }
+      }
+    },
+    "/auth/mfa/verify": {
+      "post": {
+        "summary": "V17: the code step of a password sign-in (authenticator code or unused recovery code); completes the sign-in under a new session id",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MfaCode"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "`{method: TOTP | RECOVERY_CODE, recoveryCodesLeft, authenticated: true, mustChangePassword}`; records the last sign-in; refresh CSRF"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "401": {
+            "description": "No session, or the waiting sign-in expired (5 minutes)"
+          },
+          "409": {
+            "description": "No sign-in is waiting for a code, or the code is wrong or already used"
+          },
+          "429": {
+            "description": "5 wrong codes within 15 minutes; retry after the window (problem+json detail)"
+          }
+        }
+      }
+    },
+    "/auth/mfa/recovery-codes": {
+      "post": {
+        "summary": "V17: replace the recovery codes (current password and an authenticator or recovery code); the unused codes stop working",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MfaConfirm"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "`{status: REGENERATED, recoveryCodes}`: 10 new codes, shown once (null on an idempotent replay)"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "401": {
+            "description": "No session"
+          },
+          "409": {
+            "description": "Two-step sign-in is off, current password incorrect, wrong or used code, or idempotency conflict"
+          },
+          "429": {
+            "description": "5 wrong current passwords or 5 wrong codes within 15 minutes (problem+json detail)"
+          }
+        }
+      }
+    },
+    "/auth/mfa/disable": {
+      "post": {
+        "summary": "V17: turn off two-step sign-in (current password and an authenticator or recovery code); signs out the user's other sessions",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MfaConfirm"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "`{status: DISABLED}`; this session continues under a new session id"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "401": {
+            "description": "No session"
+          },
+          "409": {
+            "description": "Already off, required for the account (administrators of a non-demo workspace), current password incorrect, wrong or used code, or idempotency conflict"
+          },
+          "429": {
+            "description": "5 wrong current passwords or 5 wrong codes within 15 minutes (problem+json detail)"
+          }
+        }
+      }
+    },
     "/admin/users": {
       "get": {
         "summary": "Users of the tenant, server-paged by name (ADMIN)",
@@ -4879,6 +5057,45 @@
           },
           "409": {
             "description": "Business rule, last-administrator or idempotency conflict"
+          }
+        }
+      }
+    },
+    "/admin/users/{id}/reset-mfa": {
+      "post": {
+        "summary": "V17: reset another user's two-step sign-in (ADMIN; lost phone); removes the secret and recovery codes and signs the user out",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "User id",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The user row (`mfa_enabled: false`)"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Role/CSRF denied, or password change or two-step sign-in required"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "Yourself, two-step sign-in not on, or idempotency conflict"
           }
         }
       }
@@ -15474,6 +15691,41 @@
           "reason": {
             "type": "string",
             "maxLength": 2000
+          }
+        }
+      },
+      "MfaCode": {
+        "type": "object",
+        "required": [
+          "code"
+        ],
+        "properties": {
+          "code": {
+            "type": "string",
+            "maxLength": 32,
+            "description": "6-digit authenticator code or an unused recovery code (abcde-fghij; case and hyphen ignored)",
+            "writeOnly": true
+          }
+        }
+      },
+      "MfaConfirm": {
+        "type": "object",
+        "required": [
+          "currentPassword",
+          "code"
+        ],
+        "properties": {
+          "currentPassword": {
+            "type": "string",
+            "format": "password",
+            "maxLength": 128,
+            "writeOnly": true
+          },
+          "code": {
+            "type": "string",
+            "maxLength": 32,
+            "description": "6-digit authenticator code; /recovery-codes and /disable also accept an unused recovery code",
+            "writeOnly": true
           }
         }
       }

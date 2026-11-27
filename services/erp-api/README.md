@@ -26,7 +26,7 @@ run by `target/surefire-reports/*.xml`.
 | Package | Owns |
 |---|---|
 | `lk.dexlanka.erp` | `ErpApplication` only (component scan root) |
-| `platform` | `Store` (posting primitives), `Actor` (identity + role checks), `ErpUser` (principal with its session version), `SecurityConfig`, `LoginRateLimit`, `SessionGuard` (per-request revocation, role refresh, forced password change), `Passwords` (the password rule, temporary passwords), `PasswordService` + `AccountCommands` (self-service change), `PasswordAttemptLimit` (V9: 5 wrong current passwords per account in 15 minutes, then 429), `AuthController` (`/api/health`, `/api/auth/*`), `ApiErrors` (the single `@RestControllerAdvice`) |
+| `platform` | `Store` (posting primitives), `Actor` (identity + role checks), `ErpUser` (principal with its session version), `SecurityConfig`, `LoginRateLimit`, `SessionGuard` (per-request revocation, role refresh, forced password change; V17: the `MFA_REQUIRED` code step and the `MFA_SETUP_REQUIRED` administrator gate, from session attributes), `Passwords` (the password rule, temporary passwords), `PasswordService` + `AccountCommands` (self-service change), `PasswordAttemptLimit` (V9: 5 wrong current passwords per account in 15 minutes, then 429), `AuthController` (`/api/health`, `/api/auth/*`); V17 two-step sign-in: `Totp` (RFC 6238 codes and Base32), `MfaSecrets` (AES-256-GCM encryption of the secrets under `app.mfa.encryption-key` / `MFA_ENCRYPTION_KEY`; the API refuses to start without it), `MfaPolicy` (administrators of a non-demo workspace must use it, `app.mfa.required-for-admins`), `MfaAttemptLimit` (5 wrong codes per account in 15 minutes, then 429), `MfaService` + `MfaController` (`/api/auth/mfa/*`: set-up, enable, the code step, recovery codes, disable), `ApiErrors` (the single `@RestControllerAdvice`) |
 | `catalog` | Organization, user accounts, partners (maintenance and directory in `Partner*` files), items, work centers (machines), BOM revisions; item master (V4: `ItemService`, `UnitService` conversion service, `CategoryService`, `VariantService`, `ItemQuery`); multi-level BOMs (V7: `BomGraph` structure + roll-up, `BomService` copy/edit-draft + approval rules called from `CatalogService.approveBom`, `BomQuery` explosion/where-used/compare/cost, `BomStateSections`) |
 | `procurement` | Multi-line purchase orders in purchase units (`PurchaseOrderService`: draft/submit/independent approval/cancel/close short, drafts from MRP shortages), goods receipts per line (`ReceivingService`), supplier invoices with quantity/price variances (`SupplierInvoiceService`), supplier returns (`SupplierReturnService`), the read model (`ProcurementQuery`), open MRP supply (`ProcurementSupply`), shared rules (`PurchaseRules`) and the original single-item contract (`ProcurementService`) |
 | `quality` | Incoming and final inspections (including the supplier return of a failed incoming lot and MO completion after the last final release); the paged inspection list (V9: `InspectionQuery`). V12 quality management: inspection plans, defect codes and measurement evaluation (`InspectionPlanService`, `InspectionPlanQuery`), nonconformance reports and dispositions (`NcrService`, `NcrQuery`), rework orders (`ReworkService`), CAPA (`CapaService`, `CapaQuery`), shared rules (`QualityRules`: lot hold settling, MO completion, accounts) and keyset paging (`QualityPaging`). `NcrService` calls `procurement.SupplierReturnService` (joining its transaction) to post RETURN_TO_SUPPLIER dispositions |
@@ -39,7 +39,7 @@ run by `target/surefire-reports/*.xml`.
 | `traceability` | V14 genealogy and recalls: **`TraceService`**, the trace engine and the one public read service recalls use (`forward`/`backward` lot closures over the `lot_genealogy_links` view with depth-limited, cycle-safe recursive CTEs, `origins`, `supplierLots`, plus the `search` and `trace` graph/tree read endpoints), `RecallService` (open/refresh/contain/notify/close/cancel, `outstanding` close check, audited export), `RecallQuery` (paged list, detail, notification CSV), `RecallStateSections`, `TraceController`, `RecallController` |
 | `performance` | V15 OEE and utilization (read model plus closed-day snapshots): `OeeCalculator` (pure per-day calculation: time classification, A/P/Q/OEE, losses, warnings; `Spans` interval arithmetic), `OeeEngine` (loads working time through `routing.CalendarService`, the `machine_downtime` view, operation time logs/reports and production actuals; merges closed snapshots with live figures), `Rollup` (time-weighted roll-ups), `PerformanceQuery` (OEE matrix, losses, day detail, the state key), `PerformanceService` (close / recalculate days), `PerformanceStateSections`, `PerformanceDemoSeed` |
 | `demo` | `DemoDatabase` (embedded PostgreSQL for the `demo`/`test` profiles), `DemoSeed` (demo tenant, or first-start bootstrap tenant outside demo), `DemoPersonas` (V11 adds `MAINTENANCE`), `IntegrationDemoSeed` (V9), `RoutingDemoSeed` (V10), `MaintenanceDemoSeed` (V11), `QualityDemoSeed` (V12), `ScheduleDemoSeed` (V13), `TraceabilityDemoSeed` (V14); `performance.PerformanceDemoSeed` (V15) lives in its feature package |
-| `admin` | V8 administration (ADMIN only): `UserAdminService` + `UserQuery` (edit, deactivate/reactivate, temporary passwords, directory), `ApprovalPolicyService` (public `evaluate(tenant, documentType, amount, creatorId)` → `Decision`, `approverDecision`, `autoApproval`; used by `inventory` for stock adjustments and, since V9, by `manufacturing` and `procurement` for order approval) + `ApprovalPolicyController` (`GET /api/approval-policies` for every role), `ImportService` with `ImportKind`s `ItemImport`, `PartnerImport`, `OpeningStockImport` and the `CsvFile` reader, `AuditQuery` (paged trail, facets, streamed CSV export), `PeriodService` (close/reopen accounting periods), `AdminController` |
+| `admin` | V8 administration (ADMIN only): `UserAdminService` + `UserQuery` (edit, deactivate/reactivate, temporary passwords, V17 reset of another user's two-step sign-in, directory with `mfa_enabled`/`mfa_enabled_at`), `ApprovalPolicyService` (public `evaluate(tenant, documentType, amount, creatorId)` → `Decision`, `approverDecision`, `autoApproval`; used by `inventory` for stock adjustments and, since V9, by `manufacturing` and `procurement` for order approval) + `ApprovalPolicyController` (`GET /api/approval-policies` for every role), `ImportService` with `ImportKind`s `ItemImport`, `PartnerImport`, `OpeningStockImport` and the `CsvFile` reader, `AuditQuery` (paged trail, facets, streamed CSV export), `PeriodService` (close/reopen accounting periods), `AdminController` |
 
 A domain package contains, by convention:
 
@@ -72,8 +72,9 @@ Route ownership:
 | Controller | Routes under `/api` |
 |---|---|
 | `platform.AuthController` | `GET /health`, `GET /auth/config`, `GET /auth/csrf`, `GET /auth/me`, `POST /auth/password`, `POST /auth/demo` (`/auth/login`, `/auth/logout` are Spring Security filters) |
+| `platform.MfaController` | V17: `POST /auth/mfa/setup`, `/auth/mfa/enable`, `/auth/mfa/verify`, `/auth/mfa/recovery-codes`, `/auth/mfa/disable` |
 | `admin.ApprovalPolicyController` | `GET /approval-policies` (V9, every role) |
-| `admin.AdminController` | `GET /admin/users`, `/admin/approval-policies`, `/admin/imports`, `/admin/imports/{kind}/template`, `/admin/audit`, `/admin/audit/facets`, `/admin/audit/export`, `/admin/periods`; `POST /admin/users/{id}`, `/admin/users/{id}/deactivate`, `/reactivate`, `/reset-password`, `/admin/approval-policies/{documentType}`, `/admin/imports/{kind}/validate`, `/admin/imports/{kind}/commit`, `/admin/periods/close`, `/admin/periods/reopen` |
+| `admin.AdminController` | `GET /admin/users`, `/admin/approval-policies`, `/admin/imports`, `/admin/imports/{kind}/template`, `/admin/audit`, `/admin/audit/facets`, `/admin/audit/export`, `/admin/periods`; `POST /admin/users/{id}`, `/admin/users/{id}/deactivate`, `/reactivate`, `/reset-password`, `/reset-mfa` (V17), `/admin/approval-policies/{documentType}`, `/admin/imports/{kind}/validate`, `/admin/imports/{kind}/commit`, `/admin/periods/close`, `/admin/periods/reopen` |
 | `catalog.CatalogController` | `POST /users`, `/organization`, `/partners`, `/machines`, `/items`, `/boms`, `/boms/{id}/approve` |
 | `catalog.PartnerController` | `GET /partners`, `GET /partners/{id}`, `POST /partners/{id}` |
 | `catalog.ItemMasterController` | `GET /items`, `/items/{id}`, `/items/{id}/movements`, `/items/{id}/units`, `/items/{id}/convert`, `/items/by-barcode`, `/units`, `/item-categories`, `/item-templates`, `/item-templates/{id}`; `POST /items/{id}`, `/items/{id}/deactivate`, `/items/{id}/activate`, `/items/{id}/conversions`, `/items/{id}/conversions/{unit}/remove`, `/items/{id}/barcodes`, `/items/{id}/barcodes/{barcodeId}/remove`, `/units`, `/units/{code}`, `/item-categories`, `/item-categories/{id}`, `/item-templates`, `/item-templates/{id}`, `/item-templates/{id}/variants` |
@@ -126,7 +127,7 @@ Each feature owns one Flyway version and one `/api/state` order range, so parall
 | `V14` | Phase 2 genealogy explorer and recalls (builds on V10–V12) | 2400–2499 |
 | `V15` | Phase 2 OEE and utilization (builds on V10–V12) | 2500–2599 |
 | `V16` | Phase 2 integration | 2600–2699 |
-| `V17` | Phase 3 security: TOTP MFA (required for administrators) with recovery codes, credential lifecycle | 2700–2799 |
+| `V17` | Phase 3 security: TOTP MFA (required for administrators) with recovery codes, credential lifecycle — **delivered** (`V17__mfa_credentials.sql`; no `/api/state` keys, range unused) | 2700–2799 |
 | `V18` | Phase 3 local server: hardened PostgreSQL on Windows, encrypted backup/restore, upgrade and restore drills, backup status | 2800–2899 |
 | `V19` | Phase 3 licensing: signed per-site licence files, user limits, 14-day grace, read-only-but-exportable expiry, optional online validation | 2900–2999 |
 | `V20` | Phase 3 company/site groundwork (tenant = company boundary, sites) and site/warehouse access scopes | 3000–3099 |
@@ -316,7 +317,7 @@ annotate contributors with `@Transactional`. Existing keys, in order:
 
 V9 removed keys no screen reads any more: `users` (110), `receipts` (240, `GET /api/purchases/receipts`), `ledger` (250, `GET /api/inventory/ledger`) and `journal` (320, `GET /api/reports/journal`). The Manufacturing orders, Shop floor, Quality control and Costs & reports screens read the V9 paged endpoints; `orders` and `inspections` stay for the dashboard and attention counts. V9 contributes no new keys (range 1900–1999 unused). V10 contributes no keys either (range 2000–2099 unused): routings,
 calendars, skills and operations are read from their own endpoints; `orders` rows gain the columns `routing_id` and
-`routing_revision`. V16 contributes no keys either (range 2600–2699 unused): it adds `changes_since_publish` and `last_change_at` to `schedule` (2300) and, in `DashboardStateSections`, counts `metrics.overdue` against the Asia/Colombo business date like the attention model.
+`routing_revision`. V16 contributes no keys either (range 2600–2699 unused): it adds `changes_since_publish` and `last_change_at` to `schedule` (2300) and, in `DashboardStateSections`, counts `metrics.overdue` against the Asia/Colombo business date like the attention model. V17 contributes no keys (range 2700–2799 unused): two-step sign-in state is in `GET /api/auth/me`.
 
 V7 also added columns to existing keys: `orders` rows carry `parent_order_id`, and `mrp` rows (now computed by the
 multi-level `MrpPlanner`) keep their original columns and add `level`, `independent_demand`, `dependent_demand`,
@@ -413,7 +414,7 @@ rPET product line (so FIFO consumption of the other seeds' stock is untouched): 
 preform and `FG-010` 1.5 L bottle (+ the existing label) with approved R01 BOMs and no routing or inspection plan, a
 Lanka Polymer Trading receipt as supplier lot `LPT-R2611-31`, preform (IM-02) and bottle (BM-02) orders run to released
 output, bottles shipped to Ceylon Beverage Industries and Island Consumer Products, and a CRITICAL recall of the resin
-lot, contained (resin, preform and bottle lots held by RECALL NCRs) with Ceylon notified and Island pending. V16 adds no demo seed (`ORDER + 160` stays free); the earlier seeds' production commands record their work-center status changes like any other command. A feature that needs
+lot, contained (resin, preform and bottle lots held by RECALL NCRs) with Ceylon notified and Island pending. V16 adds no demo seed (`ORDER + 160` stays free), nor does V17 (`ORDER + 170` stays free; every demo persona starts with two-step sign-in off and the demo workspace is exempt from the administrator requirement); the earlier seeds' production commands record their work-center status changes like any other command. A feature that needs
 demo data adds its own runner, ordered after the base seed and idempotent (it also runs against an existing
 `.local/postgres` demo database on the next start):
 
@@ -486,6 +487,10 @@ What the base provides:
   `command(session, path, body)`; `query(actor, path)`; `commandRequest(...)` to customize; `json(result)` to read a
   JSON object response; `toJson(value)`.
 - Database: `update`, `row`, `rows`, `count`, `decimal`; `s` is the `Store` for posting primitives.
+- V17: the `test` profile (`src/test/resources/application-test.yml`) ships a fixed `app.mfa.encryption-key` and sets
+  `app.mfa.required-for-admins: false`, so administrators created by `createUser` sign in without two-step sign-in;
+  `platform.MfaTest` switches the rule on for its own cases with `MfaPolicy.requiredForAdmins(true)` and resets it
+  afterwards, and moves time with `MfaService.clock(...)` / `MfaAttemptLimit.clock(...)`.
 
 Cover for every command: the happy path with its ledger/journal/audit effects, role denial (403), another tenant's
 record (404), each `require` rule (409), the idempotent replay and key reuse with a different body, and rollback of
@@ -507,9 +512,12 @@ partial work on failure.
 | `Actor.allow(...)` denied | 403 | `{"message":"Your role cannot perform this action"}` |
 | Missing/expired CSRF token | 403 | `{"message":"Access denied or session token expired. Refresh and try again."}` |
 | Temporary password not yet replaced (`SessionGuard`) | 403 | `{"message":"Change your temporary password to continue","code":"PASSWORD_CHANGE_REQUIRED"}` |
+| Two-step sign-in code still due (`SessionGuard`, V17) | 403 | `{"message":"Enter the code from your authenticator app to finish signing in","code":"MFA_REQUIRED"}` |
+| Administrator without two-step sign-in (`SessionGuard`, V17) | 403 | `{"message":"Set up two-step sign-in to continue","code":"MFA_SETUP_REQUIRED"}` |
 | Not signed in, account deactivated or session revoked | 401 | `{"message":"Please sign in"}` |
 | Too many sign-in attempts (`LoginRateLimit`, per address) | 429 | `{"message":"Too many sign-in attempts. Try again in one minute."}` |
 | Too many wrong current passwords (`PasswordAttemptLimit`, per account, V9) | 429 | `application/problem+json`, `detail` "Too many incorrect current passwords. Try again in N minutes." |
+| Too many wrong two-step sign-in codes (`MfaAttemptLimit`, per account, V17) | 429 | `application/problem+json`, `detail` "Too many incorrect codes. Try again in N minutes." |
 | Database trigger `RAISE EXCEPTION` (SQLSTATE P0001) | 409 | `application/problem+json`, the trigger's message in `detail` |
 | Constraint violation or `check_violation` trigger | 409 | `{"message":"This transaction violates a record, quantity or accounting constraint. …"}` |
 | Other database failure | 500 | `application/problem+json`, generic `detail` (no SQL) |

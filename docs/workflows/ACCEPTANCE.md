@@ -28,6 +28,7 @@ A screen alone does not satisfy a business workflow. Each supported command has 
 | Routing to operations (V10) | Draft routing (operations, work centers, alternates, setup/run minutes, crew, skill, inspection point) → approval by another planner (not author or last editor) → current revision → new MO snapshots it into PENDING operations (planned minutes for the order quantity) → issue readies operation 1 → start (first start starts the order) / setup done / pause / resume / report / finish on the Shop floor, strictly in sequence → time logs per SETUP/RUN interval → output posting limited to the last operation's good quantity, final output after every operation is done | Overlapping operations, splitting an operation across work centers, rescheduling (V13) and labour/machine cost from time logs later |
 | Shift calendars (V10) | Shift patterns (overnight, one break) → calendars (plant default, per work-center assignment) → holidays and overtime → available minutes per work center and day from one service (`routing.CalendarService`) | No history of calendar changes; no per-operator rosters |
 | Skills (V10) | Skill catalogue → user levels with certification expiry → operations requiring a skill start/resume only for a qualified user; PLANNER/ADMIN override with a recorded, audited reason | No training records or automatic expiry reminders |
+| Two-step sign-in (V17) | Profile menu → set up (setup key or `otpauth://` link in an authenticator app) → confirm with password + code → ten recovery codes shown once → next password sign-in stops at the code screen (authenticator or recovery code) → workspace; administrators of a real workspace must set it up before working; an administrator resets a lost phone | No QR image, passkeys or email recovery; no `MFA_ENCRYPTION_KEY` rotation; code attempt limits in memory per process |
 
 ## Defined critical outcomes
 
@@ -73,6 +74,13 @@ A screen alone does not satisfy a business workflow. Each supported command has 
 40. Dispositions above the affected quantity: refused; a rejected concession frees its quantity.
 41. Rework value conservation: output lot value = input value + material + labour, rework WIP nets to zero per order and the database `CHECK` enforces it; input → output lot links are immutable.
 42. CAPA closed by its owner: refused; a different quality user verifies effectiveness (`quality.CapaTest`).
+43. Two-step sign-in code step (V17): after a correct password of an account with two-step sign-in on, every route except identity, CSRF, config, sign-out and `/auth/mfa/verify` answers 403 `MFA_REQUIRED`; a correct code completes the sign-in under a new session id; a waiting sign-in expires after 5 minutes (401) (`platform.MfaTest`).
+44. Replayed authenticator code: the same 30-second code is refused (409) on a second sign-in; the next code works. A recovery code works once, case-insensitively; replacing the codes makes every earlier code fail.
+45. Guessing codes: 5 wrong codes for one account within 15 minutes → further attempts, even with the right code, get 429 until the window passes.
+46. Administrator without two-step sign-in in a real workspace: every route except identity, CSRF, config, sign-out, password change and set-up answers 403 `MFA_SETUP_REQUIRED`, also for a user promoted to ADMIN mid-session; an administrator cannot turn it off (409). The demo workspace and the persona switch are exempt.
+47. Turning it on needs the set-up secret of this session, the current password and a correct code; the secret is stored only encrypted (`v1:` prefix, never the Base32 secret) and the user's other sessions end.
+48. Administrator reset of a lost phone: not for yourself (409), not across tenants (404), not by a non-administrator (403); removes the secret and recovery codes, signs the user out (401 on their next request) and is audited `USER_MFA_RESET`.
+49. TOTP arithmetic: the RFC 6238 SHA-1 test vectors, one step of clock drift either way and nothing further (`platform.TotpTest`).
 
 ## Multi-level browser acceptance (V7 demo data)
 
@@ -150,6 +158,25 @@ Figures are those of a fresh demo database (the history is relative to the day t
 7. **Roles**: as *demo.maintenance* (Ruwan) the navigation lists Production schedule (read only: no *Run scheduler*), Shop floor, Work centers, Maintenance and Performance; a VIEWER account (create one under **Administration → Users**; the demo has no viewer persona) opens Maintenance read-only. No page shows an access error on load for any persona (the matrix is in `docs/FEATURES.md`; `RoleAccessMatrixTest` covers all eight roles).
 8. **Stale schedule**: as *demo.planner* start or pause an operation on the Shop floor, or report downtime on a work center; **Production schedule** then says *The published schedule SCH-… may be out of date: N changes … since it was run*, and the Overview / bell show the same item. **Run scheduler** and **Publish** clear it.
 9. **Maintenance and paused orders**: put an order without a routing on hold, start a maintenance work order on its work center (Maintenance → work order → **Start**), then try **Resume** on the order card: it is refused with *Machine is under maintenance* until the work order is completed (routed operations behave the same).
+
+## Two-step sign-in browser acceptance (V17)
+
+The demo workspace is exempt from the administrator requirement and enters through the persona switch, which never asks for a code, so the demo exercises set-up, recovery codes, turning it off and the administrator's reset. The demo personas have random passwords and two-step sign-in needs the current password, so first give one persona a known password:
+
+1. As *demo.admin* (Nimal Perera): **Administration → Users** shows a *Two-step* column; every demo user reads *Off* (administrators of a real workspace read *Required* until they set it up). Open *Dilini Fernando* → **Reset password** → **Reset password** and copy the temporary password.
+2. Avatar (**Open profile menu**) → *Dilini Fernando* (Production planner): the *Set a new password* screen asks for the temporary password and a new one (16+ characters) → **Save and continue**.
+3. Avatar → **Two-step sign-in** → **Set up two-step sign-in**: the dialog shows a setup key in groups of four, the account (`demo.planner@dexlanka.test`, time-based, 6 digits) and an *Open in an authenticator app on this device* link (there is no QR image). Add the key to an authenticator app, enter its 6-digit code and the new password → **Turn on two-step sign-in**. A wrong code or password shows the error under the fields.
+4. Ten recovery codes (`abcde-fghij`) appear with *Shown once* and **Copy codes** → **I saved my codes**: the toast says two-step sign-in is on and other sessions were signed out. The avatar menu now reads *Two-step sign-in · on*; the dialog subtitle shows *On since … · 10 recovery codes left*.
+5. **Replace recovery codes**: password + current code → ten new codes are shown once; the earlier ones no longer work.
+6. **Turn off** (planner only; administrators of a real workspace do not see it): password + code → the toast confirms and the menu item loses *· on*. Turn it on again for the next step.
+7. Avatar → *Nimal Perera*: **Administration → Users** shows Dilini's *Two-step* as *On*; open her: *Two-step sign-in: On since …* and **Reset two-step sign-in** → confirm. The row returns to *Off*. **Audit trail** lists *Two-step sign-in turned on*, *Recovery codes replaced*, *Two-step sign-in turned off* and *Two-step sign-in reset by an administrator*. The button is absent on your own row (use the profile menu).
+8. Switching to Dilini again needs no code: the persona switch is not a password sign-in.
+
+Production (or any non-demo workspace, with `MFA_ENCRYPTION_KEY` set and `MFA_REQUIRED_FOR_ADMINS` left at `true`):
+
+1. The bootstrap administrator signs in with email and password: instead of the workspace the *Set up two-step sign-in.* screen appears (*Administrators of … sign in with a password and a code from their phone*). Steps 3–4 above, then **I saved my codes** opens the workspace. Until then every other request answers 403 `MFA_SETUP_REQUIRED`; **Sign out** is available.
+2. Sign out and sign in again: after the password the *One more step.* screen asks for the code → **Verify and continue** opens the workspace. **Lost your phone? Use a recovery code** accepts one recovery code once (the audit trail records *Recovery code used to sign in*). Five wrong codes within 15 minutes show *Too many incorrect codes. Try again in N minutes.*; after 5 minutes without a code the sign-in starts over.
+3. The administrator's dialog (avatar → **Two-step sign-in**) says administrators must keep it on and offers only **Replace recovery codes**. A second administrator resets a lost phone from **Administration → Users**; the reset administrator sets it up again at the next sign-in. Other roles opt in from the profile menu.
 
 ## Manual browser acceptance
 
