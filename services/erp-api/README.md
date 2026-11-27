@@ -134,9 +134,15 @@ Each feature owns one Flyway version and one `/api/state` order range, so parall
 | `V21` | Phase 3 LAN resilience: durable browser write queue for brief server/LAN outages, replay with idempotency keys | 3100–3199 |
 | `V22` | Phase 3 Windows installer: services, firewall, setup wizard, upgrade/rollback (unsigned; signing pluggable) | 3200–3299 |
 | `V23` | Phase 3 integration | 3300–3399 |
+| `V24` | Phase 4 general ledger: chart of accounts (types, hierarchy, system accounts for every existing posting code), posting dates, manual journals with independent approval and reversal, trial balance and account ledger, FINANCE role | 3400–3499 |
+| `V25` | Phase 4 taxes: tax codes with effective-dated rates, country tax templates (Sri Lanka first), partner tax registration/exemption, line tax calculation and rounding, tax register | 3500–3599 |
+| `V26` | Phase 4 receivables: customer invoices from deliveries, credit notes, cash receipts with allocation, customer statements and ageing (builds on V24–V25) | 3600–3699 |
+| `V27` | Phase 4 payables: supplier invoices in purchase units with tax, supplier payments and payment runs, allocation, supplier statements and ageing (builds on V24–V25) | 3700–3799 |
+| `V28` | Phase 4 financial statements: profit and loss, balance sheet, cash book, period-close checklist | 3800–3899 |
+| `V29` | Phase 4 finance integration | 3900–3999 |
 
 Branches are merged to `main` in ascending migration order (Flyway runs with `outOfOrder=false`), two features at a
-time. A feature that needs a second migration uses a sub-version of its own number (e.g. `V3_1__…`) so it still sorts
+time. Phase 4 (V24–V29) is built on the `phase4` branch in parallel with Phase 3 and merges into `main` only after V23. A feature that needs a second migration uses a sub-version of its own number (e.g. `V3_1__…`) so it still sorts
 inside its slot.
 
 ### 1. Package and files
