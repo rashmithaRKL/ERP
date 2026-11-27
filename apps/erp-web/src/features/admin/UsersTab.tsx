@@ -134,7 +134,7 @@ export function UsersTab() {
               render: (r) =>
                 r.mfa_enabled ? (
                   <Tone tone="green">On</Tone>
-                ) : r.role === 'ADMIN' && !me.tenant.demo ? (
+                ) : r.role === 'ADMIN' && me.mfaRequired ? (
                   <Tone tone="amber">Required</Tone>
                 ) : (
                   <span className="muted">Off</span>
