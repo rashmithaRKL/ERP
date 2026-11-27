@@ -20,6 +20,7 @@ import { createOrder } from '../manufacturing/forms';
 import { invalidateSales, useSalesCommand, useSalesOrder } from './api';
 import type { SalesOrderDetail } from './api';
 import { endSalesOrder, returnDelivery } from './forms';
+import { TaxEstimate } from '../tax/TaxEstimate';
 import './sales.css';
 
 const STEPS = ['DRAFT', 'CONFIRMED', 'PARTIAL', 'DELIVERED'];
@@ -263,6 +264,10 @@ function Detail({
             },
           ]}
         />
+
+        {data.lines.length > 0 && status !== 'CANCELLED' && (
+          <TaxEstimate kind="sales" orderId={text(o.id)} version={o.updated_at} />
+        )}
 
         <h3>Deliveries</h3>
         {data.deliveries.length ? (

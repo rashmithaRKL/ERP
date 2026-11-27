@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ChevronLeft, ChevronRight, Pencil, Plus, Search } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Pencil, Percent, Plus, Search } from 'lucide-react';
 import { useWorkspace } from '../../app/workspace';
 import { Panel, Table } from '../../components';
 import { request } from '../../lib/api';
@@ -8,6 +8,7 @@ import type { Row } from '../../lib/api';
 import { fmt, money, num, text } from '../../lib/format';
 import { Tabs } from '../../motion/motion';
 import { createPartner, editPartner } from './forms';
+import { editPartnerTax, PartnerTaxChips } from '../tax/TaxProfiles';
 import '../sales/sales.css';
 
 type Page = { items: Row[]; next: string; total: number };
@@ -143,6 +144,7 @@ export function PartnerDirectory({ kind }: { kind: 'CUSTOMER' | 'SUPPLIER' }) {
               ),
             },
             { label: 'Terms', render: (r) => `Net ${text(r.payment_days)} days` },
+            { label: 'Tax', render: (r) => <PartnerTaxChips partner={r} /> },
             ...(customer
               ? [
                   {
@@ -168,17 +170,30 @@ export function PartnerDirectory({ kind }: { kind: 'CUSTOMER' | 'SUPPLIER' }) {
             { label: 'Status', render: (r) => <PartnerStatus active={r.active} /> },
             {
               label: '',
-              render: (r) =>
-                editable && (
-                  <button
-                    className="button small secondary"
-                    aria-label={`Edit ${text(r.name)}`}
-                    onClick={() => editPartner(workspace, r, done)}
-                  >
-                    <Pencil size={13} />
-                    Edit
-                  </button>
-                ),
+              render: (r) => (
+                <div className="row-actions">
+                  {editable && (
+                    <button
+                      className="button small secondary"
+                      aria-label={`Edit ${text(r.name)}`}
+                      onClick={() => editPartner(workspace, r, done)}
+                    >
+                      <Pencil size={13} />
+                      Edit
+                    </button>
+                  )}
+                  {can() && (
+                    <button
+                      className="button small secondary"
+                      aria-label={`Tax profile of ${text(r.name)}`}
+                      onClick={() => void editPartnerTax(workspace, r, done)}
+                    >
+                      <Percent size={13} />
+                      Tax
+                    </button>
+                  )}
+                </div>
+              ),
             },
           ]}
         />

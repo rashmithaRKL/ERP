@@ -18,6 +18,7 @@ const AuditTab = lazy(() => import('../features/admin/AuditTab').then((m) => ({ 
 const PeriodsTab = lazy(() =>
   import('../features/admin/PeriodsTab').then((m) => ({ default: m.PeriodsTab })),
 );
+const TaxesTab = lazy(() => import('../features/tax/TaxesTab').then((m) => ({ default: m.TaxesTab })));
 
 const TABS = [
   { value: 'organization', label: 'Organization' },
@@ -26,12 +27,13 @@ const TABS = [
   { value: 'imports', label: 'Imports' },
   { value: 'audit', label: 'Audit trail' },
   { value: 'periods', label: 'Accounting periods' },
+  { value: 'taxes', label: 'Taxes' },
 ];
 
 /**
  * Route `/settings`. Everyone sees the organization, connectivity and motion settings (and changes their own password
- * from the profile menu); administrators also get users, approval policies, CSV imports, the audit trail and
- * accounting periods.
+ * from the profile menu); administrators also get users, approval policies, CSV imports, the audit trail,
+ * accounting periods and taxes (V25).
  */
 export default function AdministrationPage() {
   const { can } = useWorkspace();
@@ -59,6 +61,7 @@ export default function AdministrationPage() {
         {tab === 'imports' && <ImportsTab />}
         {tab === 'audit' && <AuditTab />}
         {tab === 'periods' && <PeriodsTab />}
+        {tab === 'taxes' && <TaxesTab />}
       </Suspense>
     </>
   );
