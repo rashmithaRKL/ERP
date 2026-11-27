@@ -1,5 +1,30 @@
 # Verification record
 
+## Advanced factory operations (V10–V16) — 27 November 2026
+
+Environment: macOS 26.7, Node 24.14.0, Maven 3.9.11 with OpenJDK 21.0.11, embedded PostgreSQL (zonky
+`embedded-postgres` 2.1.0) for tests. Run on `main` after the V16 merge (`a05e4c0`), from a clean `npm ci`.
+
+| Check | Result |
+|---|---|
+| `npm run typecheck` | passed |
+| `npm run build` | passed; largest chunk `charts` 414 kB, every chunk below 500 kB before compression |
+| `npm run format:check -w apps/erp-web` | passed |
+| Frontend unit tests (vitest) | 30 / 0 failures (6 files) |
+| `mvn spotless:check` | passed |
+| `npm run test:api` (first run) | 303 tests, **1 failure**: `PlanningDemoSeedTest` found 23 demo manufacturing orders after its rollback |
+| `npm run test:api` (after the fix below) | **303 / 0 failures**, 3 min 37 s, in the same class order that failed |
+
+Cause of the failure: `SalesDemoSeedTest` (V3) committed the `demo` tenant to the shared test database and left it
+there, while every later demo seed test rolls back and expects no demo tenant afterwards. On macOS the sales test runs
+just before the planning test; the earlier Windows runs evidently ran them the other way round. The failing test
+passed on its own. Fix (test code only): `SalesDemoSeedTest` now removes the `demo` tenant's rows from every table
+after it runs, inside one transaction with `session_replication_role = replica` so append-only triggers and foreign
+keys do not block the cleanup. No production code changed.
+
+Not verified in this round: the Phase 2 browser walkthroughs in `docs/workflows/ACCEPTANCE.md` (V10–V16 sections),
+phone-width layouts of the Phase 2 pages, Docker deployment, backup/restore drills and load targets.
+
 ## Commercial core (V3–V9) — 21–25 November 2026
 
 Environment: Windows 11, Node 24.11.1, Maven 3.9.10 with JDK 21, embedded PostgreSQL 14 (zonky) for demo and tests, Brave with the Claude browser extension for visual checks. Work was built by parallel agents in git worktrees and merged in migration order; each merge was followed by the full suite.

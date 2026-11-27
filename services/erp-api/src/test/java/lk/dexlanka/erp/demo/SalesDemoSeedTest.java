@@ -10,13 +10,16 @@ import lk.dexlanka.erp.procurement.ProcurementService;
 import lk.dexlanka.erp.quality.QualityService;
 import lk.dexlanka.erp.sales.ReturnsService;
 import lk.dexlanka.erp.sales.SalesService;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * The base demo seed (sales orders now created as drafts and confirmed, dispatched per line) followed by the V3 sales
- * demo seed, run against the shared test database's {@code demo} tenant. No other test uses that tenant.
+ * demo seed, run against the shared test database's {@code demo} tenant. The seeds commit their own transactions (the
+ * drifted-database check needs that), so the tenant is removed afterwards: the other demo seed tests expect none.
  */
 class SalesDemoSeedTest extends IntegrationTestBase {
     @Autowired
@@ -42,6 +45,22 @@ class SalesDemoSeedTest extends IntegrationTestBase {
 
     @Autowired
     PlatformTransactionManager transactions;
+
+    @AfterEach
+    void removeDemoTenant() {
+        new TransactionTemplate(transactions).executeWithoutResult(status -> {
+            // Append-only triggers and foreign keys stay off for this transaction only (the embedded test server runs
+            // as a superuser); production code never deletes ledger rows.
+            update("SET LOCAL session_replication_role = replica");
+            for (var table : rows(
+                    "SELECT c.table_name FROM information_schema.columns c JOIN information_schema.tables t ON t.table_schema=c.table_schema AND t.table_name=c.table_name WHERE c.table_schema=current_schema() AND c.column_name='tenant_id' AND t.table_type='BASE TABLE'")) {
+                update("DELETE FROM " + table.get("table_name") + " WHERE tenant_id=?", DemoPersonas.TENANT);
+            }
+            update("DELETE FROM tenants WHERE id=?", DemoPersonas.TENANT);
+        });
+        assertThat(count("SELECT COUNT(*) FROM manufacturing_orders WHERE tenant_id=?", DemoPersonas.TENANT))
+                .isZero();
+    }
 
     @Test
     void demoSeedsBuildSalesDocumentsInEveryStateAndRunOnce() {
