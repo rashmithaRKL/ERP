@@ -23,3 +23,10 @@ CLAUDE.local.md
 
 # graphify knowledge graph (local, rebuilt with `graphify update .`)
 graphify-out/
+# Added by code-review-graph
+.code-review-graph/
+# token-savior-recall caches (local)
+.token-savior-cache/
+.token-savior-checkpoints/
+# rtk project filters (local)
+.rtk/
