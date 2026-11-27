@@ -15,7 +15,8 @@ import org.springframework.security.web.csrf.HttpSessionCsrfTokenRepository;
 /**
  * Session authentication (form login at {@code /api/auth/login}), CSRF on every unsafe method, JSON error bodies, the
  * login rate limit and per-request session revalidation ({@link SessionGuard}). Only active accounts can sign in; a
- * successful sign-in records {@code users.last_login_at} and reports {@code mustChangePassword}. Every route except the
+ * successful sign-in records {@code users.last_login_at} and reports {@code mustChangePassword}; with two-step sign-in
+ * on (V17) it reports {@code mfaRequired} instead and the sign-in completes at {@code /api/auth/mfa/verify}. Every route except the
  * few {@code permitAll} ones requires a signed-in user; role checks happen in the domain services via
  * {@link Actor#allow}.
  */
@@ -45,7 +46,7 @@ class SecurityConfig {
     }
 
     @Bean
-    SecurityFilterChain chain(HttpSecurity http, Store store) throws Exception {
+    SecurityFilterChain chain(HttpSecurity http, Store store, MfaService mfa, MfaPolicy policy) throws Exception {
         http.authorizeHttpRequests(
                         a -> a.requestMatchers("/api/auth/csrf", "/api/auth/config", "/api/auth/demo", "/api/health")
                                 .permitAll()
@@ -57,12 +58,19 @@ class SecurityConfig {
                         .usernameParameter("email")
                         .successHandler((req, res, auth) -> {
                             String id = ((ErpUser) auth.getPrincipal()).actor().id();
-                            store.db().update("UPDATE users SET last_login_at=now() WHERE id=?", id);
                             boolean change = Boolean.TRUE.equals(store.db()
                                     .queryForObject(
                                             "SELECT must_change_password FROM users WHERE id=?", Boolean.class, id));
+                            boolean second = mfa.enabled(id);
+                            if (second) req.getSession().setAttribute(MfaService.PENDING, System.currentTimeMillis());
+                            else {
+                                req.getSession().setAttribute(MfaService.PASSWORD_SESSION, true);
+                                store.db().update("UPDATE users SET last_login_at=now() WHERE id=?", id);
+                            }
                             res.setContentType("application/json");
-                            res.getWriter().write("{\"authenticated\":true,\"mustChangePassword\":" + change + "}");
+                            res.getWriter()
+                                    .write("{\"authenticated\":true,\"mfaRequired\":" + second
+                                            + ",\"mustChangePassword\":" + change + "}");
                         })
                         .failureHandler((req, res, e) -> {
                             res.setStatus(401);
@@ -87,7 +95,7 @@ class SecurityConfig {
                 .headers(h ->
                         h.contentSecurityPolicy(c -> c.policyDirectives("default-src 'none'; frame-ancestors 'none'")));
         http.addFilterBefore(new LoginRateLimit(), UsernamePasswordAuthenticationFilter.class);
-        http.addFilterBefore(new SessionGuard(store.db()), AuthorizationFilter.class);
+        http.addFilterBefore(new SessionGuard(store.db(), policy), AuthorizationFilter.class);
         return http.build();
     }
 }

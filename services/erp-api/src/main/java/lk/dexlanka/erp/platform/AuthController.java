@@ -33,13 +33,19 @@ class AuthController {
     private final Store s;
     private final UserDetailsService users;
     private final PasswordService passwords;
+    private final MfaService mfa;
     private final boolean demo;
 
     AuthController(
-            Store s, UserDetailsService users, PasswordService passwords, @Value("${app.demo:false}") boolean demo) {
+            Store s,
+            UserDetailsService users,
+            PasswordService passwords,
+            MfaService mfa,
+            @Value("${app.demo:false}") boolean demo) {
         this.s = s;
         this.users = users;
         this.passwords = passwords;
+        this.mfa = mfa;
         this.demo = demo;
     }
 
@@ -59,9 +65,14 @@ class AuthController {
         return Map.of("token", token.getToken(), "headerName", token.getHeaderName());
     }
 
-    /** The signed-in user. {@code mustChangePassword} is true after an administrator reset (and for new accounts). */
+    /**
+     * The signed-in user. {@code mustChangePassword} is true after an administrator reset (and for new accounts). V17:
+     * {@code mfaPending} while the code step of a sign-in is due, {@code mfaSetupRequired} while an administrator still
+     * has to set up two-step sign-in, plus the account's {@code mfaEnabled}, {@code mfaRequired} and
+     * {@code recoveryCodesLeft}.
+     */
     @GetMapping("/api/auth/me")
-    Map<String, Object> me(Authentication auth) {
+    Map<String, Object> me(Authentication auth, HttpServletRequest req) {
         var a = Actor.of(auth);
         var account = s.one(
                 "SELECT must_change_password,last_login_at,password_changed_at FROM users WHERE tenant_id=? AND id=?",
@@ -76,6 +87,16 @@ class AuthController {
         result.put("mustChangePassword", Boolean.TRUE.equals(account.get("must_change_password")));
         result.put("lastLoginAt", account.get("last_login_at"));
         result.put("passwordChangedAt", account.get("password_changed_at"));
+        var status = mfa.status(a);
+        result.putAll(status);
+        var session = req.getSession(false);
+        result.put("mfaPending", session != null && session.getAttribute(MfaService.PENDING) != null);
+        result.put(
+                "mfaSetupRequired",
+                session != null
+                        && session.getAttribute(MfaService.PASSWORD_SESSION) != null
+                        && Boolean.TRUE.equals(status.get("mfaRequired"))
+                        && !Boolean.TRUE.equals(status.get("mfaEnabled")));
         return result;
     }
 
@@ -117,7 +138,7 @@ class AuthController {
     }
 
     /** Stores {@code u} as the session principal under a fresh session id. */
-    private static void signIn(UserDetails u, HttpServletRequest req, HttpServletResponse res) {
+    static void signIn(UserDetails u, HttpServletRequest req, HttpServletResponse res) {
         req.getSession();
         req.changeSessionId();
         var ctx = SecurityContextHolder.createEmptyContext();

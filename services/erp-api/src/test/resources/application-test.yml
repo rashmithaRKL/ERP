@@ -1,0 +1,6 @@
+app:
+  mfa:
+    # Isolated test database only.
+    encryption-key: wvsQ/FZxy1sI83sLd8ZoPkhndb/a3U6Wr15qBCdKCrk=
+    # Existing sign-in tests use administrators without an authenticator; MfaTest turns the rule on for its own cases.
+    required-for-admins: false
