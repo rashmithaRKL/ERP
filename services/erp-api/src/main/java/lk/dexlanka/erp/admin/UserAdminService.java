@@ -125,6 +125,31 @@ public class UserAdminService {
         return response;
     }
 
+    /**
+     * V17: turns off another user's two-step sign-in (a lost phone): the secret and recovery codes are removed and their
+     * open sessions end. An administrator must set it up again at the next sign-in.
+     */
+    @Transactional
+    public Map<String, Object> resetMfa(Actor a, String id, String key) {
+        a.allow();
+        return s.once(a, key, "user-reset-mfa:" + id, Map.of(), () -> {
+            var u = user(a, id);
+            require(!a.id().equals(id), "Use Two-step sign-in in your profile menu to change your own");
+            require(u.get("mfa_enabled_at") != null, "Two-step sign-in is not on for this user");
+            s.db().update(
+                            "UPDATE users SET mfa_secret=NULL,mfa_enabled_at=NULL,mfa_last_step=NULL,session_version=session_version+1,updated_at=now() WHERE tenant_id=? AND id=?",
+                            a.tenant(),
+                            id);
+            s.db().update("DELETE FROM mfa_recovery_codes WHERE tenant_id=? AND user_id=?", a.tenant(), id);
+            s.audit(
+                    a,
+                    "USER_MFA_RESET",
+                    str(u, "email"),
+                    "Two-step sign-in turned off by an administrator; recovery codes removed; open sessions signed out");
+            return result(a, id);
+        });
+    }
+
     // ------------------------------------------------------------------ helpers
 
     private Map<String, Object> user(Actor a, String id) {

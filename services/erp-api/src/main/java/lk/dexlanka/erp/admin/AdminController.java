@@ -86,6 +86,12 @@ class AdminController {
         return users.resetPassword(Actor.of(a), id, k);
     }
 
+    @PostMapping("/users/{id}/reset-mfa")
+    Map<String, Object> resetMfa(
+            Authentication a, @PathVariable String id, @RequestHeader("Idempotency-Key") String k) {
+        return users.resetMfa(Actor.of(a), id, k);
+    }
+
     // ------------------------------------------------------------------ approval policies
 
     @GetMapping("/approval-policies")

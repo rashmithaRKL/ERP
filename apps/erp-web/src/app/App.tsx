@@ -30,6 +30,7 @@ import {
 import { FormDialog } from '../components';
 import { ChangePasswordDialog } from '../features/admin/ChangePasswordDialog';
 import { ForcePasswordChange } from '../features/admin/ForcePasswordChange';
+import { MfaChallenge, MfaSetupRequired, TwoStepDialog } from '../features/admin/TwoStep';
 import BomDialog from '../features/boms/BomDialog';
 import { OrderDrawer } from '../features/manufacturing/OrderDrawer';
 import { request, session, SESSION_CHANGED, token } from '../lib/api';
@@ -69,6 +70,7 @@ export default function App() {
   const [notifications, setNotifications] = useState(false);
   const [profile, setProfile] = useState(false);
   const [password, setPassword] = useState(false);
+  const [twoStep, setTwoStep] = useState(false);
   const [help, setHelp] = useState(false);
   const [mobile, setMobile] = useState(false);
   const [dark, setDark] = useState(() => localStorage.getItem('dex-theme') === 'dark');
@@ -159,8 +161,12 @@ export default function App() {
       </div>
     );
   if (!user) return <Login onSuccess={() => qc.invalidateQueries({ queryKey: ['user'] })} />;
+  if (user.mfaPending)
+    return <MfaChallenge user={user} onDone={() => qc.invalidateQueries({ queryKey: ['user'] })} />;
   if (user.mustChangePassword)
     return <ForcePasswordChange user={user} onDone={() => qc.invalidateQueries({ queryKey: ['user'] })} />;
+  if (user.mfaSetupRequired)
+    return <MfaSetupRequired user={user} onDone={() => qc.invalidateQueries({ queryKey: ['user'] })} />;
   const ws = { ...workspace, user };
   const { active, shortages } = summary;
   // The heading's Export button: the route's rows (derived or fetched), manufacturing orders by default, none for null.
@@ -573,6 +579,10 @@ export default function App() {
                 setProfile(false);
                 setPassword(true);
               }}
+              onTwoStep={() => {
+                setProfile(false);
+                setTwoStep(true);
+              }}
               onClose={() => setProfile(false)}
             />
           )}
@@ -587,6 +597,7 @@ export default function App() {
               }}
             />
           )}
+          {twoStep && <TwoStepDialog key="two-step" onClose={() => setTwoStep(false)} />}
           {help && <HelpDialog key="help" onClose={() => setHelp(false)} />}
         </AnimatePresence>
       </div>
