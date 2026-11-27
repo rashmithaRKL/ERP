@@ -18,7 +18,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 /**
- * Costs & reports read model (V9), for ADMIN and PLANNER: the manufacturing cost register ({@code GET
+ * Costs & reports read model (V9), for ADMIN, PLANNER and (V24) FINANCE: the manufacturing cost register ({@code GET
  * /api/reports/costs}) with tenant-wide cost totals, and the posted journal lines ({@code GET /api/reports/journal}).
  * Both are keyset-paged, newest first. Journal date filters are calendar days in {@value #ZONE}, inclusive.
  */
@@ -55,7 +55,13 @@ public class ReportQuery {
               AND (?::text IS NULL OR e.reference ILIKE ? OR e.description ILIKE ?)
               AND (?::date IS NULL OR e.created_at >= (?::date)::timestamp AT TIME ZONE '%1$s')
               AND (?::date IS NULL OR e.created_at < ((?::date) + 1)::timestamp AT TIME ZONE '%1$s')
+              AND (?::date IS NULL OR e.posting_date >= ?::date)
+              AND (?::date IS NULL OR e.posting_date <= ?::date)
+              AND (?::text IS NULL OR e.source=?)
             """.formatted(ZONE);
+
+    /** V24 journal entry sources accepted by the {@code source} filter. */
+    static final List<String> SOURCES = List.of("SYSTEM", "MANUAL", "REVERSAL");
 
     private final Store s;
 
@@ -71,7 +77,7 @@ public class ReportQuery {
      * @param q matched against order number and product name/SKU
      */
     public Map<String, Object> costs(Actor a, String status, String q, int limit, String before) {
-        a.allow("PLANNER");
+        a.allow("PLANNER", "FINANCE");
         limit(limit);
         String statuses = statuses(status);
         String like = like(q);
@@ -106,12 +112,32 @@ public class ReportQuery {
      *
      * @param account exact account code, or blank
      * @param q matched against the entry reference and description
-     * @param from first posting day (yyyy-MM-dd), inclusive
-     * @param to last posting day (yyyy-MM-dd), inclusive
+     * @param from first day the entry was recorded (yyyy-MM-dd, its {@code created_at}), inclusive
+     * @param to last day the entry was recorded (yyyy-MM-dd), inclusive
      */
     public Map<String, Object> journal(
             Actor a, String account, String q, String from, String to, int limit, String before) {
-        a.allow("PLANNER");
+        return journal(a, account, q, from, to, null, null, null, limit, before);
+    }
+
+    /**
+     * V24: {@link #journal(Actor, String, String, String, String, int, String)} with the posting-date range ({@code
+     * postedFrom}..{@code postedTo}, the entries' accounting dates, inclusive) and the entry {@code source} (SYSTEM,
+     * MANUAL or REVERSAL). Rows add {@code posting_date}, {@code source}, {@code reverses_entry_id} and the line
+     * {@code memo}.
+     */
+    public Map<String, Object> journal(
+            Actor a,
+            String account,
+            String q,
+            String from,
+            String to,
+            String postedFrom,
+            String postedTo,
+            String source,
+            int limit,
+            String before) {
+        a.allow("PLANNER", "FINANCE");
         limit(limit);
         String f = blankToNull(from);
         String t = blankToNull(to);
@@ -120,12 +146,22 @@ public class ReportQuery {
         require(
                 fromDate == null || toDate == null || !toDate.isBefore(fromDate),
                 "The end date must be on or after the start date");
+        String pf = blankToNull(postedFrom);
+        String pt = blankToNull(postedTo);
+        LocalDate postedFromDate = date(pf, "postedFrom");
+        LocalDate postedToDate = date(pt, "postedTo");
+        require(
+                postedFromDate == null || postedToDate == null || !postedToDate.isBefore(postedFromDate),
+                "The last posting date must be on or after the first");
+        String src = blankToNull(source) == null ? null : source.strip().toUpperCase(Locale.ROOT);
+        require(src == null || SOURCES.contains(src), "Unknown journal source filter");
         String acc = blankToNull(account);
         String like = like(q);
         String cursor = blankToNull(before);
-        Object[] filter = {a.tenant(), acc, acc, like, like, like, f, f, t, t};
+        Object[] filter = {a.tenant(), acc, acc, like, like, like, f, f, t, t, pf, pf, pt, pt, src, src};
         var rows = s.list(
-                "SELECT l.id,l.entry_id,e.reference,e.description,e.actor,e.created_at,l.account,l.debit,l.credit"
+                "SELECT l.id,l.entry_id,e.reference,e.description,e.actor,e.created_at,e.posting_date,e.source,"
+                        + "e.reverses_entry_id,l.account,l.debit,l.credit,l.memo"
                         + JOURNAL_FROM
                         + """
                   AND (?::text IS NULL OR (e.created_at,e.id,l.debit,l.id) <

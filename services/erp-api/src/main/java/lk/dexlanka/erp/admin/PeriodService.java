@@ -20,7 +20,7 @@ import org.springframework.web.server.ResponseStatusException;
  * closed period covers the current (database) date, and every posting is dated now, so a closed past period can no
  * longer receive postings and closing a period that ends today stops all postings for the rest of the day.
  *
- * <p>Rules: periods close in date order, only once their end date has been reached; only the most recently closed
+ * <p>V24: ADMIN and FINANCE administer periods. Rules: periods close in date order, only once their end date has been reached; only the most recently closed
  * period can be reopened, with a reason (audited); a reopened period must be closed again before a later one.
  */
 @Service
@@ -33,7 +33,7 @@ public class PeriodService {
 
     @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
     public Map<String, Object> periods(Actor a) {
-        a.allow();
+        a.allow("FINANCE");
         var items = s.list("""
                 SELECT x.end_date::text AS id,x.end_date::text AS end_date,x.start_date::text AS start_date,x.closed,x.closed_at,x.reopened_at,x.reopen_reason,x.created_at,
                        cu.name AS closed_by,ru.name AS reopened_by,
@@ -64,7 +64,7 @@ public class PeriodService {
 
     @Transactional
     public Map<String, Object> close(Actor a, AdminCommands.ClosePeriod c, String key) {
-        a.allow();
+        a.allow("FINANCE");
         LocalDate end = date(c.endDate());
         return s.once(a, key, "close-period:" + end, c, () -> {
             LocalDate today = LocalDate.parse(s.db().queryForObject("SELECT CURRENT_DATE::text", String.class));
@@ -101,7 +101,7 @@ public class PeriodService {
 
     @Transactional
     public Map<String, Object> reopen(Actor a, AdminCommands.ReopenPeriod c, String key) {
-        a.allow();
+        a.allow("FINANCE");
         return s.once(a, key, "reopen-period", c, () -> {
             String latest = latestClosed(a);
             require(latest != null, "There is no closed period to reopen");

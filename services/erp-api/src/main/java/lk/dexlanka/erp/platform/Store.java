@@ -5,6 +5,9 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import java.time.LocalDate;
+import java.time.ZoneId;
+import java.util.ArrayList;
 import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -26,13 +29,24 @@ import org.springframework.web.server.ResponseStatusException;
  * <ul>
  *   <li>{@link #once} - tenant lock + idempotency (validates the key, replays a stored result, rejects key reuse).
  *   <li>{@link #ledger} - the only way to change stock quantity/value (a DB trigger maintains {@code stock_balances}).
- *   <li>{@link #journal} - balanced two-line journal entry; rejects posting into a closed period.
+ *   <li>{@link #journal} - balanced two-line journal entry; rejects posting into a closed period. V24: every entry has a
+ *       posting date (system postings: today in Asia/Colombo) and a source; the overloads post on an explicit posting
+ *       date, including multi-line MANUAL and REVERSAL entries.
  *   <li>{@link #audit} - audit event plus {@code LOCAL_ONLY} outbox event.
  *   <li>{@link #require} - business-rule guard, mapped to HTTP 409; {@link #one} maps "no row" to HTTP 404.
  * </ul>
  */
 @Component
 public class Store {
+    /** The business time zone (ADR-006): posting dates are calendar days here. */
+    public static final ZoneId BUSINESS_ZONE = ZoneId.of("Asia/Colombo");
+
+    /** V24 journal entry sources: posting code, approved manual journals, reversals of posted entries. */
+    public static final String SYSTEM = "SYSTEM";
+
+    public static final String MANUAL = "MANUAL";
+    public static final String REVERSAL = "REVERSAL";
+
     private final JdbcTemplate db;
     private final ObjectMapper json;
 
@@ -179,7 +193,31 @@ public class Store {
                 "The financial period is closed");
     }
 
-    /** Posts a balanced debit/credit pair for {@code amount} (skipped when zero; negative amounts are rejected). */
+    /**
+     * V24: 409 when a closed financial period covers {@code postingDate} (periods close in date order, so: any closed
+     * period ending on or after it). The database refuses such an entry too ({@code journal_entries_open_period}).
+     */
+    public void openPeriod(Actor a, LocalDate postingDate) {
+        require(
+                list(
+                                "SELECT 1 FROM financial_periods WHERE tenant_id=? AND closed=true AND end_date>=?",
+                                a.tenant(),
+                                postingDate)
+                        .isEmpty(),
+                "The financial period covering " + postingDate + " is closed");
+    }
+
+    /** V24: today's business date (Asia/Colombo, ADR-006), the posting date of system postings. */
+    public static LocalDate today() {
+        return LocalDate.now(BUSINESS_ZONE);
+    }
+
+    /**
+     * Posts a balanced debit/credit pair for {@code amount} (skipped when zero; negative amounts are rejected). V24: the
+     * entry is dated today (the column default: the Asia/Colombo date) with source SYSTEM; the guard is unchanged (a
+     * closed period covering the current date refuses it) and the database also refuses a posting date inside a closed
+     * period.
+     */
     public void journal(Actor a, String reference, String description, String debit, String credit, BigDecimal amount) {
         openPeriod(a);
         if (amount.signum() == 0) return;
@@ -204,6 +242,96 @@ public class Store {
                 entry,
                 credit,
                 money(amount));
+    }
+
+    /**
+     * V24: a balanced debit/credit pair dated {@code postingDate} (source SYSTEM), for documents that carry their own
+     * accounting date. Refused when a closed period covers the posting date. Returns the entry id, or null when {@code
+     * amount} is zero.
+     */
+    public String journal(
+            Actor a,
+            String reference,
+            String description,
+            String debit,
+            String credit,
+            BigDecimal amount,
+            LocalDate postingDate) {
+        if (amount.signum() == 0) return null;
+        require(amount.signum() > 0, "Journal amount must be positive");
+        return journal(
+                a,
+                reference,
+                description,
+                postingDate,
+                SYSTEM,
+                null,
+                List.of(
+                        new JournalLine(debit, money(amount), BigDecimal.ZERO, null),
+                        new JournalLine(credit, BigDecimal.ZERO, money(amount), null)));
+    }
+
+    /** V24: one line of a multi-line journal entry; exactly one of {@code debit} and {@code credit} is positive. */
+    public record JournalLine(String account, BigDecimal debit, BigDecimal credit, String memo) {}
+
+    /**
+     * V24: posts a balanced multi-line entry dated {@code postingDate} and returns its id. {@code source} is {@link
+     * #SYSTEM}, {@link #MANUAL} (an approved manual journal) or {@link #REVERSAL} (then {@code reversesEntryId} names the
+     * reversed entry; the database allows one reversal per entry). Needs at least two lines, each with exactly one
+     * positive side, and debits equal to credits; refused when a closed period covers the posting date. Accounts are
+     * checked by the database: codes of the tenant's chart only (deferred foreign key), never inactive or header accounts.
+     */
+    public String journal(
+            Actor a,
+            String reference,
+            String description,
+            LocalDate postingDate,
+            String source,
+            String reversesEntryId,
+            List<JournalLine> lines) {
+        require(List.of(SYSTEM, MANUAL, REVERSAL).contains(source), "Unknown journal source");
+        require(REVERSAL.equals(source) == (reversesEntryId != null), "A reversal names the entry it reverses");
+        require(lines.size() >= 2, "A journal entry needs at least two lines");
+        BigDecimal debits = BigDecimal.ZERO;
+        BigDecimal credits = BigDecimal.ZERO;
+        for (var l : lines) {
+            BigDecimal dr = l.debit() == null ? BigDecimal.ZERO : l.debit();
+            BigDecimal cr = l.credit() == null ? BigDecimal.ZERO : l.credit();
+            require(dr.signum() >= 0 && cr.signum() >= 0, "Journal amounts must be positive");
+            require((dr.signum() == 0) != (cr.signum() == 0), "Each journal line is either a debit or a credit");
+            debits = debits.add(money(dr));
+            credits = credits.add(money(cr));
+        }
+        require(debits.compareTo(credits) == 0, "Journal entry must balance");
+        openPeriod(a, postingDate);
+        String entry = id();
+        db.update(
+                "INSERT INTO journal_entries(id,tenant_id,reference,description,actor,posting_date,source,reverses_entry_id) VALUES(?,?,?,?,?,?,?,?)",
+                entry,
+                a.tenant(),
+                reference,
+                description,
+                a.name(),
+                postingDate,
+                source,
+                reversesEntryId);
+        var values = new ArrayList<String>();
+        var args = new ArrayList<Object>();
+        for (var l : lines) {
+            values.add("(?,?,?,?,?,?,?)");
+            args.add(id());
+            args.add(a.tenant());
+            args.add(entry);
+            args.add(l.account());
+            args.add(money(l.debit() == null ? BigDecimal.ZERO : l.debit()));
+            args.add(money(l.credit() == null ? BigDecimal.ZERO : l.credit()));
+            args.add(l.memo() == null || l.memo().isBlank() ? null : l.memo().strip());
+        }
+        db.update(
+                "INSERT INTO journal_lines(id,tenant_id,entry_id,account,debit,credit,memo) VALUES "
+                        + String.join(",", values),
+                args.toArray());
+        return entry;
     }
 
     // ------------------------------------------------------------------ input guards

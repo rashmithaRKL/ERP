@@ -8,7 +8,8 @@ import org.springframework.security.core.Authentication;
 /**
  * The authenticated user a command runs as. Tenant ownership always comes from here, never from request JSON.
  *
- * <p>Roles: ADMIN, PLANNER, WAREHOUSE, OPERATOR, QUALITY, SALES, VIEWER, MAINTENANCE (V11). ADMIN passes every
+ * <p>Roles: ADMIN, PLANNER, WAREHOUSE, OPERATOR, QUALITY, SALES, VIEWER, MAINTENANCE (V11), FINANCE (V24: the
+ * accountant; chart of accounts, manual journals, reversals, accounting periods, costs and reports). ADMIN passes every
  * {@link #allow} check.
  */
 public record Actor(String id, String tenant, String email, String name, String role) implements Serializable {

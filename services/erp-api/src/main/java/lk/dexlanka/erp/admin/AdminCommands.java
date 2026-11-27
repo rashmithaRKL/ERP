@@ -16,9 +16,9 @@ import java.util.List;
  * serialized in declaration order, the idempotency payload hash: never rename or reorder them.
  */
 public final class AdminCommands {
-    public static final String ROLES = "ADMIN|PLANNER|WAREHOUSE|OPERATOR|QUALITY|SALES|VIEWER|MAINTENANCE";
-    public static final String APPROVER_ROLES = "PLANNER|WAREHOUSE|QUALITY|SALES|OPERATOR";
-    public static final String DOCUMENT_TYPES = "MANUFACTURING_ORDER|PURCHASE_ORDER|STOCK_ADJUSTMENT";
+    public static final String ROLES = "ADMIN|PLANNER|WAREHOUSE|OPERATOR|QUALITY|SALES|VIEWER|MAINTENANCE|FINANCE";
+    public static final String APPROVER_ROLES = "PLANNER|WAREHOUSE|QUALITY|SALES|OPERATOR|FINANCE";
+    public static final String DOCUMENT_TYPES = "MANUFACTURING_ORDER|PURCHASE_ORDER|STOCK_ADJUSTMENT|MANUAL_JOURNAL";
     public static final String IMPORT_KINDS = "ITEMS|PARTNERS|OPENING_STOCK";
 
     /** Largest accepted CSV upload (characters of the decoded text). */
@@ -42,7 +42,7 @@ public final class AdminCommands {
             @DecimalMin("0") @Digits(integer = 12, fraction = 2)
             BigDecimal amountThreshold,
 
-            @NotNull @Size(max = 5) List<@NotBlank @Pattern(regexp = APPROVER_ROLES) String> approverRoles) {}
+            @NotNull @Size(max = 6) List<@NotBlank @Pattern(regexp = APPROVER_ROLES) String> approverRoles) {}
 
     /** A CSV file as text (UTF-8, optional BOM). Imports run a dry run first; see {@code ImportService}. */
     public record ImportFile(

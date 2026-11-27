@@ -29,7 +29,7 @@ public final class CatalogCommands {
             @NotBlank @Size(max = 160) String name,
             @NotBlank @Size(min = 16, max = 128) String password,
 
-            @NotBlank @Pattern(regexp = "ADMIN|PLANNER|WAREHOUSE|OPERATOR|QUALITY|SALES|VIEWER|MAINTENANCE")
+            @NotBlank @Pattern(regexp = "ADMIN|PLANNER|WAREHOUSE|OPERATOR|QUALITY|SALES|VIEWER|MAINTENANCE|FINANCE")
             String role) {}
 
     public record BomLine(

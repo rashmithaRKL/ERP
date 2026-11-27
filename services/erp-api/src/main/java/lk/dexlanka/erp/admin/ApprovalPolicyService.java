@@ -20,8 +20,8 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 /**
- * Per-tenant approval policies for {@value #MANUFACTURING_ORDER}, {@value #PURCHASE_ORDER} and
- * {@value #STOCK_ADJUSTMENT}: whether a second person must approve, above which document value, and which roles may
+ * Per-tenant approval policies for {@value #MANUFACTURING_ORDER}, {@value #PURCHASE_ORDER}, {@value #STOCK_ADJUSTMENT}
+ * and (V24) {@value #MANUAL_JOURNAL}: whether a second person must approve, above which document value, and which roles may
  * approve (ADMIN always may). The self-approval ban is absolute and not part of a policy: {@link Decision#requireApprover}
  * rejects the document's creator, including an ADMIN.
  *
@@ -40,9 +40,21 @@ public class ApprovalPolicyService {
     public static final String MANUFACTURING_ORDER = "MANUFACTURING_ORDER";
     public static final String PURCHASE_ORDER = "PURCHASE_ORDER";
     public static final String STOCK_ADJUSTMENT = "STOCK_ADJUSTMENT";
+    /**
+     * V24: manual journals (package {@code accounting}), evaluated when submitted (amount = total debits). Approved by
+     * FINANCE (and ADMIN) only; listed by {@link #summaries} and edited through the same command, but kept out of the
+     * administration list of operational documents ({@link #DOCUMENT_TYPES}): the Accounting page shows it.
+     */
+    public static final String MANUAL_JOURNAL = "MANUAL_JOURNAL";
+    /** The operational document types of the Administration → Approval policies tab. */
     public static final List<String> DOCUMENT_TYPES = List.of(MANUFACTURING_ORDER, PURCHASE_ORDER, STOCK_ADJUSTMENT);
-    /** Document types whose commands evaluate the policy (all of them since V9). */
-    public static final List<String> WIRED = DOCUMENT_TYPES;
+    /** Every document type with a policy (V24 adds {@link #MANUAL_JOURNAL}). */
+    public static final List<String> ALL_TYPES =
+            List.of(MANUFACTURING_ORDER, PURCHASE_ORDER, STOCK_ADJUSTMENT, MANUAL_JOURNAL);
+    /** Document types whose commands evaluate the policy (all of them since V9; manual journals since V24). */
+    public static final List<String> WIRED = ALL_TYPES;
+    /** V24: FINANCE approves manual journals only, and manual journals are approved by FINANCE only (ADMIN always). */
+    static final List<String> FINANCE_ROLES = List.of("FINANCE");
 
     static final BigDecimal DEFAULT_ADJUSTMENT_THRESHOLD = new BigDecimal("50000");
 
@@ -67,7 +79,7 @@ public class ApprovalPolicyService {
             boolean customized,
             Object updatedAt,
             Object updatedBy) {
-        Map<String, Object> toMap() {
+        public Map<String, Object> toMap() {
             var m = new LinkedHashMap<String, Object>();
             m.put("documentType", documentType);
             m.put("approvalRequired", approvalRequired);
@@ -127,6 +139,7 @@ public class ApprovalPolicyService {
                         false,
                         null,
                         null);
+            case MANUAL_JOURNAL -> new Policy(documentType, true, null, FINANCE_ROLES, false, null, null);
             default -> throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Unknown document type");
         };
     }
@@ -197,7 +210,7 @@ public class ApprovalPolicyService {
     @Transactional(readOnly = true)
     public List<Map<String, Object>> summaries(Actor a) {
         var out = new ArrayList<Map<String, Object>>();
-        for (String type : DOCUMENT_TYPES) {
+        for (String type : ALL_TYPES) {
             var p = policy(a.tenant(), type);
             var m = new LinkedHashMap<String, Object>();
             m.put("documentType", type);
@@ -223,6 +236,11 @@ public class ApprovalPolicyService {
         defaults(documentType); // 404 for an unknown type
         return s.once(a, key, "approval-policy:" + documentType, c, () -> {
             var roles = c.approverRoles().stream().distinct().sorted().toList();
+            if (MANUAL_JOURNAL.equals(documentType))
+                require(
+                        FINANCE_ROLES.containsAll(roles),
+                        "Manual journals are approved by Finance and administrators only");
+            else require(!roles.contains("FINANCE"), "Finance approves manual journals only");
             store(a, documentType, c.approvalRequired(), c.amountThreshold(), roles);
             var p = policy(a.tenant(), documentType);
             s.audit(a, "APPROVAL_POLICY_UPDATED", documentType, describe(p));
@@ -257,6 +275,7 @@ public class ApprovalPolicyService {
         String label = switch (p.documentType()) {
             case MANUFACTURING_ORDER -> "Manufacturing orders";
             case PURCHASE_ORDER -> "Purchase orders";
+            case MANUAL_JOURNAL -> "Manual journals";
             default -> "Stock adjustments";
         };
         if (!p.approvalRequired()) return label + ": no second approval";

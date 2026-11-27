@@ -6,7 +6,7 @@ import lk.dexlanka.erp.platform.Store;
 import org.springframework.stereotype.Component;
 
 /**
- * Financial aggregates; returned to ADMIN and PLANNER only. (The {@code journal} key was removed in V9; Costs & reports
+ * Financial aggregates; returned to ADMIN, PLANNER and (V24) FINANCE only. (The {@code journal} key was removed in V9; Costs & reports
  * reads {@code GET /api/reports/journal}.)
  */
 @Component
@@ -19,7 +19,8 @@ class FinanceStateSections implements StateContributor {
 
     @Override
     public List<StateSection> sections() {
-        return List.of(StateSection.of("financial", 310, this::financial).visibleToRoles("ADMIN", "PLANNER"));
+        return List.of(
+                StateSection.of("financial", 310, this::financial).visibleToRoles("ADMIN", "PLANNER", "FINANCE"));
     }
 
     private Map<String, Object> financial(StateRequest r) {

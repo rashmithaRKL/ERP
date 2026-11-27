@@ -22,6 +22,9 @@ public final class DemoPersonas {
     /** V11: created by {@code maintenance.MaintenanceDemoSeed} (also in an existing demo database). */
     public static final Actor MAINTENANCE = new Actor(
             "demo-maintenance", TENANT, "demo.maintenance@dexlanka.test", "Ruwan Wickramasinghe", "MAINTENANCE");
+    /** V24: the accountant, created by {@code accounting.AccountingDemoSeed} (also in an existing demo database). */
+    public static final Actor FINANCE =
+            new Actor("demo-finance", TENANT, "demo.finance@dexlanka.test", "Sanduni Rajapaksa", "FINANCE");
 
     private DemoPersonas() {}
 }
