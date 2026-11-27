@@ -31,7 +31,7 @@ import org.springframework.transaction.support.TransactionTemplate;
  */
 @Component
 @Order(DemoSeed.ORDER + 240)
-class AccountingDemoSeed implements ApplicationRunner {
+public class AccountingDemoSeed implements ApplicationRunner {
     private static final Logger log = LoggerFactory.getLogger(AccountingDemoSeed.class);
     private static final Actor FINANCE = DemoPersonas.FINANCE;
     private static final Actor ADMIN = DemoPersonas.ADMIN;
@@ -80,7 +80,7 @@ class AccountingDemoSeed implements ApplicationRunner {
     }
 
     /** The FINANCE persona (also added to a demo database created before V24). */
-    void persona() {
+    public void persona() {
         Actor f = FINANCE;
         if (!s.list("SELECT 1 FROM users WHERE id=?", f.id()).isEmpty()) return;
         s.db().update(
@@ -94,7 +94,7 @@ class AccountingDemoSeed implements ApplicationRunner {
     }
 
     /** Idempotent: does nothing once a {@code demo-v24-} command has run. */
-    void seed() {
+    public void seed() {
         if (!s.list(
                         "SELECT 1 FROM idempotency_keys WHERE tenant_id=? AND request_key LIKE 'demo-v24-%' LIMIT 1",
                         DemoPersonas.TENANT)

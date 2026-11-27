@@ -160,7 +160,7 @@ public class ReportQuery {
         String cursor = blankToNull(before);
         Object[] filter = {a.tenant(), acc, acc, like, like, like, f, f, t, t, pf, pf, pt, pt, src, src};
         var rows = s.list(
-                "SELECT l.id,l.entry_id,e.reference,e.description,e.actor,e.created_at,e.posting_date,e.source,"
+                "SELECT l.id,l.entry_id,e.reference,e.description,e.actor,e.created_at,e.posting_date::text AS posting_date,e.source,"
                         + "e.reverses_entry_id,l.account,l.debit,l.credit,l.memo"
                         + JOURNAL_FROM
                         + """

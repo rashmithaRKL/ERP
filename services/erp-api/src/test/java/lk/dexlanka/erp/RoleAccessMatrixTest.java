@@ -14,15 +14,15 @@ import lk.dexlanka.erp.platform.Actor;
 import org.junit.jupiter.api.Test;
 
 /**
- * V16 role access matrix. For each of the eight roles, every page listed in that role's navigation (mirroring {@code
+ * V16 role access matrix (V24 adds the FINANCE role and the Accounting page). For each of the nine roles, every page listed in that role's navigation (mirroring {@code
  * roles} in {@code apps/erp-web/src/app/routes.tsx}; keep both in sync) is opened the way the web app opens it: the read
  * endpoints the page calls on load (and its tabs) must answer for that role, never 403. Endpoints a page only calls for
  * some roles (valuation, skill matrix, schedule run list, administration) are listed with those roles, as the page
  * gates them. The table is documented in {@code docs/FEATURES.md} (Role access matrix).
  */
 class RoleAccessMatrixTest extends RoutingTestBase {
-    static final List<String> ROLES =
-            List.of("ADMIN", "PLANNER", "WAREHOUSE", "OPERATOR", "QUALITY", "SALES", "VIEWER", "MAINTENANCE");
+    static final List<String> ROLES = List.of(
+            "ADMIN", "PLANNER", "WAREHOUSE", "OPERATOR", "QUALITY", "SALES", "VIEWER", "MAINTENANCE", "FINANCE");
 
     /** A read the page makes; {@code roles} = only for these roles (null = every role that sees the page). */
     record Read(String path, Set<String> roles) {
@@ -153,8 +153,18 @@ class RoleAccessMatrixTest extends RoutingTestBase {
                             Read.all("/api/item-templates"))),
             new Page(
                     "/reports",
-                    Set.of("ADMIN", "PLANNER"),
+                    Set.of("ADMIN", "PLANNER", "FINANCE"),
                     f -> List.of(Read.all("/api/reports/costs"), Read.all("/api/reports/journal"))),
+            new Page(
+                    "/accounting",
+                    Set.of("ADMIN", "FINANCE"),
+                    f -> List.of(
+                            Read.all("/api/accounting/accounts"),
+                            Read.all("/api/accounting/journals?status=SUBMITTED&limit=25"),
+                            Read.all("/api/accounting/policy"),
+                            Read.all("/api/accounting/trial-balance"),
+                            Read.all("/api/approval-policies"),
+                            Read.all("/api/admin/periods"))),
             new Page(
                     "/settings",
                     null,
@@ -186,6 +196,7 @@ class RoleAccessMatrixTest extends RoutingTestBase {
                             "/performance",
                             "/products",
                             "/reports",
+                            "/accounting",
                             "/settings"),
             "PLANNER",
                     List.of(
@@ -280,6 +291,18 @@ class RoleAccessMatrixTest extends RoutingTestBase {
                             "/machines",
                             "/maintenance",
                             "/performance",
+                            "/settings"),
+            "FINANCE",
+                    List.of(
+                            "/",
+                            "/inventory",
+                            "/manufacturing",
+                            "/shopfloor",
+                            "/quality",
+                            "/traceability",
+                            "/machines",
+                            "/reports",
+                            "/accounting",
                             "/settings"));
 
     @Test
@@ -330,5 +353,11 @@ class RoleAccessMatrixTest extends RoutingTestBase {
         query(viewer, "/api/reports/costs").andExpect(status().isForbidden());
         query(quality, "/api/admin/users").andExpect(status().isForbidden());
         query(maintenance, "/api/planning/mrp").andExpect(status().isForbidden());
+        // V24: the general ledger is for FINANCE and ADMIN only; FINANCE is no administrator.
+        var finance = createUser(t, "FINANCE");
+        query(planner, "/api/accounting/accounts").andExpect(status().isForbidden());
+        query(viewer, "/api/accounting/journals").andExpect(status().isForbidden());
+        query(sales, "/api/admin/periods").andExpect(status().isForbidden());
+        query(finance, "/api/admin/users").andExpect(status().isForbidden());
     }
 }
