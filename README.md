@@ -25,7 +25,8 @@ npm run dev
 ## What works
 
 The release covers three layers: the platform, the Phase 1 commercial core (V1–V9) and the Phase 2 advanced factory
-operations (V10–V15), made to work together by the V16 integration pass. Everything below runs against the real
+operations (V10–V15), made to work together by the V16 integration pass; Phase 4 finance starts with the general
+ledger (V24). Everything below runs against the real
 database with tests; limits are listed in [the feature register](docs/FEATURES.md) and [the roadmap](docs/ROADMAP.md).
 
 ### Platform and administration
@@ -53,6 +54,10 @@ database with tests; limits are listed in [the feature register](docs/FEATURES.m
 - **Production schedule** (V13): forward finite-capacity scheduling inside shift calendars, maintenance windows and downtime, with alternates, precedence, pins (also by dragging a Gantt bar), draft/publish/compare, late orders, capacity heatmap, next operations on the Shop floor and projected completion in the order drawer; the page, the `schedule` state key and the planners' attention items say when orders, operations, maintenance, downtime or calendars changed since the published run (V16).
 - **Traceability & recalls** (V14): a genealogy explorer (graph or tree) from any lot, order, receipt, delivery or supplier, backward to suppliers and forward to customers through every level, transfer, rework and return; recalls that compute affected stock and shipments, contain them through RECALL nonconformances, track customer notifications and close only when everything is notified and dispositioned (or by an independent override).
 - **Performance (OEE)** (V15): OEE per work center and business day from records only (shift time, downtime, operation time logs and reports), never a fabricated 0 %; time-weighted roll-ups, loss waterfall, heatmap, six big losses, utilization, data-coverage warnings and closed days that later calendar edits never rewrite.
+
+### Finance (Phase 4, V24)
+
+- **General ledger** (V24, Accounting page for the new `FINANCE` role and administrators): a chart of accounts per company (asset, liability, equity, income and expense accounts with header accounts, normal balances and contra accounts; system accounts for every posting code and the codes reserved for taxes, receivables and payables; older unknown codes flagged for review), enforced by the database for every journal line; posting dates and sources on every entry with the closed-period guard on the posting date; manual journals (`JV-…`) balanced to the cent with independent approval under a `MANUAL_JOURNAL` approval policy; one reversal per posted entry; chart balances as of any date, account ledgers with running balances and a trial balance as of a date or for a period with CSV export; attention items for journals awaiting the viewer's approval.
 
 ## Try the complete workflow
 
