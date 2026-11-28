@@ -1050,7 +1050,8 @@
                 "warehouse",
                 "operator",
                 "quality",
-                "maintenance"
+                "maintenance",
+                "finance"
               ],
               "default": "admin"
             }
@@ -5121,7 +5122,7 @@
             "name": "documentType",
             "in": "path",
             "required": true,
-            "description": "MANUFACTURING_ORDER, PURCHASE_ORDER or STOCK_ADJUSTMENT",
+            "description": "MANUFACTURING_ORDER, PURCHASE_ORDER, STOCK_ADJUSTMENT or (V24) MANUAL_JOURNAL (approver roles ⊆ FINANCE)",
             "schema": {
               "type": "string"
             }
@@ -5486,20 +5487,20 @@
     },
     "/admin/periods": {
       "get": {
-        "summary": "Accounting periods with posting status (ADMIN)",
+        "summary": "Accounting periods with posting status (ADMIN/FINANCE)",
         "responses": {
           "200": {
             "description": "`{items, today, latestClosed, postingBlocked}`"
           },
           "403": {
-            "description": "ADMIN only"
+            "description": "ADMIN/FINANCE only"
           }
         }
       }
     },
     "/admin/periods/close": {
       "post": {
-        "summary": "Close the period ending on endDate (ADMIN); in date order, never after today",
+        "summary": "Close the period ending on endDate (ADMIN/FINANCE); in date order, never after today",
         "parameters": [
           {
             "$ref": "#/components/parameters/IdempotencyKey"
@@ -5539,7 +5540,7 @@
     },
     "/admin/periods/reopen": {
       "post": {
-        "summary": "Reopen the most recently closed period with a reason (ADMIN; audited)",
+        "summary": "Reopen the most recently closed period with a reason (ADMIN/FINANCE; audited)",
         "parameters": [
           {
             "$ref": "#/components/parameters/IdempotencyKey"
@@ -5583,7 +5584,7 @@
         "parameters": [],
         "responses": {
           "200": {
-            "description": "`{items:[{documentType, approvalRequired, amountThreshold, approverRoles}]}` for MANUFACTURING_ORDER, PURCHASE_ORDER, STOCK_ADJUSTMENT"
+            "description": "`{items:[{documentType, approvalRequired, amountThreshold, approverRoles}]}` for MANUFACTURING_ORDER, PURCHASE_ORDER, STOCK_ADJUSTMENT and (V24) MANUAL_JOURNAL"
           }
         }
       }
@@ -5716,7 +5717,7 @@
     },
     "/reports/costs": {
       "get": {
-        "summary": "Manufacturing cost register, newest first, keyset-paged (V9, ADMIN/PLANNER): {items, next, total, summary}",
+        "summary": "Manufacturing cost register, newest first, keyset-paged (V9, ADMIN/PLANNER; V24 FINANCE): {items, next, total, summary}",
         "parameters": [
           {
             "name": "status",
@@ -5763,7 +5764,7 @@
             "description": "Per order estimated, material, conversion, actual, WIP, finished and scrap cost; `summary` = tenant-wide totals"
           },
           "403": {
-            "description": "ADMIN/PLANNER only"
+            "description": "ADMIN/PLANNER/FINANCE only"
           },
           "409": {
             "description": "Unknown status filter or page size outside 1-200"
@@ -5773,7 +5774,7 @@
     },
     "/reports/journal": {
       "get": {
-        "summary": "Posted journal lines, newest entry first, debits before credits, keyset-paged (V9, ADMIN/PLANNER)",
+        "summary": "Posted journal lines, newest entry first, debits before credits, keyset-paged (V9, ADMIN/PLANNER; V24 FINANCE, posting-date and source filters)",
         "parameters": [
           {
             "name": "account",
@@ -5801,7 +5802,7 @@
               "type": "string",
               "format": "date"
             },
-            "description": "First posting day (Asia/Colombo), inclusive"
+            "description": "First day the entry was recorded (Asia/Colombo), inclusive"
           },
           {
             "name": "to",
@@ -5811,7 +5812,36 @@
               "type": "string",
               "format": "date"
             },
-            "description": "Last posting day (Asia/Colombo), inclusive"
+            "description": "Last day the entry was recorded (Asia/Colombo), inclusive"
+          },
+          {
+            "name": "postedFrom",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date"
+            },
+            "description": "V24: first posting date, inclusive"
+          },
+          {
+            "name": "postedTo",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date"
+            },
+            "description": "V24: last posting date, inclusive"
+          },
+          {
+            "name": "source",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "V24: SYSTEM, MANUAL or REVERSAL"
           },
           {
             "name": "limit",
@@ -5836,13 +5866,13 @@
         ],
         "responses": {
           "200": {
-            "description": "`{items, next, totals:{debit, credit}, accounts}`; `accounts` (posted account codes) on the first page only"
+            "description": "`{items, next, totals:{debit, credit}, accounts}`; `accounts` (posted account codes) on the first page only; V24 rows add posting_date, source, reverses_entry_id and memo"
           },
           "400": {
             "description": "Malformed date"
           },
           "403": {
-            "description": "ADMIN/PLANNER only"
+            "description": "ADMIN/PLANNER/FINANCE only"
           },
           "409": {
             "description": "End date before start date, or page size outside 1-200"
@@ -11490,6 +11520,757 @@
           }
         }
       }
+    },
+    "/accounting/accounts": {
+      "get": {
+        "summary": "Chart of accounts in tree order with balances as of a date and header roll-ups (V24, FINANCE/ADMIN)",
+        "parameters": [
+          {
+            "name": "asOf",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date"
+            },
+            "description": "Posting date up to which balances are summed (default today)"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "`{asOf, items, totals:{debit, credit}, counts:{accounts, needs_review, inactive}}`; rows carry depth, children, own debit/credit/balance and total_* with sub-accounts"
+          },
+          "403": {
+            "description": "FINANCE/ADMIN only"
+          },
+          "400": {
+            "description": "Malformed date"
+          }
+        }
+      },
+      "post": {
+        "summary": "Create a ledger account (V24, FINANCE/ADMIN); audited GL_ACCOUNT_CREATED",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Committed result; retry with same key returns prior result"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Role/CSRF denied (FINANCE/ADMIN only), or password change required"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "Business rule (chart, balance, approval, period, reversal) or idempotency conflict"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GlAccount"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/accounting/accounts/{id}": {
+      "post": {
+        "summary": "Replace a ledger account (V24, FINANCE/ADMIN): system accounts keep code and type, a used account keeps its code; clears needs_review; audited GL_ACCOUNT_UPDATED",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Account id",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Committed result; retry with same key returns prior result"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Role/CSRF denied (FINANCE/ADMIN only), or password change required"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "Business rule (chart, balance, approval, period, reversal) or idempotency conflict"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GlAccount"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/accounting/accounts/{id}/deactivate": {
+      "post": {
+        "summary": "Deactivate a non-system account with a zero balance, no active sub-accounts and no open manual journal using it (V24)",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Account id",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Committed result; retry with same key returns prior result"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Role/CSRF denied (FINANCE/ADMIN only), or password change required"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "Business rule (chart, balance, approval, period, reversal) or idempotency conflict"
+          }
+        }
+      }
+    },
+    "/accounting/accounts/{id}/reactivate": {
+      "post": {
+        "summary": "Reactivate an account whose parent is active (V24)",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Account id",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Committed result; retry with same key returns prior result"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Role/CSRF denied (FINANCE/ADMIN only), or password change required"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "Business rule (chart, balance, approval, period, reversal) or idempotency conflict"
+          }
+        }
+      }
+    },
+    "/accounting/accounts/{id}/ledger": {
+      "get": {
+        "summary": "Account ledger: posted lines oldest first with opening and running balance, keyset-paged (V24, FINANCE/ADMIN); a header account includes its sub-accounts",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Account id",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date"
+            },
+            "description": "First posting date (inclusive)"
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date"
+            },
+            "description": "Last posting date (inclusive)"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200
+            },
+            "description": "Page size"
+          },
+          {
+            "name": "before",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Cursor: the previous page's next value"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "`{account, from, to, opening, carried, totals:{debit, credit, lines}, closing, items, next}`; rows carry the running `balance`"
+          },
+          "403": {
+            "description": "FINANCE/ADMIN only"
+          },
+          "400": {
+            "description": "Malformed date"
+          },
+          "404": {
+            "description": "Account not found or unowned"
+          },
+          "409": {
+            "description": "End date before start date, or page size outside 1-200"
+          }
+        }
+      }
+    },
+    "/accounting/trial-balance": {
+      "get": {
+        "summary": "Trial balance as of a date (no from) or for a period (V24, FINANCE/ADMIN)",
+        "parameters": [
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date"
+            },
+            "description": "First posting date of the period; blank = as of `to`"
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date"
+            },
+            "description": "Last posting date (default today)"
+          },
+          {
+            "name": "zero",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false
+            },
+            "description": "Include postable accounts without activity"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "`{mode, from, to, items, totals:{opening_debit, opening_credit, debit, credit, closing_debit, closing_credit}, balanced}`"
+          },
+          "403": {
+            "description": "FINANCE/ADMIN only"
+          },
+          "400": {
+            "description": "Malformed date"
+          },
+          "409": {
+            "description": "End date before start date"
+          }
+        }
+      }
+    },
+    "/accounting/journals": {
+      "get": {
+        "summary": "Manual journals, newest first, keyset-paged (V24, FINANCE/ADMIN)",
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "all (default), open, DRAFT, SUBMITTED, POSTED, REVERSED or CANCELLED"
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Journal number or narration"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200
+            },
+            "description": "Page size"
+          },
+          {
+            "name": "before",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Cursor: the previous page's next value"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "`{items, next, total, counts}`; rows carry `can_approve` for the viewer"
+          },
+          "403": {
+            "description": "FINANCE/ADMIN only"
+          },
+          "409": {
+            "description": "Unknown status filter or page size outside 1-200"
+          }
+        }
+      },
+      "post": {
+        "summary": "Create a draft manual journal JV-… (V24, FINANCE/ADMIN); drafts may be incomplete; audited MANUAL_JOURNAL_CREATED",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Committed result; retry with same key returns prior result"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Role/CSRF denied (FINANCE/ADMIN only), or password change required"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "Business rule (chart, balance, approval, period, reversal) or idempotency conflict"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ManualJournal"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/accounting/journals/{id}": {
+      "get": {
+        "summary": "One manual journal with lines, activity and what the viewer may do (`can`) (V24, FINANCE/ADMIN)",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Manual journal id",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The journal row plus `lines`, `activity`, `can:{edit, submit, approve, return, cancel, reverse}`, `approverRoles`"
+          },
+          "403": {
+            "description": "FINANCE/ADMIN only"
+          },
+          "404": {
+            "description": "Journal not found or unowned"
+          }
+        }
+      },
+      "post": {
+        "summary": "Replace a DRAFT manual journal (V24); audited MANUAL_JOURNAL_UPDATED",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Manual journal id",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Committed result; retry with same key returns prior result"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Role/CSRF denied (FINANCE/ADMIN only), or password change required"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "Business rule (chart, balance, approval, period, reversal) or idempotency conflict"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ManualJournal"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/accounting/journals/{id}/submit": {
+      "post": {
+        "summary": "DRAFT -> SUBMITTED: at least two lines, balanced to the cent, active postable accounts, posting date outside closed periods; posts at once when the MANUAL_JOURNAL policy needs no second person (V24)",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Manual journal id",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Committed result; retry with same key returns prior result"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Role/CSRF denied (FINANCE/ADMIN only), or password change required"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "Business rule (chart, balance, approval, period, reversal) or idempotency conflict"
+          }
+        }
+      }
+    },
+    "/accounting/journals/{id}/approve": {
+      "post": {
+        "summary": "SUBMITTED -> POSTED (one MANUAL journal entry on the posting date) by an approver role of the MANUAL_JOURNAL policy who neither created, last edited nor submitted it, ADMIN included (V24)",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Manual journal id",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Committed result; retry with same key returns prior result"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Role/CSRF denied (FINANCE/ADMIN only), or password change required"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "Business rule (chart, balance, approval, period, reversal) or idempotency conflict"
+          }
+        }
+      }
+    },
+    "/accounting/journals/{id}/return": {
+      "post": {
+        "summary": "SUBMITTED -> DRAFT with a reason, by its creator/submitter or an approver (V24)",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Manual journal id",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Committed result; retry with same key returns prior result"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Role/CSRF denied (FINANCE/ADMIN only), or password change required"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "Business rule (chart, balance, approval, period, reversal) or idempotency conflict"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/JournalReason"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/accounting/journals/{id}/cancel": {
+      "post": {
+        "summary": "DRAFT or SUBMITTED -> CANCELLED with a reason (V24)",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Manual journal id",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Committed result; retry with same key returns prior result"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Role/CSRF denied (FINANCE/ADMIN only), or password change required"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "Business rule (chart, balance, approval, period, reversal) or idempotency conflict"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/JournalReason"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/accounting/entries/{id}": {
+      "get": {
+        "summary": "One posted journal entry with its lines, total, reversal links and manual journal (V24, FINANCE/ADMIN)",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Journal entry id",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "`{reference, description, posting_date, source, total, lines, reverses_entry_id, reversed_by_entry_id, manual_journal_id, can_reverse, …}`"
+          },
+          "403": {
+            "description": "FINANCE/ADMIN only"
+          },
+          "404": {
+            "description": "Entry not found or unowned"
+          }
+        }
+      }
+    },
+    "/accounting/entries/{id}/reverse": {
+      "post": {
+        "summary": "Reverse a posted SYSTEM or MANUAL entry once: a REVERSAL entry with debit and credit swapped, the same reference, dated in an open period on or after the original (V24); audited JOURNAL_REVERSED",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Journal entry id",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Committed result; retry with same key returns prior result"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Role/CSRF denied (FINANCE/ADMIN only), or password change required"
+          },
+          "404": {
+            "description": "Record not found or unowned"
+          },
+          "409": {
+            "description": "Business rule (chart, balance, approval, period, reversal) or idempotency conflict"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReverseEntry"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/accounting/policy": {
+      "get": {
+        "summary": "The MANUAL_JOURNAL approval policy (V24, FINANCE/ADMIN); ADMIN changes it with POST /admin/approval-policies/MANUAL_JOURNAL",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "`{documentType, approvalRequired, amountThreshold, approverRoles, customized, wired, updatedAt, updatedBy}`"
+          },
+          "403": {
+            "description": "FINANCE/ADMIN only"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -12156,7 +12937,8 @@
               "QUALITY",
               "SALES",
               "VIEWER",
-              "MAINTENANCE"
+              "MAINTENANCE",
+              "FINANCE"
             ]
           }
         }
@@ -13593,7 +14375,8 @@
               "QUALITY",
               "SALES",
               "VIEWER",
-              "MAINTENANCE"
+              "MAINTENANCE",
+              "FINANCE"
             ]
           }
         }
@@ -13615,7 +14398,7 @@
           },
           "approverRoles": {
             "type": "array",
-            "maxItems": 5,
+            "maxItems": 6,
             "items": {
               "type": "string",
               "enum": [
@@ -13623,10 +14406,11 @@
                 "WAREHOUSE",
                 "QUALITY",
                 "SALES",
-                "OPERATOR"
+                "OPERATOR",
+                "FINANCE"
               ]
             },
-            "description": "Roles besides ADMIN (always allowed) that may approve; the creator never may"
+            "description": "Roles besides ADMIN (always allowed) that may approve; the creator never may; FINANCE only for MANUAL_JOURNAL, and MANUAL_JOURNAL names FINANCE only (V24)"
           }
         }
       },
@@ -15726,6 +16510,139 @@
             "maxLength": 32,
             "description": "6-digit authenticator code; /recovery-codes and /disable also accept an unused recovery code",
             "writeOnly": true
+          }
+        }
+      },
+      "GlAccount": {
+        "type": "object",
+        "required": [
+          "code",
+          "name",
+          "type"
+        ],
+        "properties": {
+          "code": {
+            "type": "string",
+            "pattern": "^[A-Z0-9][A-Z0-9_.-]{0,39}$"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "ASSET",
+              "LIABILITY",
+              "EQUITY",
+              "INCOME",
+              "EXPENSE"
+            ]
+          },
+          "contra": {
+            "type": "boolean",
+            "description": "Normal balance on the side opposite to the type's"
+          },
+          "header": {
+            "type": "boolean",
+            "description": "Header account: groups sub-accounts of the same type, takes no postings"
+          },
+          "parentId": {
+            "type": "string",
+            "nullable": true,
+            "description": "An active header account of the same type"
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 400
+          }
+        }
+      },
+      "ManualJournalLine": {
+        "type": "object",
+        "required": [
+          "account"
+        ],
+        "properties": {
+          "account": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80,
+            "description": "Account code of an active postable account"
+          },
+          "debit": {
+            "type": "string",
+            "nullable": true,
+            "description": "Decimal > 0 with at most 2 decimals; exactly one of debit and credit"
+          },
+          "credit": {
+            "type": "string",
+            "nullable": true,
+            "description": "Decimal > 0 with at most 2 decimals; exactly one of debit and credit"
+          },
+          "memo": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 200
+          }
+        }
+      },
+      "ManualJournal": {
+        "type": "object",
+        "required": [
+          "postingDate",
+          "narration",
+          "lines"
+        ],
+        "properties": {
+          "postingDate": {
+            "type": "string",
+            "format": "date"
+          },
+          "narration": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 400
+          },
+          "lines": {
+            "type": "array",
+            "maxItems": 200,
+            "items": {
+              "$ref": "#/components/schemas/ManualJournalLine"
+            }
+          }
+        }
+      },
+      "JournalReason": {
+        "type": "object",
+        "required": [
+          "reason"
+        ],
+        "properties": {
+          "reason": {
+            "type": "string",
+            "minLength": 5,
+            "maxLength": 400
+          }
+        }
+      },
+      "ReverseEntry": {
+        "type": "object",
+        "required": [
+          "reason"
+        ],
+        "properties": {
+          "postingDate": {
+            "type": "string",
+            "format": "date",
+            "nullable": true,
+            "description": "Default today; on or after the original posting date, outside closed periods"
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 5,
+            "maxLength": 400
           }
         }
       }
