@@ -87,11 +87,19 @@ export function HelpDialog({ onClose }: { onClose: () => void }) {
           posted entry can be reversed once with a reason. The trial balance, as of a date or for a period,
           exports to CSV, and each account opens its ledger with opening and running balances.
         </p>
+        <p>
+          Taxes: administrators keep tax codes with stacked (optionally compound) components and
+          effective-dated rate history under Administration → Taxes, apply a country template (Sri Lanka VAT
+          first: a starting point to be verified by a qualified accountant; no certification is claimed),
+          record partner tax registration and exemptions and item default codes. Sales and purchase order
+          drawers show an estimated tax breakdown; tax is not posted yet, so the tax register and VAT return
+          summary stay empty until invoicing arrives.
+        </p>
         <h3>What remains on the roadmap</h3>
         <p>
-          Taxes, receivables and payables, financial statements, tax localization, personnel workflows,
-          machine telemetry, extended onboarding, MFA, cloud synchronization, signed Windows installation,
-          SaaS billing and AI services. The repository documents acceptance criteria and readiness gaps.
+          Receivables and payables with tax posting, financial statements, personnel workflows, machine
+          telemetry, extended onboarding, cloud synchronization, signed Windows installation, SaaS billing and
+          AI services. The repository documents acceptance criteria and readiness gaps.
         </p>
         <div className="help-callout">
           <ShieldCheck size={18} />

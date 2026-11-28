@@ -215,6 +215,17 @@ const LABELS: Record<string, string> = {
   RECALL_CLOSED: 'Recall closed',
   RECALL_CLOSED_OVERRIDE: 'Recall closed by override',
   RECALL_CANCELLED: 'Recall cancelled',
+  // Taxes (V25).
+  TAX_CODE_CREATED: 'Tax code created',
+  TAX_CODE_UPDATED: 'Tax code updated',
+  TAX_COMPONENT_ADDED: 'Tax component added',
+  TAX_COMPONENT_UPDATED: 'Tax component updated',
+  TAX_RATE_ADDED: 'Tax rate version added',
+  TAX_RATE_REMOVED: 'Tax rate version removed',
+  TAX_SETTINGS_UPDATED: 'Tax settings updated',
+  TAX_TEMPLATE_APPLIED: 'Tax template applied',
+  PARTNER_TAX_UPDATED: 'Partner tax profile updated',
+  ITEM_TAX_UPDATED: 'Item tax defaults updated',
 };
 
 /** Fallback: a trailing bare verb (e.g. the `CANCEL` in `PO_CANCEL`) is shown in the past tense. */

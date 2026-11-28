@@ -25,6 +25,7 @@ import { endPurchaseOrder, returnToSupplier } from './forms';
 import { PurchaseStatus } from './PurchaseStatus';
 import '../sales/sales.css';
 import './purchasing.css';
+import { TaxEstimate } from '../tax/TaxEstimate';
 
 const STEPS = ['DRAFT', 'SUBMITTED', 'APPROVED', 'PARTIAL', 'RECEIVED'];
 
@@ -305,6 +306,10 @@ function Detail({
             { label: 'Line total', render: (l) => money(l.line_total) },
           ]}
         />
+
+        {data.lines.length > 0 && text(o.status) !== 'CANCELLED' && (
+          <TaxEstimate kind="purchase" orderId={text(o.id)} version={o.updated_at} />
+        )}
 
         <h3>Goods receipts</h3>
         {data.receipts.length ? (

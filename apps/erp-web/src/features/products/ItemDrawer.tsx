@@ -25,6 +25,7 @@ import { ItemTypeBadge } from './ItemTypeBadge';
 import { useItemDetail, useItemMovements } from './itemMaster';
 import type { ItemDetail } from './itemMaster';
 import { ProductMark } from './ProductMark';
+import { ItemTaxSection } from '../tax/TaxProfiles';
 
 /** Item master side drawer: overview, units & conversions, barcodes, variants, stock, where-used, movements. */
 export function ItemDrawer({
@@ -285,6 +286,7 @@ function Overview({ data }: { data: ItemDetail }) {
           </dd>
         </dl>
       </div>
+      <ItemTaxSection itemId={item.id} />
       <div className="drawer-section">
         <h3>Item history</h3>
         {data.activity.length ? (

@@ -506,6 +506,47 @@ active (trigger); no entry is dated inside a closed period (trigger); an entry i
 System accounts (the posting codes) and the codes reserved for later Phase 4 features are listed in
 `services/erp-api/README.md` (Ledger reasons and journal accounts).
 
+### Taxes (`/tax/*`, V25)
+
+Tax codes, effective-dated rates, country templates, partner/item tax profiles, estimates, the tax register and the VAT return summary. Reads of codes, settings, profiles and estimates are open to every signed-in role (document screens show tax); every command and the register/return are **ADMIN** only (the general-ledger integration opens them to FINANCE). Rates are percentages with up to four decimals; amounts are rounded half-up to the workspace currency's decimals (LKR: 2). Method: [ARCHITECTURE.md, ADR-009](../architecture/ARCHITECTURE.md#adr-009-tax-calculation-rounding-and-effective-dated-rates-v25). Country templates are *a starting point to be verified by a qualified accountant; no certification is claimed*.
+
+| Method | Path | Purpose / allowed roles (ADMIN also allowed) |
+|---|---|---|
+| GET | `/tax/codes` | `{items, today}`: every code `{id, code, name, applies_to (SALES/PURCHASES/BOTH), kind (STANDARD/ZERO_RATED/EXEMPT), output_account_code, input_account_code, active, template_regime, template_code, edited_at, used, item_count, partner_count, current_rate, components:[{id, seq, name, compound, used, current_rate, rates:[{id, effective_from, effective_to, rate, note, used, current}]}]}`; `effective_to` is derived (the day before the next version), rates newest first; `current_rate` of a code is today's combined rate (compound components count on the earlier ones), null when a component has no rate today; every role |
+| GET | `/tax/settings` | `{settings:{prices_include_tax, rounding (PER_LINE/PER_DOCUMENT), regime, default_sales_code_id, default_purchase_code_id, exempt_code_id, updated_at}, currency, scale, today, templates:[{code, country, name, rounding, prices_include_tax, notes, disclaimer, applied, codes:[{code, name, applies_to, kind, rates}]}]}`; defaults (exclusive, per line) until saved; every role |
+| POST | `/tax/settings` | `{pricesIncludeTax, rounding, defaultSalesCodeId?, defaultPurchaseCodeId?, exemptCodeId?}`: codes must be active and apply to the side (409), the exemption code must be EXEMPT; audited `TAX_SETTINGS_UPDATED` |
+| POST | `/tax/codes` | `{code ([A-Z0-9][A-Z0-9_-]{0,19}), name, appliesTo, kind, outputAccountCode? (default OUTPUT_TAX), inputAccountCode? (default INPUT_TAX), components?:[{name, compound, effectiveFrom, rate}]}`: a STANDARD code needs 1–9 components (the first not compound), zero-rated/exempt codes none (409); duplicate code → 409; audited `TAX_CODE_CREATED` |
+| POST | `/tax/codes/{id}` | `{name, appliesTo, outputAccountCode, inputAccountCode, active}`; code and kind are fixed. Deactivating or narrowing a code that is a workspace default → 409. Marks a template code as edited. Audited `TAX_CODE_UPDATED` |
+| POST | `/tax/codes/{id}/components` | `{name, compound, effectiveFrom, rate}`: appends a component (next `seq`) with its first rate; STANDARD codes only; audited `TAX_COMPONENT_ADDED` |
+| POST | `/tax/components/{id}` | `{name, compound}`; the first component is never compound; the compound flag of a component with recorded tax cannot change (409, and a DB guard); audited `TAX_COMPONENT_UPDATED` |
+| POST | `/tax/components/{id}/rates` | `{effectiveFrom, rate, note?}`: a new rate version. 409 when a version already starts that day, or when it would start on or before the latest document date already taxed on the component (DB guard too). Audited `TAX_RATE_ADDED` |
+| POST | `/tax/rates/{id}/remove` | Removes a version no tax line uses, never the component's last one and never one starting on or before the latest taxed date (409; the DB rejects any change to a used version). Audited `TAX_RATE_REMOVED` |
+| POST | `/tax/templates/{regime}/apply` | No body. Applies a country template (`LK` = Sri Lanka VAT): creates missing codes with their rate history, adds missing rate versions to template codes nobody edited, keeps every other code (`kept`); settings take the template's rounding/price convention only when no template was applied before and its defaults only where none are set. Returns `{regime, created, updated, unchanged, kept}`; re-applying changes nothing. Unknown regime → 404. Audited `TAX_TEMPLATE_APPLIED` |
+| GET | `/tax/partners/{id}` | `{partner:{id, name, type, tax_id, tax_registered, tax_exemption_reference, tax_exemption_valid_until, exemption_active, sales_tax_code_id, purchase_tax_code_id, sales_tax_code, purchase_tax_code}}`; every role. `GET /partners` rows carry the same columns |
+| POST | `/tax/partners/{id}` | `{taxRegistered, exemptionReference?, exemptionValidUntil?, salesTaxCodeId?, purchaseTaxCodeId?}`: an exemption needs both the reference and the date (409); codes must be active and apply to the side. Audited `PARTNER_TAX_UPDATED` (shown in the partner's activity) |
+| GET | `/tax/items/{id}` | `{item:{id, sku, name, sales_tax_code_id, purchase_tax_code_id, sales_tax_code, purchase_tax_code}}`; every role |
+| POST | `/tax/items/{id}` | `{salesTaxCodeId?, purchaseTaxCodeId?}`; audited `ITEM_TAX_UPDATED`. The columns do not lock the item's SKU/unit/type |
+| GET | `/tax/estimates/sales-orders/{id}?date=` | Read-only estimate of a sales order's lines (OUTPUT) at the rates effective on `date` (default today, Asia/Colombo): `{order_id, number, order_total, date, configured, available, message?, estimate}` where `estimate` is a calculation result (below). `configured` false without any tax code; `available` false with the reason in `message` when the codes cannot calculate (for example no rate effective on the date). Nothing is stored; the order's totals are unchanged; every role |
+| GET | `/tax/estimates/purchase-orders/{id}?date=` | The same for a purchase order (INPUT); a supplier not recorded as tax-registered adds a warning |
+| POST | `/tax/calculate` | Read-only preview, nothing stored: `{direction: OUTPUT\|INPUT, date, partnerId?, pricesIncludeTax? (null = setting), lines:[{lineNo, itemId?, quantity, unitPrice, discountPct?, taxCodeId?}]}` → the calculation result; every role |
+| GET | `/tax/register?from=&to=&direction=&code=&q=&limit=&before=` | The tax register (`tax_lines`), newest posting date first, keyset-paged (`limit` 1–200, default 50): `{items, next, summary:{lines, base, output_tax, input_tax}}`; rows add `code, code_name, component, partner, partner_tax_id`; `q` matches document number, partner and document type. Empty until invoicing posts tax (V26/V27); ADMIN |
+| GET | `/tax/register/export?…` | The same filter as CSV (≤ 50,000 rows); ADMIN |
+| GET | `/tax/return?from=&to=` | VAT return summary by posting date: `{from, to, currency, empty, codes:[{id, code, name, kind, output_base, output_tax, input_base, input_tax, documents}], components:[{code, component, rate, direction, base, tax}], totals:{output_standard_base, output_zero_rated_base, output_exempt_base, output_tax, input_standard_base, input_zero_rated_base, input_exempt_base, input_tax, net_payable}}` (a line's base counted once, from its first component); ADMIN |
+| GET | `/tax/return/export?from=&to=` | The summary as CSV; ADMIN |
+
+Calculation result (`TaxService.Result`, also the `estimate`): `{currency, scale, date, direction, partnerId, pricesIncludeTax, rounding, net, tax, gross, warnings, lines:[{lineNo, itemId, amount, taxCodeId, code, codeName, kind, source (LINE/EXEMPTION/ITEM/PARTNER/TENANT/NONE), accountCode, base, tax, gross, components:[{componentId, seq, name, compound, rateVersionId, rate, effectiveFrom, base, tax}]}], codes:[{taxCodeId, code, name, kind, accountCode, base, tax, components:[{componentId, seq, name, compound, rateVersionId, rate, base, tax}]}]}`. Code resolution per line: explicit `taxCodeId` (must be active and apply to the direction, else 409) → the partner's exemption valid on the document date (→ the exemption code) → the item's default → the partner's default → the workspace default; inactive or other-direction defaults are skipped; no code = untaxed with a warning.
+
+```json
+{"code":"VAT-STD","name":"VAT standard rate","appliesTo":"BOTH","kind":"STANDARD","outputAccountCode":null,"inputAccountCode":null,
+ "components":[{"name":"VAT","compound":false,"effectiveFrom":"2024-01-01","rate":"18.0000"}]}
+```
+
+```json
+{"taxRegistered":true,"exemptionReference":"VAT-EXM-0142","exemptionValidUntil":"2027-12-31","salesTaxCodeId":"opaque-code","purchaseTaxCodeId":null}
+```
+
+No `/state` keys (range 3500–3599 unused). Nothing in V25 writes `tax_lines`; `tax.TaxService#record` is the writer for V26/V27.
+
 Lifecycle actions: `approve` (an approver role of the `MANUFACTURING_ORDER` policy — default PLANNER, ADMIN always — distinct from the creator; orders the policy auto-approves are created APPROVED); `reserve` (PLANNER/WAREHOUSE); `issue` (WAREHOUSE); `start`, `pause`, `resume` (OPERATOR/PLANNER); `close`, `cancel` (PLANNER). Cancellation is available only before material issue, with reservations safely released. Issued order cancellation is blocked until a controlled return/variance procedure exists.
 
 Examples:
